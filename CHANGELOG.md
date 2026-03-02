@@ -7,19 +7,11 @@ All notable changes to this project are documented in this file.
 ### Added
 - (Nothing yet)
 
-## [1.8.3] - 2026-03-02
-
-### Fixed
-- Resolved Google Play rejection: when no streaming addons are configured, the app now shows a friendly "Addon Setup Required" guide instead of a playback error.
-- Source selector on Details page shows "No Streaming Addons" with setup instructions instead of generic "No sources found".
-- Auto-play no longer navigates to the player when no sources are available — shows the source selector with guidance instead.
-
 ## [1.8.2] - 2026-03-02
 
 ### Changed
 - Cross-device cloud sync (IPTV, addons, catalogs, watchlist, settings) now triggers on every profile selection instead of only on first app launch.
 - Playback starts significantly faster — removed redundant startup buffer gate and lowered initial buffer threshold.
-- App version updated to `1.8.2` (`versionCode 182`).
 
 ### Fixed
 - Continue Watching no longer shows a 60-second empty gap when auto-playing the next episode.
@@ -32,6 +24,8 @@ All notable changes to this project are documented in this file.
 - Watched badges now appear on initial Details page load without needing to navigate away and back.
 - ARVIO Cloud watched data queries now paginate correctly for large libraries (previously capped at 1,000 rows).
 - Hero clear logo now loads immediately on startup when selecting a profile, instead of requiring a focus change.
+- When no streaming addons are configured, the app now shows a friendly setup guide instead of a playback error.
+- Source selector shows setup instructions instead of generic "No sources found" when no addons are installed.
 - Next auto-played episode no longer starts at 01:00 — correctly starts at 00:01.
 
 ## [1.6.0] - 2026-02-22
