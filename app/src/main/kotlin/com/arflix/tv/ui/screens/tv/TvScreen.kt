@@ -210,12 +210,12 @@ fun TvScreen(
     // OkHttp with connection pooling for faster channel switching
     val iptvHttpClient = remember {
         OkHttpClient.Builder()
-            .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
+            .connectionPool(ConnectionPool(8, 10, TimeUnit.MINUTES))
             .followRedirects(true)
             .followSslRedirects(true)
             .retryOnConnectionFailure(true)
             .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(300, TimeUnit.SECONDS) // 5 min — live streams should not timeout during normal playback
             .build()
     }
     val iptvDataSourceFactory = remember(iptvHttpClient) {
@@ -238,10 +238,15 @@ fun TvScreen(
 
     val exoPlayer = remember {
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(12_000, 60_000, 2_000, 4_000)
-            .setTargetBufferBytes(50 * 1024 * 1024) // 50 MB cap for IPTV (live streams need less buffer)
-            .setPrioritizeTimeOverSizeThresholds(false) // respect byte limit over time limit
-            .setBackBuffer(8_000, true)
+            .setBufferDurationsMs(
+                20_000,    // minBufferMs — keep a healthy safety buffer for live streams
+                120_000,   // maxBufferMs — 2 min ahead to survive brief IPTV server hiccups
+                1_000,     // bufferForPlaybackMs — fast initial start
+                3_000      // bufferForPlaybackAfterRebufferMs — resume quickly after stall
+            )
+            .setTargetBufferBytes(80 * 1024 * 1024)
+            .setPrioritizeTimeOverSizeThresholds(true) // prioritize time buffer for live continuity
+            .setBackBuffer(10_000, true)
             .build()
 
         ExoPlayer.Builder(context)

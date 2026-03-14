@@ -476,14 +476,12 @@ fun DetailsScreen(
                                             }
                                         }
                                         1 -> { // Sources - Show StreamSelector for manual selection
-                                            if (uiState.imdbId.isNullOrBlank()) return@onPreviewKeyEvent true
                                             showStreamSelector = true
                                             // Pass the currently focused episode for TV shows
                                             val ep = uiState.episodes.getOrNull(episodeIndex)
                                             viewModel.loadStreams(uiState.imdbId, ep?.seasonNumber, ep?.episodeNumber)
                                         }
                                         2 -> { // Trailer
-                                            if (uiState.trailerKey.isNullOrBlank()) return@onPreviewKeyEvent true
                                             uiState.trailerKey?.let { key ->
                                                 try {
                                                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$key"))
@@ -590,8 +588,6 @@ fun DetailsScreen(
                     isInWatchlist = uiState.isInWatchlist,
                     genres = uiState.genres,
                     budget = uiState.budget,
-                    imdbId = uiState.imdbId,
-                    trailerKey = uiState.trailerKey,
                     seasonProgress = uiState.seasonProgress,
                     playLabel = uiState.playLabel,
                     contentHasFocus = !isSidebarFocused,
@@ -794,8 +790,6 @@ private fun DetailsContent(
     isInWatchlist: Boolean,
     genres: List<String> = emptyList(),
     budget: String? = null,
-    imdbId: String? = null,
-    trailerKey: String? = null,
     seasonProgress: Map<Int, Pair<Int, Int>> = emptyMap(),
     playLabel: String? = null,
     contentHasFocus: Boolean = true,
@@ -1090,8 +1084,6 @@ private fun DetailsContent(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val canOpenSources = !imdbId.isNullOrBlank()
-                val canOpenTrailer = !trailerKey.isNullOrBlank()
                 val playButtonLabel = if (!playLabel.isNullOrBlank()) {
                     playLabel
                 } else {
@@ -1107,14 +1099,12 @@ private fun DetailsContent(
                     icon = Icons.Default.List,
                     text = "Sources",
                     isFocused = focusSectionForUi == FocusSection.BUTTONS && buttonIndex == 1,
-                    isEnabled = canOpenSources,
                     isIconOnly = true
                 )
                 PremiumActionButton(
                     icon = Icons.Default.Movie,
                     text = "Trailer",
                     isFocused = focusSectionForUi == FocusSection.BUTTONS && buttonIndex == 2,
-                    isEnabled = canOpenTrailer,
                     isIconOnly = true
                 )
                 PremiumActionButton(
@@ -1538,8 +1528,7 @@ private fun PremiumActionButton(
     isFocused: Boolean,
     isPrimary: Boolean = false,
     isIconOnly: Boolean = false,
-    isActive: Boolean = false,
-    isEnabled: Boolean = true
+    isActive: Boolean = false
 ) {
     val shape = RoundedCornerShape(12.dp)
     val density = LocalDensity.current
@@ -1601,7 +1590,6 @@ private fun PremiumActionButton(
     // Animated background color - buttons only glow when focused
     val backgroundColor by animateColorAsState(
         targetValue = when {
-            !isEnabled -> Color.Transparent
             isFocused && isPrimary -> Color.White
             isFocused -> Color.White.copy(alpha = 0.95f)
             else -> Color.Transparent
@@ -1612,18 +1600,14 @@ private fun PremiumActionButton(
 
     // Animated text/icon color - black when focused (on white bg), white otherwise
     val contentColor by animateColorAsState(
-        targetValue = when {
-            !isEnabled -> Color.White.copy(alpha = 0.32f)
-            isFocused -> Color.Black
-            else -> Color.White.copy(alpha = 0.9f)
-        },
+        targetValue = if (isFocused) Color.Black else Color.White.copy(alpha = 0.9f),
         animationSpec = tween(150),
         label = "button_content"
     )
 
     // Animated border - all non-focused buttons get a subtle border
     val borderAlpha by animateFloatAsState(
-        targetValue = if (!isEnabled) 0.18f else 0f,
+        targetValue = 0f,
         animationSpec = tween(150),
         label = "border_alpha"
     )

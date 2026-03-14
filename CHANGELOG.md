@@ -10,20 +10,24 @@ All notable changes to this project are documented in this file.
 ## [1.9.1] - 2026-03-14
 
 ### Improved
-- Playback startup speed improved ~300% through progressive source loading — playback begins from the first responding addon instead of waiting for all addons to finish.
+- Playback startup speed improved ~300% through progressive source loading and background stream prefetching on Details page open.
+- Smart autoplay: when stream cache is warm (prefetched), playback starts instantly. When cold, a 3.5s collection window ensures the best source is selected from all responding addons.
 - Player buffering reduced with larger buffer window, 256MB disk media cache, and stronger connection reuse for large files.
 - Live TV mini-player no longer switches channel on focus change; first click previews, second click opens fullscreen.
 - Search page layout tightened so Movies and TV Shows rows are fully visible and readable under the topbar.
 - Non-English subtitle selection with OpenSubtitles now matches correctly using normalized language tokens.
+- Details action buttons (Sources, Trailer, etc.) now render instantly without waiting for external IDs to load.
 
 ### Fixed
-- Intermittent crash when pressing play caused by ExoPlayer race conditions during rapid navigation and force-unwrap on nullable season/episode fields.
+- Major crash when pressing play caused by SimpleCache folder lock conflict when re-entering the player. Fixed with a process-wide singleton cache.
+- Intermittent crash from ExoPlayer race conditions during rapid navigation and force-unwrap on nullable season/episode fields.
 - Continue Watching showing wrong resume time on unwatched next episodes (e.g. "Continue S2E2 33:02" after finishing S2E1).
 - Trakt list catalogs disappearing from Homepage after initial load due to premature merge filtering and DataStore re-trigger race.
 - IPTV config for non-primary profiles not persisting to cloud due to cloud push timing before DataStore flush.
 - ExoPlayer onPlayerError listener crash after player release during back navigation.
 - AudioManager unsafe cast crash on non-standard Android TV firmware.
 - Home left-scroll viewport not following focus on first left move.
+- Live TV timeout popup after extended watching caused by insufficient OkHttp read timeout and small buffer window for IPTV streams.
 
 ## [1.9] - 2026-03-13
 

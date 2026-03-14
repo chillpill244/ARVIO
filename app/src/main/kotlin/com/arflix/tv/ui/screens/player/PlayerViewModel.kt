@@ -357,7 +357,6 @@ class PlayerViewModel @Inject constructor(
                     isSetupError = false
                 )
 
-                var firstPlayableSelected = false
                 val preferredLanguage = _uiState.value.preferredAudioLanguage.ifBlank { resolvePreferredAudioLanguage() }
                 val progressiveFlow = if (mediaType == MediaType.MOVIE) {
                     streamRepository.resolveMovieStreamsProgressive(
@@ -378,8 +377,17 @@ class PlayerViewModel @Inject constructor(
                     )
                 }
 
+                // Collect progressive emissions, updating the UI as sources arrive.
+                // If the first emission is already a cache hit (isFinal on first emit),
+                // pick immediately — no collection window needed.
+                // Otherwise wait up to AUTOPLAY_COLLECTION_WINDOW_MS for more addons.
+                val AUTOPLAY_COLLECTION_WINDOW_MS = 3_500L
+                val collectionStartMs = System.currentTimeMillis()
+                var autoplaySelected = false
+                var lastMergedStreams: List<StreamSource> = emptyList()
+                var isFirstEmission = true
+
                 progressiveFlow.collect { progressive ->
-                    // Keep exact source order consistent with Details -> Sources tab.
                     val allStreams = progressive.streams
                         .filter { stream ->
                             val u = stream.url?.trim().orEmpty()
@@ -388,6 +396,7 @@ class PlayerViewModel @Inject constructor(
                     val existingVod = _uiState.value.streams.filter { it.addonId == "iptv_xtream_vod" }
                     val mergedStreams = (allStreams + existingVod)
                         .distinctBy { "${it.url?.trim().orEmpty()}|${it.source}" }
+                    lastMergedStreams = mergedStreams
 
                     val errorMessage = if (progressive.isFinal && mergedStreams.isEmpty()) {
                         if (streamingAddonCount == 0) {
@@ -406,29 +415,24 @@ class PlayerViewModel @Inject constructor(
                         isSetupError = progressive.isFinal && mergedStreams.isEmpty() && streamingAddonCount == 0
                     )
 
-                    if (!firstPlayableSelected && mergedStreams.isNotEmpty()) {
-                        val preferredFromBingeGroup = currentPreferredBingeGroup?.let { preferredGroup ->
-                            mergedStreams.firstOrNull { stream ->
-                                stream.behaviorHints?.bingeGroup == preferredGroup &&
-                                    (currentPreferredAddonId?.let { stream.addonId == it } ?: true)
-                            } ?: mergedStreams.firstOrNull { stream ->
-                                stream.behaviorHints?.bingeGroup == preferredGroup
-                            }
-                        }
+                    // Cache hit path: first emission is already final (prefetch completed)
+                    // → pick immediately, no waiting.
+                    val cacheHit = isFirstEmission && progressive.isFinal && mergedStreams.isNotEmpty()
+                    isFirstEmission = false
 
-                        val preferredFromNavigation = mergedStreams.firstOrNull { s ->
-                            val addonMatch = currentPreferredAddonId?.let { s.addonId == it } ?: true
-                            val sourceMatch = currentPreferredSourceName?.let { s.source == it } ?: true
-                            addonMatch && sourceMatch
-                        } ?: mergedStreams.firstOrNull { s ->
-                            currentPreferredAddonId?.let { s.addonId == it } ?: false
-                        }
+                    val elapsedMs = System.currentTimeMillis() - collectionStartMs
+                    val shouldSelectNow = !autoplaySelected && mergedStreams.isNotEmpty() &&
+                        (cacheHit || progressive.isFinal || elapsedMs >= AUTOPLAY_COLLECTION_WINDOW_MS)
 
-                        val stabilitySelected = pickPreferredStream(mergedStreams, preferredLanguage)
-                        val selected = preferredFromBingeGroup ?: preferredFromNavigation ?: stabilitySelected ?: mergedStreams.first()
-                        firstPlayableSelected = true
-                        selectStream(selected)
+                    if (shouldSelectNow) {
+                        autoplaySelected = true
+                        autoplaySelectBest(mergedStreams, preferredLanguage)
                     }
+                }
+
+                if (!autoplaySelected && lastMergedStreams.isNotEmpty()) {
+                    autoplaySelected = true
+                    autoplaySelectBest(lastMergedStreams, preferredLanguage)
                 }
 
                 // Apply subtitle preference in background (non-blocking)
@@ -790,6 +794,29 @@ class PlayerViewModel @Inject constructor(
             codes.isEmpty() || hasMulti -> 1
             else -> 0
         }
+    }
+
+    private fun autoplaySelectBest(streams: List<StreamSource>, preferredLanguage: String) {
+        val preferredFromBingeGroup = currentPreferredBingeGroup?.let { preferredGroup ->
+            streams.firstOrNull { stream ->
+                stream.behaviorHints?.bingeGroup == preferredGroup &&
+                    (currentPreferredAddonId?.let { stream.addonId == it } ?: true)
+            } ?: streams.firstOrNull { stream ->
+                stream.behaviorHints?.bingeGroup == preferredGroup
+            }
+        }
+
+        val preferredFromNavigation = streams.firstOrNull { s ->
+            val addonMatch = currentPreferredAddonId?.let { s.addonId == it } ?: true
+            val sourceMatch = currentPreferredSourceName?.let { s.source == it } ?: true
+            addonMatch && sourceMatch
+        } ?: streams.firstOrNull { s ->
+            currentPreferredAddonId?.let { s.addonId == it } ?: false
+        }
+
+        val stabilitySelected = pickPreferredStream(streams, preferredLanguage)
+        val selected = preferredFromBingeGroup ?: preferredFromNavigation ?: stabilitySelected ?: streams.first()
+        selectStream(selected)
     }
 
     private fun pickPreferredStream(

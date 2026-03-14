@@ -374,6 +374,12 @@ class DetailsViewModel @Inject constructor(
                     if (!imdbId.isNullOrBlank()) {
                         mediaRepository.cacheImdbId(mediaType, mediaId, imdbId)
                         updateState { state -> state.copy(imdbId = imdbId, tvdbId = tvdbId) }
+                        // Prefetch streams in background as soon as IMDB ID is available.
+                        // When the user presses Play or opens Sources, results are already
+                        // cached in StreamRepository, so loading appears near-instant.
+                        val prefetchSeason = if (mediaType == MediaType.TV) (initialSeason ?: 1) else null
+                        val prefetchEpisode = if (mediaType == MediaType.TV) (initialEpisode ?: 1) else null
+                        prefetchStreamsInBackground(imdbId, prefetchSeason, prefetchEpisode)
                     } else if (tvdbId != null) {
                         updateState { state -> state.copy(tvdbId = tvdbId) }
                     }
@@ -993,6 +999,40 @@ class DetailsViewModel @Inject constructor(
     }
 
     // ========== Stream Resolution ==========
+
+    /**
+     * Silently prefetch streams in the background so they are cached by the time
+     * the user presses Play or opens Sources. Does not update UI loading state —
+     * it only populates StreamRepository's internal cache.
+     */
+    private var prefetchJob: kotlinx.coroutines.Job? = null
+    private fun prefetchStreamsInBackground(imdbId: String, season: Int?, episode: Int?) {
+        prefetchJob?.cancel()
+        prefetchJob = viewModelScope.launch {
+            runCatching {
+                if (currentMediaType == MediaType.MOVIE) {
+                    streamRepository.resolveMovieStreams(
+                        imdbId = imdbId,
+                        title = _uiState.value.item?.title.orEmpty(),
+                        year = _uiState.value.item?.year?.toIntOrNull()
+                    )
+                } else if (season != null && episode != null) {
+                    streamRepository.resolveEpisodeStreams(
+                        imdbId = imdbId,
+                        season = season,
+                        episode = episode,
+                        tmdbId = currentMediaId,
+                        tvdbId = _uiState.value.tvdbId,
+                        genreIds = _uiState.value.item?.genreIds ?: emptyList(),
+                        originalLanguage = _uiState.value.item?.originalLanguage,
+                        title = _uiState.value.item?.title ?: ""
+                    )
+                } else {
+                    null
+                }
+            }
+        }
+    }
 
     fun loadStreams(imdbId: String?, season: Int? = null, episode: Int? = null) {
         loadStreamsJob?.cancel()

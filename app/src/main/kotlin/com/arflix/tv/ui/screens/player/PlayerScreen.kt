@@ -333,11 +333,7 @@ fun PlayerScreen(
             .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .setDefaultRequestProperties(baseRequestHeaders)
     }
-    val mediaCache = remember(context) {
-        val cacheDir = java.io.File(context.cacheDir, "media3_playback_cache").apply { mkdirs() }
-        val evictor = LeastRecentlyUsedCacheEvictor(256L * 1024L * 1024L)
-        SimpleCache(cacheDir, evictor, StandaloneDatabaseProvider(context))
-    }
+    val mediaCache = remember(context) { PlaybackCacheSingleton.getInstance(context) }
     val cacheDataSourceFactory = remember(httpDataSourceFactory, mediaCache) {
         CacheDataSource.Factory()
             .setCache(mediaCache)
@@ -2910,6 +2906,23 @@ private fun resolveFrameRateSeamlessStrategy(): Int {
 
 private fun readMedia3FrameRateConst(fieldName: String, fallback: Int): Int {
     return runCatching { C::class.java.getField(fieldName).getInt(null) }.getOrDefault(fallback)
+}
+
+private object PlaybackCacheSingleton {
+    @Volatile
+    private var instance: SimpleCache? = null
+
+    fun getInstance(context: android.content.Context): SimpleCache {
+        return instance ?: synchronized(this) {
+            instance ?: run {
+                val cacheDir = java.io.File(context.applicationContext.cacheDir, "media3_playback_cache").apply { mkdirs() }
+                val evictor = LeastRecentlyUsedCacheEvictor(256L * 1024L * 1024L)
+                SimpleCache(cacheDir, evictor, StandaloneDatabaseProvider(context.applicationContext)).also {
+                    instance = it
+                }
+            }
+        }
+    }
 }
 
 private class PlaybackCookieJar : CookieJar {
