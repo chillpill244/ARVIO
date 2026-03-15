@@ -230,13 +230,13 @@ private fun ContextMenuItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isFocused) Color.White else TextSecondary,
+                tint = if (isFocused) Color.Black else TextSecondary,
                 modifier = Modifier.size(22.dp)
             )
             Text(
                 text = label,
                 style = ArflixTypography.body,
-                color = if (isFocused) Color.White else TextPrimary
+                color = if (isFocused) Color.Black else TextPrimary
             )
         }
     }

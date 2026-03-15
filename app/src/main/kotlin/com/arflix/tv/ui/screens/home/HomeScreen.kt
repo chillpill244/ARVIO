@@ -1,4 +1,4 @@
-@file:OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
+@file:OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package com.arflix.tv.ui.screens.home
 
@@ -15,6 +15,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.Arrangement
@@ -104,6 +105,7 @@ import com.arflix.tv.data.model.Category
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.ui.components.MediaCard as ArvioMediaCard
+import com.arflix.tv.ui.components.CardContent
 import com.arflix.tv.ui.components.CardLayoutMode
 import com.arflix.tv.ui.components.MediaContextMenu
 import com.arflix.tv.ui.components.rememberCardLayoutMode
@@ -208,6 +210,8 @@ fun HomeScreen(
     currentProfile: com.arflix.tv.data.model.Profile? = null,
     onNavigateToDetails: (MediaType, Int, Int?, Int?) -> Unit = { _, _, _, _ -> },
     onNavigateToSearch: () -> Unit = {},
+    onNavigateToMovies: () -> Unit = {},
+    onNavigateToSeries: () -> Unit = {},
     onNavigateToWatchlist: () -> Unit = {},
     onNavigateToTv: (channelId: String?, streamUrl: String?) -> Unit = { _, _ -> },
     onNavigateToSettings: () -> Unit = {},
@@ -551,6 +555,8 @@ fun HomeScreen(
             currentProfile = currentProfile,
             onNavigateToDetails = onNavigateToDetails,
             onNavigateToSearch = onNavigateToSearch,
+            onNavigateToMovies = onNavigateToMovies,
+            onNavigateToSeries = onNavigateToSeries,
             onNavigateToWatchlist = onNavigateToWatchlist,
             onNavigateToTv = onNavigateToTv,
             getIptvStreamUrl = { itemId -> viewModel.getIptvStreamUrl(itemId) },
@@ -732,7 +738,7 @@ private fun HeroSection(
                                 .width(300.dp)
                         )
                     } else {
-                        // Fallback to title text
+                        // Fallback to title text - single line with marquee for long titles
                         Text(
                             text = currentItem.title.uppercase(),
                             style = ArflixTypography.heroTitle.copy(
@@ -742,7 +748,9 @@ private fun HeroSection(
                                 shadow = textShadow
                             ),
                             color = TextPrimary,
-                            maxLines = 2
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip,
+                            modifier = Modifier.basicMarquee()
                         )
                     }
                 }
@@ -976,6 +984,8 @@ private fun HomeInputLayer(
     currentProfile: com.arflix.tv.data.model.Profile?,
     onNavigateToDetails: (MediaType, Int, Int?, Int?) -> Unit,
     onNavigateToSearch: () -> Unit,
+    onNavigateToMovies: () -> Unit,
+    onNavigateToSeries: () -> Unit,
     onNavigateToWatchlist: () -> Unit,
     onNavigateToTv: (channelId: String?, streamUrl: String?) -> Unit,
     getIptvStreamUrl: (itemId: Int) -> String?,
@@ -986,8 +996,10 @@ private fun HomeInputLayer(
 ) {
     val focusRequester = remember { FocusRequester() }
     var selectPressedInHome by remember { mutableStateOf(false) }
+    var enterKeyDownTimeMs by remember { mutableLongStateOf(0L) }
     val hasProfile = currentProfile != null
     val maxSidebarIndex = if (hasProfile) SidebarItem.entries.size else SidebarItem.entries.size - 1  // 5 or 4
+    val longPressThresholdMs = 500L  // Hold time required to trigger long-press
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -1022,6 +1034,10 @@ private fun HomeInputLayer(
                             }
                             // Only accept KeyUp action when its KeyDown also happened on this screen.
                             selectPressedInHome = true
+                            // Only record timestamp on first KeyDown (avoid key repeat resetting it)
+                            if (enterKeyDownTimeMs == 0L) {
+                                enterKeyDownTimeMs = SystemClock.elapsedRealtime()
+                            }
                             true
                         }
                         Key.DirectionLeft -> {
@@ -1115,6 +1131,11 @@ private fun HomeInputLayer(
                                 return@onPreviewKeyEvent true
                             }
                             selectPressedInHome = false
+                            
+                            // Check if Enter was held long enough for long-press
+                            val holdDurationMs = SystemClock.elapsedRealtime() - enterKeyDownTimeMs
+                            val isLongPress = holdDurationMs >= longPressThresholdMs
+                            
                             if (focusState.isSidebarFocused) {
                                 if (hasProfile && focusState.sidebarFocusIndex == 0) {
                                     onSwitchProfile()
@@ -1123,6 +1144,8 @@ private fun HomeInputLayer(
                                     when (SidebarItem.entries[itemIndex]) {
                                         SidebarItem.SEARCH -> onNavigateToSearch()
                                         SidebarItem.HOME -> { }
+                                        SidebarItem.MOVIES -> onNavigateToMovies()
+                                        SidebarItem.SERIES -> onNavigateToSeries()
                                         SidebarItem.WATCHLIST -> onNavigateToWatchlist()
                                         SidebarItem.TV -> onNavigateToTv(null, null)
                                         SidebarItem.SETTINGS -> onNavigateToSettings()
@@ -1134,12 +1157,17 @@ private fun HomeInputLayer(
                                     focusState.currentRowIndex,
                                     focusState.currentItemIndex
                                 )
-                                currentItem?.let { item ->
-                                    val iptvId = item.status?.removePrefix("iptv:")?.takeIf { item.status?.startsWith("iptv:") == true && it.isNotBlank() }
-                                    if (iptvId != null) {
-                                        onNavigateToTv(iptvId, getIptvStreamUrl(item.id))
-                                    } else {
-                                        onNavigateToDetails(item.mediaType, item.id, item.nextEpisode?.seasonNumber, item.nextEpisode?.episodeNumber)
+                                if (currentItem != null) {
+                                    val currentCategory = categories.getOrNull(focusState.currentRowIndex)
+                                    val isContinueWatching = currentCategory?.id == "continue_watching"
+                                    
+                                    if (isLongPress && isContinueWatching) {
+                                        // Long-press on Continue Watching item: open context menu to remove
+                                        onOpenContextMenu(currentItem, true)
+                                    } else if (!isLongPress || !isContinueWatching) {
+                                        // Short-press: normal navigation to item details
+                                        // Long-press on non-Continue Watching: also navigate normally
+                                        onNavigateToDetails(currentItem.mediaType, currentItem.id, currentItem.nextEpisode?.seasonNumber, currentItem.nextEpisode?.episodeNumber)
                                     }
                                 }
                             }
@@ -1161,6 +1189,8 @@ private fun HomeInputLayer(
                 when (item) {
                     SidebarItem.SEARCH -> onNavigateToSearch()
                     SidebarItem.HOME -> { }
+                    SidebarItem.MOVIES -> onNavigateToMovies()
+                    SidebarItem.SERIES -> onNavigateToSeries()
                     SidebarItem.WATCHLIST -> onNavigateToWatchlist()
                     SidebarItem.TV -> onNavigateToTv(null, null)
                     SidebarItem.SETTINGS -> onNavigateToSettings()
@@ -1182,7 +1212,17 @@ private fun HomeInputLayer(
                 } else {
                     onNavigateToDetails(item.mediaType, item.id, item.nextEpisode?.seasonNumber, item.nextEpisode?.episodeNumber)
                 }
-            }
+            },
+            onItemFocused = { item, index ->
+                val rowIndex = categories.indexOfFirst { it.items.contains(item) }
+                if (rowIndex >= 0) {
+                    focusState.currentRowIndex = rowIndex
+                    focusState.currentItemIndex = index
+                    focusState.isSidebarFocused = false
+                    focusState.lastNavEventTime = SystemClock.elapsedRealtime()
+                }
+            },
+            onOpenContextMenu = onOpenContextMenu
         )
     }
 }
@@ -1195,7 +1235,9 @@ private fun HomeRowsLayer(
     contentStartPadding: androidx.compose.ui.unit.Dp,
     fastScrollThresholdMs: Long,
     usePosterCards: Boolean,
-    onItemClick: (MediaItem) -> Unit
+    onItemClick: (MediaItem) -> Unit,
+    onItemFocused: (MediaItem, Int) -> Unit = { _, _ -> },
+    onOpenContextMenu: (MediaItem, Boolean) -> Unit = { _, _ -> }
 ) {
     val currentRowIndex = focusState.currentRowIndex
     var isFastScrolling by remember { mutableStateOf(false) }
@@ -1270,6 +1312,9 @@ private fun HomeRowsLayer(
                                 focusState.currentItemIndex = itemIdx
                                 focusState.isSidebarFocused = false
                                 focusState.lastNavEventTime = SystemClock.elapsedRealtime()
+                            },
+                            onItemLongPress = { item ->
+                                onOpenContextMenu(item, true)
                             }
                         )
                     }
@@ -1424,7 +1469,8 @@ private fun ContentRow(
     focusedItemIndex: Int,
     isFastScrolling: Boolean,
     onItemClick: (MediaItem) -> Unit,
-    onItemFocused: (MediaItem, Int) -> Unit
+    onItemFocused: (MediaItem, Int) -> Unit,
+    onItemLongPress: (MediaItem) -> Unit = {}
 ) {
     val rowState = rememberLazyListState()
     val configuration = LocalConfiguration.current
@@ -1622,7 +1668,7 @@ private fun ContentRow(
                         Box(modifier = Modifier.padding(start = 60.dp)) {
                             val cardLogoUrl = cardLogoUrls["${item.mediaType}_${item.id}"]
                             ArvioMediaCard(
-                                item = item,
+                                content = CardContent.Media(item),
                                 width = 140.dp,  // Smaller cards
                                 isLandscape = !usePosterCards,
                                 logoImageUrl = cardLogoUrl,
@@ -1631,6 +1677,7 @@ private fun ContentRow(
                                 enableSystemFocus = false,
                                 onFocused = { onItemFocused(item, index) },
                                 onClick = { onItemClick(item) },
+                                onLongPress = { onItemLongPress(item) }
                             )
                         }
                     }
@@ -1638,7 +1685,7 @@ private fun ContentRow(
                     // Standard Card - keep width aligned with scroll math
                     val cardLogoUrl = cardLogoUrls["${item.mediaType}_${item.id}"]
                     ArvioMediaCard(
-                        item = item,
+                        content = CardContent.Media(item),
                         width = itemWidth,
                         isLandscape = !usePosterCards,
                         logoImageUrl = cardLogoUrl,
@@ -1647,6 +1694,7 @@ private fun ContentRow(
                         enableSystemFocus = false,
                         onFocused = { onItemFocused(item, index) },
                         onClick = { onItemClick(item) },
+                        onLongPress = { onItemLongPress(item) }
                     )
                 }
             }

@@ -17,14 +17,18 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.arflix.tv.network.OkHttpProvider
+import com.arflix.tv.data.repository.IptvRefreshInterval
+import com.arflix.tv.data.repository.IptvRepository
 import com.arflix.tv.data.repository.ProfileManager
 import com.arflix.tv.util.AppLogger
 import com.arflix.tv.util.CrashlyticsProvider
+import com.arflix.tv.worker.IptvRefreshWorker
 import com.arflix.tv.worker.TraktSyncWorker
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -40,6 +44,8 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
     lateinit var workerFactory: HiltWorkerFactory
     @Inject
     lateinit var profileManager: ProfileManager
+    @Inject
+    lateinit var iptvRepository: IptvRepository
 
     override fun onCreate() {
         super.onCreate()
@@ -53,6 +59,23 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
         // Initialize active profile asynchronously to avoid blocking cold start.
         appScope.launch {
             runCatching { profileManager.initialize() }
+            initializeIptvRefreshSchedule()
+        }
+    }
+
+    private fun initializeIptvRefreshSchedule() {
+        appScope.launch {
+            try {
+                // Use IptvRepository to read the profile-scoped preference key correctly.
+                // Reading the key directly from the datastore would use the wrong (non-scoped)
+                // key name and always return null, preventing the worker from being scheduled.
+                val interval = iptvRepository.observeRefreshInterval().first()
+                if (interval != IptvRefreshInterval.DISABLED) {
+                    scheduleIptvRefreshIfNeeded(interval.hours)
+                }
+            } catch (e: Exception) {
+                // Ignore - profile may not be ready yet
+            }
         }
     }
 
@@ -121,6 +144,35 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
             TraktSyncWorker.WORK_NAME,
             ExistingPeriodicWorkPolicy.KEEP,
             syncRequest
+        )
+    }
+
+    /**
+     * Schedule or cancel IPTV playlist refresh based on user preference
+     */
+    fun scheduleIptvRefreshIfNeeded(intervalHours: Long) {
+        val workManager = WorkManager.getInstance(this)
+        
+        if (intervalHours <= 0) {
+            workManager.cancelUniqueWork(IptvRefreshWorker.WORK_NAME)
+            return
+        }
+
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val refreshRequest = PeriodicWorkRequestBuilder<IptvRefreshWorker>(
+            intervalHours, TimeUnit.HOURS
+        )
+            .setConstraints(constraints)
+            .addTag(IptvRefreshWorker.TAG)
+            .build()
+
+        workManager.enqueueUniquePeriodicWork(
+            IptvRefreshWorker.WORK_NAME,
+            ExistingPeriodicWorkPolicy.UPDATE,
+            refreshRequest
         )
     }
 

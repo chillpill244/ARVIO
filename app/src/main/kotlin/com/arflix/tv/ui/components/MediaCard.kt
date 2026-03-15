@@ -1,7 +1,13 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.arflix.tv.ui.components
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +24,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,6 +44,7 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.size.Precision
+import com.arflix.tv.data.model.IptvChannel
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.ui.skin.ArvioFocusableSurface
@@ -47,12 +55,43 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.zIndex
 
 /**
+ * Sealed class representing card content for unified display.
+ * Supports both MediaItem and IptvChannel through a common interface.
+ */
+sealed class CardContent {
+    abstract val id: Any  // Can be Int (MediaItem) or String (IptvChannel)
+    abstract val title: String
+    abstract val image: String?
+    abstract val subtitle: String
+
+    data class Media(val item: MediaItem) : CardContent() {
+        override val id: Any = item.id
+        override val title: String = item.title
+        override val image: String? = item.image
+        override val subtitle: String = item.subtitle
+        val backdrop: String? = item.backdrop
+        val isWatched: Boolean = item.isWatched
+        val progress: Int = item.progress
+        val isPlaceholder: Boolean = item.isPlaceholder
+        val mediaType: MediaType = item.mediaType
+    }
+
+    data class Channel(val channel: IptvChannel) : CardContent() {
+        override val id: Any = channel.id
+        override val title: String = channel.name
+        override val image: String? = channel.logo
+        override val subtitle: String = ""  // Channels don't have subtitles
+    }
+}
+
+/**
  * Media card component for rows/grids.
  * Arctic Fuse 2 style:
  * - Large landscape cards with solid pink/magenta focus border
  * - Transform-based focus (graphicsLayer) via `ArvioFocusableSurface`
  * - No layout size changes on focus (no width/height scaling)
  * - Uses `ArvioSkin` for consistent styling
+ * - Supports both MediaItem and IptvChannel via CardContent sealed class
  */
 
 // Shared gradient overlay for all cards - avoids per-card Brush allocation.
@@ -69,7 +108,7 @@ private val sharedCardOverlayBrush = Brush.verticalGradient(
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun MediaCard(
-    item: MediaItem,
+    content: CardContent,
     width: Dp = 280.dp,  // Arctic Fuse 2: larger cards by default
     isLandscape: Boolean = true,
     logoImageUrl: String? = null,
@@ -78,10 +117,14 @@ fun MediaCard(
     enableSystemFocus: Boolean = true,
     onFocused: () -> Unit = {},
     onClick: () -> Unit = {},
+    onLongPress: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    // Extract MediaItem for type-specific features
+    val mediaItem = (content as? CardContent.Media)?.item
+    
     // If this is a placeholder card, show skeleton only
-    if (item.isPlaceholder) {
+    if (mediaItem?.isPlaceholder == true) {
         PlaceholderCard(
             width = width,
             isLandscape = isLandscape,
@@ -97,9 +140,9 @@ fun MediaCard(
     // Plex-like behavior: landscape cards should prefer wide artwork/backdrops.
     // Poster art is portrait and looks cropped in 16:9 cards, so only use it as fallback.
     val imageUrl = if (isLandscape) {
-        item.backdrop ?: item.image
+        (mediaItem?.backdrop ?: content.image)
     } else {
-        item.image
+        content.image
     }
     val shape = rememberArvioCardShape(ArvioSkin.radius.md)
 
@@ -142,6 +185,15 @@ fun MediaCard(
         modifier = modifier
             .width(width)
             .zIndex(if (visualFocused) 1f else 0f)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val firstDown = awaitFirstDown()
+                    val longPress = awaitLongPressOrCancellation(firstDown.id)
+                    if (longPress != null) {
+                        onLongPress()
+                    }
+                }
+            }
     ) {
         ArvioFocusableSurface(
             modifier = Modifier
@@ -163,15 +215,28 @@ fun MediaCard(
             },
         ) { _ ->
             Box(modifier = Modifier.fillMaxSize()) {
+                // Glass UI background for missing images
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.05f),
+                                    Color.White.copy(alpha = 0.08f),
+                                    Color.White.copy(alpha = 0.05f)
+                                )
+                            )
+                        )
+                )
                 // Performance: Removed SkeletonBox with infinite shimmer animation
                 // The surface background color provides a placeholder while image loads
                 AsyncImage(
                     model = imageRequest,
-                    contentDescription = item.title,
+                    contentDescription = content.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(ArvioSkin.colors.surface),
+                        .fillMaxSize(),
                 )
                 Box(
                     modifier = Modifier
@@ -180,10 +245,11 @@ fun MediaCard(
                 )
 
                 // Official logo/art overlay centered on landscape cards.
-                if (isLandscape && logoRequest != null) {
+                // Only show for MediaItem (mediaItem is not null)
+                if (isLandscape && logoRequest != null && mediaItem != null) {
                     AsyncImage(
                         model = logoRequest,
-                        contentDescription = "${item.title} logo",
+                        contentDescription = "${content.title} logo",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .align(Alignment.Center)
@@ -193,35 +259,35 @@ fun MediaCard(
                     )
                 }
 
-                // Subtle green watched badge
-                if (item.isWatched) {
+                // Subtle green watched badge - only for MediaItem
+                if (mediaItem?.isWatched == true) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                        .padding(bottom = 6.dp, end = 6.dp)
-                        .size(14.dp)
-                        .background(
-                            color = ArvioSkin.colors.watchedGreen.copy(alpha = 0.2f),
-                            shape = CircleShape
+                            .padding(bottom = 6.dp, end = 6.dp)
+                            .size(14.dp)
+                            .background(
+                                color = ArvioSkin.colors.watchedGreen.copy(alpha = 0.2f),
+                                shape = CircleShape
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = ArvioSkin.colors.watchedGreen,
+                                shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            tint = ArvioSkin.colors.watchedGreen,
+                            modifier = Modifier.size(8.dp)
                         )
-                        .border(
-                            width = 1.dp,
-                            color = ArvioSkin.colors.watchedGreen,
-                            shape = CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = ArvioSkin.colors.watchedGreen,
-                        modifier = Modifier.size(8.dp)
-                    )
-                }
+                    }
                 }
 
-                // Subtle progress bar for Continue Watching
-                if (showProgress && !item.isWatched && item.progress in 1..94) {
+                // Subtle progress bar for Continue Watching - only for MediaItem
+                if (showProgress && mediaItem?.isWatched == false && mediaItem?.progress in 1..94) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -233,7 +299,7 @@ fun MediaCard(
                     ) {
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth(item.progress / 100f)
+                                .fillMaxWidth(mediaItem.progress / 100f)
                                 .fillMaxSize()
                                 .background(Color.White.copy(alpha = 0.92f))
                         )
@@ -245,7 +311,7 @@ fun MediaCard(
         Spacer(modifier = Modifier.height(ArvioSkin.spacing.x2))
 
         Text(
-            text = item.title,
+            text = content.title,
             style = ArvioSkin.typography.cardTitle,
             color = if (visualFocused) {
                 ArvioSkin.colors.textPrimary
@@ -254,15 +320,17 @@ fun MediaCard(
             },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = if (visualFocused) Modifier.basicMarquee() else Modifier,
         )
 
         // Arctic Fuse 2 style: Show media type with genre-like format
-        val subtitle = remember(item.subtitle, item.mediaType) {
-            item.subtitle.ifBlank {
-                when (item.mediaType) {
+        // For channels, show empty or use a default text
+        val subtitle = remember(content.subtitle, mediaItem?.mediaType) {
+            content.subtitle.ifBlank {
+                when (mediaItem?.mediaType) {
                     MediaType.TV -> "Drama / TV Series"
                     MediaType.MOVIE -> "Action / Movie"
-                    else -> "Media"
+                    else -> "Live TV"
                 }
             }
         }
@@ -333,7 +401,7 @@ private fun PlaceholderCard(
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun PosterCard(
-    item: MediaItem,
+    content: CardContent,
     width: Dp = 140.dp,
     isFocusedOverride: Boolean = false,
     enableSystemFocus: Boolean = true,
@@ -352,11 +420,11 @@ fun PosterCard(
     val density = LocalDensity.current
     val aspectRatio = 2f / 3f
     // Performance: Removed context/density from keys
-    val imageRequest = remember(item.image, width) {
+    val imageRequest = remember(content.image, width) {
         val widthPx = with(density) { width.roundToPx() }
         val heightPx = (widthPx / aspectRatio).toInt().coerceAtLeast(1)
         ImageRequest.Builder(context)
-            .data(item.image)
+            .data(content.image)
             .size(widthPx, heightPx)
             .precision(Precision.INEXACT)
             .allowHardware(true)
@@ -383,7 +451,7 @@ fun PosterCard(
             // Performance: Removed SkeletonBox with infinite shimmer animation
             AsyncImage(
                 model = imageRequest,
-                contentDescription = item.title,
+                contentDescription = content.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
@@ -396,16 +464,18 @@ fun PosterCard(
             Spacer(modifier = Modifier.height(ArvioSkin.spacing.x1))
 
             Text(
-                text = item.title,
+                text = content.title,
                 style = ArvioSkin.typography.caption,
                 color = ArvioSkin.colors.textPrimary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
 
-            if (item.year.isNotBlank()) {
+            // Show year for MediaItem only
+            val mediaItem = (content as? CardContent.Media)?.item
+            if (mediaItem?.year?.isNotBlank() == true) {
                 Text(
-                    text = item.year,
+                    text = mediaItem.year,
                     style = ArvioSkin.typography.caption,
                     color = ArvioSkin.colors.textMuted.copy(alpha = 0.65f),
                 )
@@ -413,3 +483,7 @@ fun PosterCard(
         }
     }
 }
+
+/**
+ * Convenience wrapper for usage at call sites - use CardContent.Media and Channel directly
+ */

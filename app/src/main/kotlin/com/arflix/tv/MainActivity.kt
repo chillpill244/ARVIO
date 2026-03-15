@@ -64,6 +64,7 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.arflix.tv.data.repository.AuthRepository
 import com.arflix.tv.data.repository.AuthState
+import com.arflix.tv.data.repository.MediaRepository
 import com.arflix.tv.data.repository.ProfileRepository
 import com.arflix.tv.data.repository.TraktRepository
 import com.arflix.tv.navigation.AppNavigation
@@ -100,6 +101,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var traktRepository: Lazy<TraktRepository>
 
+    @Inject
+    lateinit var mediaRepository: Lazy<MediaRepository>
+
     private var jankStats: JankStats? = null
 
     // StartupViewModel for parallel loading during splash
@@ -131,6 +135,7 @@ class MainActivity : ComponentActivity() {
                     authRepository = authRepository.get(),
                     profileRepository = profileRepository.get(),
                     traktRepository = traktRepository.get(),
+                    mediaRepository = mediaRepository.get(),
                     preloadedCategories = startupState.categories,
                     preloadedHeroItem = startupState.heroItem,
                     preloadedHeroLogoUrl = startupState.heroLogoUrl,
@@ -287,6 +292,7 @@ fun ArflixApp(
     authRepository: AuthRepository,
     profileRepository: ProfileRepository,
     traktRepository: TraktRepository,
+    mediaRepository: com.arflix.tv.data.repository.MediaRepository,
     preloadedCategories: List<com.arflix.tv.data.model.Category> = emptyList(),
     preloadedHeroItem: com.arflix.tv.data.model.MediaItem? = null,
     preloadedHeroLogoUrl: String? = null,
@@ -335,7 +341,8 @@ fun ArflixApp(
                     profileRepository.clearActiveProfile()
                 }
             },
-            onExitApp = onExitApp
+            onExitApp = onExitApp,
+            mediaRepository = mediaRepository
         )
     }
 }

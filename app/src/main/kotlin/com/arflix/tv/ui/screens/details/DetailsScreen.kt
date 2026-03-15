@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.arflix.tv.ui.screens.details
 
 import android.content.Intent
@@ -10,6 +12,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,6 +53,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -91,6 +95,7 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
@@ -103,6 +108,7 @@ import com.arflix.tv.data.model.Review
 import com.arflix.tv.ui.components.EpisodeContextMenu
 import com.arflix.tv.ui.components.LoadingIndicator
 import com.arflix.tv.ui.components.CardLayoutMode
+import com.arflix.tv.ui.components.CardContent
 import com.arflix.tv.ui.components.MediaCard
 import com.arflix.tv.ui.components.PersonModal
 import com.arflix.tv.ui.components.PosterCard
@@ -147,6 +153,8 @@ fun DetailsScreen(
     onNavigateToDetails: (MediaType, Int) -> Unit,
     onNavigateToHome: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
+    onNavigateToMovies: () -> Unit = {},
+    onNavigateToSeries: () -> Unit = {},
     onNavigateToWatchlist: () -> Unit = {},
     onNavigateToTv: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
@@ -157,6 +165,7 @@ fun DetailsScreen(
     val usePosterCards = rememberCardLayoutMode() == CardLayoutMode.POSTER
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val coroutineScope = rememberCoroutineScope()
 
     // Start on buttons for both TV and movies (buttons are now shown for both)
     var focusedSection by remember { mutableStateOf(FocusSection.BUTTONS) }
@@ -189,10 +198,18 @@ fun DetailsScreen(
     }
 
     // Keep watched badges and continue target fresh when returning from player.
+    // Skip the first ON_RESUME (which happens on initial load) to avoid overriding
+    // the resume info that loadDetails() already computed.
     DisposableEffect(lifecycleOwner, mediaType, mediaId) {
+        var isFirstResume = true
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.refreshAfterPlayerReturn()
+                if (isFirstResume) {
+                    isFirstResume = false
+                } else {
+                    // Only refresh when returning from player, not on initial load
+                    viewModel.refreshAfterPlayerReturn()
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -252,6 +269,18 @@ fun DetailsScreen(
     LaunchedEffect(uiState.initialSeasonIndex) {
         if (uiState.initialSeasonIndex > 0) {
             seasonIndex = uiState.initialSeasonIndex
+        }
+    }
+
+    // Sync seasonIndex with currentSeason (handles non-contiguous IPTV seasons)
+    LaunchedEffect(uiState.currentSeason, uiState.availableSeasons) {
+        if (uiState.availableSeasons.isNotEmpty()) {
+            val idx = uiState.availableSeasons.indexOf(uiState.currentSeason)
+            if (idx >= 0) {
+                seasonIndex = idx
+            }
+        } else if (uiState.currentSeason > 0) {
+            seasonIndex = uiState.currentSeason - 1
         }
     }
 
@@ -391,6 +420,8 @@ fun DetailsScreen(
                                     when (SidebarItem.entries[itemIndex]) {
                                         SidebarItem.SEARCH -> onNavigateToSearch()
                                         SidebarItem.HOME -> onNavigateToHome()
+                                        SidebarItem.MOVIES -> onNavigateToMovies()
+                                        SidebarItem.SERIES -> onNavigateToSeries()
                                         SidebarItem.WATCHLIST -> onNavigateToWatchlist()
                                         SidebarItem.TV -> onNavigateToTv()
                                         SidebarItem.SETTINGS -> onNavigateToSettings()
@@ -422,7 +453,25 @@ fun DetailsScreen(
                                                 uiState.playPositionMs
                                             } else null
 
-                                            if (uiState.autoPlaySingleSource && !uiState.imdbId.isNullOrBlank()) {
+                                            // Check if streams are already available (pre-fetched from VOD)
+                                            if (uiState.streams.isNotEmpty()) {
+                                                // Use pre-fetched streams directly
+                                                val firstStream = uiState.streams.firstOrNull()
+                                                if (firstStream != null) {
+                                                    onNavigateToPlayer(
+                                                        mediaType,
+                                                        mediaId,
+                                                        season,
+                                                        episode,
+                                                        uiState.imdbId,
+                                                        firstStream.url?.takeIf { it.isNotBlank() },
+                                                        firstStream.addonId.takeIf { it.isNotBlank() },
+                                                        firstStream.source.takeIf { it.isNotBlank() },
+                                                        startPositionMs
+                                                    )
+                                                }
+                                            } else if (uiState.autoPlaySingleSource && !uiState.imdbId.isNullOrBlank()) {
+                                                // Fetch streams if not pre-fetched
                                                 pendingAutoPlayRequest = PendingAutoPlayRequest(
                                                     season = season,
                                                     episode = episode,
@@ -472,14 +521,44 @@ fun DetailsScreen(
                                 FocusSection.EPISODES -> {
                                     val ep = uiState.episodes.getOrNull(episodeIndex)
                                     if (ep != null) {
-                                        onNavigateToPlayer(
-                                            mediaType, mediaId,
-                                            ep.seasonNumber, ep.episodeNumber, uiState.imdbId, null, null, null, null
-                                        )
+                                        // If IPTV series context exists, play directly (we have stream URLs)
+                                        if (uiState.iptvSeriesContext != null) {
+                                            coroutineScope.launch {
+                                                val iptvUrl = viewModel.buildIptvEpisodeUrl(ep.seasonNumber, ep.episodeNumber)
+                                                if (iptvUrl != null) {
+                                                    onNavigateToPlayer(
+                                                        mediaType,
+                                                        mediaId,
+                                                        ep.seasonNumber,
+                                                        ep.episodeNumber,
+                                                        uiState.imdbId,
+                                                        iptvUrl,
+                                                        null,
+                                                        "IPTV",
+                                                        null
+                                                    )
+                                                } else {
+                                                    // Fallback to stream selector if URL building fails
+                                                    showStreamSelector = true
+                                                    viewModel.loadStreams(uiState.imdbId, ep.seasonNumber, ep.episodeNumber)
+                                                }
+                                            }
+                                        } else {
+                                            // Open the source picker for the selected episode instead of
+                                            // navigating directly to the player
+                                            showStreamSelector = true
+                                            viewModel.loadStreams(uiState.imdbId, ep.seasonNumber, ep.episodeNumber)
+                                        }
                                     }
                                 }
                                 FocusSection.SEASONS -> {
-                                    viewModel.loadSeason(seasonIndex + 1)
+                                    // Get actual season number (support non-contiguous IPTV seasons)
+                                    val actualSeasonNumber = if (uiState.availableSeasons.isNotEmpty()) {
+                                        uiState.availableSeasons.getOrNull(seasonIndex) ?: (seasonIndex + 1)
+                                    } else {
+                                        seasonIndex + 1
+                                    }
+                                    viewModel.loadSeason(actualSeasonNumber)
                                 }
                                 FocusSection.CAST -> {
                                     val member = uiState.cast.getOrNull(castIndex)
@@ -527,6 +606,7 @@ fun DetailsScreen(
                     episodes = uiState.episodes,
                     totalSeasons = uiState.totalSeasons,
                     currentSeason = uiState.currentSeason,
+                    availableSeasons = uiState.availableSeasons,
                     cast = uiState.cast,
                     reviews = uiState.reviews,
                     similar = uiState.similar,
@@ -558,6 +638,8 @@ fun DetailsScreen(
                 when (item) {
                     SidebarItem.SEARCH -> onNavigateToSearch()
                     SidebarItem.HOME -> onNavigateToHome()
+                    SidebarItem.MOVIES -> onNavigateToMovies()
+                    SidebarItem.SERIES -> onNavigateToSeries()
                     SidebarItem.WATCHLIST -> onNavigateToWatchlist()
                     SidebarItem.TV -> onNavigateToTv()
                     SidebarItem.SETTINGS -> onNavigateToSettings()
@@ -711,10 +793,11 @@ private fun handleRight(
     setButton: (Int) -> Unit, setEpisode: (Int) -> Unit, setSeason: (Int) -> Unit,
     setCast: (Int) -> Unit, setReview: (Int) -> Unit, setSimilar: (Int) -> Unit
 ): Boolean {
+    val seasonCount = if (uiState.availableSeasons.isNotEmpty()) uiState.availableSeasons.size else uiState.totalSeasons
     when (section) {
         FocusSection.BUTTONS -> if (buttonIdx < 4) setButton(buttonIdx + 1)
         FocusSection.EPISODES -> if (episodeIdx < uiState.episodes.size - 1) setEpisode(episodeIdx + 1)
-        FocusSection.SEASONS -> if (seasonIdx < uiState.totalSeasons - 1) setSeason(seasonIdx + 1)
+        FocusSection.SEASONS -> if (seasonIdx < seasonCount - 1) setSeason(seasonIdx + 1)
         FocusSection.CAST -> if (castIdx < uiState.cast.size - 1) setCast(castIdx + 1)
         FocusSection.REVIEWS -> if (reviewIdx < uiState.reviews.size - 1) setReview(reviewIdx + 1)
         FocusSection.SIMILAR -> if (similarIdx < uiState.similar.size - 1) setSimilar(similarIdx + 1)
@@ -730,6 +813,7 @@ private fun DetailsContent(
     episodes: List<Episode>,
     totalSeasons: Int,
     currentSeason: Int,
+    availableSeasons: List<Int> = emptyList(),
     cast: List<CastMember>,
     reviews: List<Review>,
     similar: List<MediaItem>,
@@ -874,7 +958,11 @@ private fun DetailsContent(
                                     shadow = textShadow
                                 ),
                                 color = TextPrimary,
-                                maxLines = 2
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .width(300.dp)
+                                    .basicMarquee()
                             )
                         }
                     }
@@ -972,6 +1060,18 @@ private fun DetailsContent(
                             )
                         }
                     }
+
+                    // Show TMDB ID
+                    Text(text = "|", style = separatorStyle, color = Color.White.copy(alpha = 0.7f))
+                    Text(
+                        text = "TMDB: ${item.id}",
+                        style = ArflixTypography.caption.copy(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            shadow = textShadow
+                        ),
+                        color = Color.White
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1173,12 +1273,15 @@ private fun DetailsContent(
                 if (totalSeasons > 1) {
                     item {
                         val seasonRowState = rememberTvLazyListState()
-                        val seasonItems = remember(totalSeasons) { (1..totalSeasons).toList() }
+                        // Use availableSeasons if provided (IPTV with gaps), otherwise generate 1..totalSeasons
+                        val seasonItems = remember(totalSeasons, availableSeasons) {
+                            if (availableSeasons.isNotEmpty()) availableSeasons else (1..totalSeasons).toList()
+                        }
                         HomeStyleRowAutoScroll(
                             rowState = seasonRowState,
                             isCurrentRow = focusedSection == FocusSection.SEASONS,
                             focusedItemIndex = seasonIndex,
-                            totalItems = totalSeasons,
+                            totalItems = seasonItems.size,
                             itemWidth = 120.dp,
                             itemSpacing = 8.dp
                         )
@@ -2289,7 +2392,7 @@ private fun SimilarMediaCard(
     val mediaTypeLabel = if (item.mediaType == MediaType.TV) "TV Series" else "Movie"
     val yearSuffix = item.year.takeIf { it.isNotBlank() }?.let { " | $it" }.orEmpty()
     MediaCard(
-        item = item.copy(subtitle = "$mediaTypeLabel$yearSuffix"),
+        content = CardContent.Media(item.copy(subtitle = "$mediaTypeLabel$yearSuffix")),
         width = if (usePosterCards) 105.dp else 210.dp,
         isLandscape = !usePosterCards,
         logoImageUrl = logoImageUrl,

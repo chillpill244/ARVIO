@@ -2,8 +2,10 @@ package com.arflix.tv.network
 
 import android.content.Context
 import com.arflix.tv.BuildConfig
+import com.arflix.tv.util.Constants
 import okhttp3.Cache
 import okhttp3.ConnectionPool
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import java.io.File
@@ -38,6 +40,14 @@ object OkHttpProvider {
     private var appContext: Context? = null
 
     val client: OkHttpClient by lazy {
+        val customAgentInterceptor = Interceptor { chain ->
+            val originalRequest = chain.request()
+            val requestWithAgent = originalRequest.newBuilder()
+                .header("User-Agent", Constants.CUSTOM_AGENT)
+                .build()
+            chain.proceed(requestWithAgent)
+        }
+
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) {
                 HttpLoggingInterceptor.Level.BASIC
@@ -47,6 +57,8 @@ object OkHttpProvider {
         }
 
         val builder = OkHttpClient.Builder()
+            // Custom User-Agent header for all requests (API, streams, images, etc.)
+            .addInterceptor(customAgentInterceptor)
             // Direct API calls — no Supabase edge function proxy.
             // TMDB/Trakt keys are passed as query params / headers by Retrofit.
             .addInterceptor(loggingInterceptor)

@@ -16,11 +16,14 @@ import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.model.Profile
 import com.arflix.tv.data.repository.AuthState
+import com.arflix.tv.data.repository.MediaRepository
 import com.arflix.tv.ui.screens.details.DetailsScreen
 import com.arflix.tv.ui.screens.home.HomeScreen
 import com.arflix.tv.ui.screens.login.LoginScreen
+import com.arflix.tv.ui.screens.movies.MoviesScreen
 import com.arflix.tv.ui.screens.player.PlayerScreen
 import com.arflix.tv.ui.screens.search.SearchScreen
+import com.arflix.tv.ui.screens.series.SeriesScreen
 import com.arflix.tv.ui.screens.settings.SettingsScreen
 import com.arflix.tv.ui.screens.tv.TvScreen
 import com.arflix.tv.ui.screens.watchlist.WatchlistScreen
@@ -33,6 +36,8 @@ sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Home : Screen("home")
     object Search : Screen("search")
+    object Movies : Screen("movies")
+    object Series : Screen("series")
     object Watchlist : Screen("watchlist")
     object Tv : Screen("tv?channelId={channelId}&streamUrl={streamUrl}") {
         fun createRoute(channelId: String? = null, streamUrl: String? = null): String {
@@ -99,7 +104,8 @@ fun AppNavigation(
     preloadedLogoCache: Map<String, String> = emptyMap(),
     currentProfile: Profile? = null,
     onSwitchProfile: () -> Unit = {},
-    onExitApp: () -> Unit = {}
+    onExitApp: () -> Unit = {},
+    mediaRepository: MediaRepository? = null
 ) {
     val navigateTopLevel: (String) -> Unit = { route ->
         navController.navigate(route) {
@@ -150,6 +156,12 @@ fun AppNavigation(
                 onNavigateToSearch = {
                     navigateTopLevel(Screen.Search.route)
                 },
+                onNavigateToMovies = {
+                    navigateTopLevel(Screen.Movies.route)
+                },
+                onNavigateToSeries = {
+                    navigateTopLevel(Screen.Series.route)
+                },
                 onNavigateToWatchlist = {
                     navigateTopLevel(Screen.Watchlist.route)
                 },
@@ -176,7 +188,24 @@ fun AppNavigation(
                 onNavigateToDetails = { mediaType, mediaId ->
                     navController.navigate(Screen.Details.createRoute(mediaType, mediaId))
                 },
+                onNavigateToPlayer = { type, id, season, episode, imdbId, url, preferredAddonId, preferredSourceName, startPositionMs ->
+                    navController.navigate(
+                        Screen.Player.createRoute(
+                            mediaType = type,
+                            mediaId = id,
+                            seasonNumber = season,
+                            episodeNumber = episode,
+                            imdbId = imdbId,
+                            streamUrl = url,
+                            preferredAddonId = preferredAddonId,
+                            preferredSourceName = preferredSourceName,
+                            startPositionMs = startPositionMs
+                        )
+                    )
+                },
                 onNavigateToHome = { navigateHome() },
+                onNavigateToMovies = { navigateTopLevel(Screen.Movies.route) },
+                onNavigateToSeries = { navigateTopLevel(Screen.Series.route) },
                 onNavigateToWatchlist = { navigateTopLevel(Screen.Watchlist.route) },
                 onNavigateToTv = { navigateTopLevel(Screen.Tv.createRoute()) },
                 onNavigateToSettings = { navigateTopLevel(Screen.Settings.route) },
@@ -199,8 +228,66 @@ fun AppNavigation(
                 },
                 onNavigateToHome = { navigateHome() },
                 onNavigateToSearch = { navigateTopLevel(Screen.Search.route) },
-                onNavigateToTv = { navigateTopLevel(Screen.Tv.createRoute()) },
+                onNavigateToMovies = { navigateTopLevel(Screen.Movies.route) },
+                onNavigateToSeries = { navigateTopLevel(Screen.Series.route) },
+                onNavigateToTv = { channelId, streamUrl ->
+                    navigateTopLevel(Screen.Tv.createRoute(channelId, streamUrl))
+                },
                 onNavigateToSettings = { navigateTopLevel(Screen.Settings.route) },
+                onSwitchProfile = {
+                    onSwitchProfile()
+                    navController.navigate(Screen.ProfileSelection.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                    }
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Movies screen
+        composable(Screen.Movies.route) {
+            com.arflix.tv.ui.screens.movies.MoviesScreen(
+                currentProfile = currentProfile,
+                onNavigateToHome = { navigateHome() },
+                onNavigateToSearch = { navigateTopLevel(Screen.Search.route) },
+                onNavigateToWatchlist = { navigateTopLevel(Screen.Watchlist.route) },
+                onNavigateToTv = { channelId, streamUrl ->
+                    navigateTopLevel(Screen.Tv.createRoute(channelId, streamUrl))
+                },
+                onNavigateToSeries = { navigateTopLevel(Screen.Series.route) },
+                onNavigateToSettings = { navigateTopLevel(Screen.Settings.route) },
+                onNavigateToDetails = { item ->
+                    // Cache the item (with vodStreams if available) so DetailsViewModel can retrieve it
+                    mediaRepository?.cacheItem(item)
+                    navController.navigate(Screen.Details.createRoute(item.mediaType, item.id))
+                },
+                onSwitchProfile = {
+                    onSwitchProfile()
+                    navController.navigate(Screen.ProfileSelection.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                    }
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Series screen
+        composable(Screen.Series.route) {
+            com.arflix.tv.ui.screens.series.SeriesScreen(
+                currentProfile = currentProfile,
+                onNavigateToHome = { navigateHome() },
+                onNavigateToSearch = { navigateTopLevel(Screen.Search.route) },
+                onNavigateToWatchlist = { navigateTopLevel(Screen.Watchlist.route) },
+                onNavigateToTv = { channelId, streamUrl ->
+                    navigateTopLevel(Screen.Tv.createRoute(channelId, streamUrl))
+                },
+                onNavigateToMovies = { navigateTopLevel(Screen.Movies.route) },
+                onNavigateToSettings = { navigateTopLevel(Screen.Settings.route) },
+                onNavigateToDetails = { item ->
+                    // Cache the item (with vodStreams if available) so DetailsViewModel can retrieve it
+                    mediaRepository?.cacheItem(item)
+                    navController.navigate(Screen.Details.createRoute(item.mediaType, item.id))
+                },
                 onSwitchProfile = {
                     onSwitchProfile()
                     navController.navigate(Screen.ProfileSelection.route) {
@@ -227,6 +314,8 @@ fun AppNavigation(
                 initialStreamUrl = initialStreamUrl,
                 onNavigateToHome = { navigateHome() },
                 onNavigateToSearch = { navigateTopLevel(Screen.Search.route) },
+                onNavigateToMovies = { navigateTopLevel(Screen.Movies.route) },
+                onNavigateToSeries = { navigateTopLevel(Screen.Series.route) },
                 onNavigateToWatchlist = { navigateTopLevel(Screen.Watchlist.route) },
                 onNavigateToSettings = { navigateTopLevel(Screen.Settings.route) },
                 onSwitchProfile = {
@@ -245,6 +334,8 @@ fun AppNavigation(
                 currentProfile = currentProfile,
                 onNavigateToHome = { navigateHome() },
                 onNavigateToSearch = { navigateTopLevel(Screen.Search.route) },
+                onNavigateToMovies = { navigateTopLevel(Screen.Movies.route) },
+                onNavigateToSeries = { navigateTopLevel(Screen.Series.route) },
                 onNavigateToTv = { navigateTopLevel(Screen.Tv.createRoute()) },
                 onNavigateToWatchlist = { navigateTopLevel(Screen.Watchlist.route) },
                 onSwitchProfile = {
@@ -321,6 +412,12 @@ fun AppNavigation(
                 onNavigateToSearch = {
                     navigateTopLevel(Screen.Search.route)
                 },
+                onNavigateToMovies = {
+                    navigateTopLevel(Screen.Movies.route)
+                },
+                onNavigateToSeries = {
+                    navigateTopLevel(Screen.Series.route)
+                },
                 onNavigateToTv = {
                     navigateTopLevel(Screen.Tv.createRoute())
                 },
@@ -385,7 +482,11 @@ fun AppNavigation(
             val preferredAddonId = backStackEntry.arguments?.getString("preferredAddonId")?.takeIf { it.isNotBlank() }
             val preferredSourceName = backStackEntry.arguments?.getString("preferredSourceName")?.takeIf { it.isNotBlank() }
             val startPositionMs = backStackEntry.arguments?.getLong("startPositionMs")?.takeIf { it >= 0L }
-            val mediaType = if (mediaTypeStr == "tv") MediaType.TV else MediaType.MOVIE
+            val mediaType = when (mediaTypeStr) {
+                "tv" -> MediaType.TV
+                "live_tv" -> MediaType.LIVE_TV
+                else -> MediaType.MOVIE
+            }
             
             PlayerScreen(
                 mediaType = mediaType,
@@ -398,7 +499,7 @@ fun AppNavigation(
                 preferredSourceName = preferredSourceName,
                 startPositionMs = startPositionMs,
                 onBack = { navController.popBackStack() },
-                onPlayNext = { nextSeason, nextEpisode, nextPreferredAddonId, nextPreferredSourceName ->
+                onPlayNext = { nextSeason, nextEpisode, nextPreferredAddonId, nextPreferredSourceName, nextStreamUrl ->
                     // Navigate to next episode
                     navController.navigate(
                         Screen.Player.createRoute(
@@ -406,6 +507,7 @@ fun AppNavigation(
                             mediaId = mediaId,
                             seasonNumber = nextSeason,
                             episodeNumber = nextEpisode,
+                            streamUrl = nextStreamUrl,
                             preferredAddonId = nextPreferredAddonId,
                             preferredSourceName = nextPreferredSourceName
                         )

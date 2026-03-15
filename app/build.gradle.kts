@@ -17,15 +17,16 @@ plugins {
 android {
     namespace = "com.arflix.tv"
     compileSdk = 34
+    buildToolsVersion = "36.1.0"
 
     defaultConfig {
-        applicationId = "com.arvio.tv"
+        applicationId = "com.muvio.tv"
         // Fire TV devices can be as low as Android 7.1 (API 25) or lower depending on model/OS.
         // Lower minSdk to maximize compatibility and avoid "There was a problem parsing the package".
-        minSdk = 21
+        minSdk = 28
         targetSdk = 34
-        versionCode = 183
-        versionName = "1.8.2"
+        versionCode = 200
+        versionName = "2.0.0"
 
         // Support both 32-bit and 64-bit devices (required for Google Play since 2019)
         ndk {
@@ -109,6 +110,33 @@ android {
             buildConfigField("Boolean", "ENABLE_CRASH_REPORTING", "true")
             buildConfigField("Boolean", "ENABLE_ANALYTICS", "false")
         }
+
+        // Beta build for public beta testing - optimized for performance and size
+        create("beta") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".beta"
+            versionNameSuffix = "-beta"
+            signingConfig = signingConfigs.getByName("debug")
+
+            // Optimize for performance and smaller download size
+            isMinifyEnabled = true
+            isShrinkResources = true
+            
+            // Remove debug symbols for faster execution
+            isDebuggable = false
+            isJniDebuggable = false
+            renderscriptOptimLevel = 3
+
+            // ProGuard rules for optimization
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+
+            // Enable crash reporting for beta feedback
+            buildConfigField("Boolean", "ENABLE_CRASH_REPORTING", "true")
+            buildConfigField("Boolean", "ENABLE_ANALYTICS", "true")
+        }
     }
 
     compileOptions {
@@ -189,7 +217,7 @@ dependencies {
     implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
 
     // Leanback (TV compliance, browse fragments if needed)
-    implementation("androidx.leanback:leanback:1.1.0-rc02")
+    implementation("androidx.leanback:leanback:1.0.0")
 
     // ExoPlayer / Media3 for video playback - version 1.3.1 for latest codec support
     val media3Version = "1.3.1"

@@ -71,10 +71,18 @@ data class TvUiState(
         val hasFavoriteChannelsInSnapshot = snapshot.favoriteChannels
             .toHashSet()
             .let { ids -> snapshot.channels.any { ids.contains(it.id) } }
-        return if (hasFavoriteChannelsInSnapshot) {
+        val baseList = if (hasFavoriteChannelsInSnapshot) {
             listOf(FAVORITES_GROUP_NAME) + ordered
         } else {
             ordered
+        }
+        
+        // Filter by query (search in category names)
+        val trimmed = query.trim().lowercase()
+        if (trimmed.isBlank()) return baseList
+        
+        return baseList.filter { category ->
+            category.lowercase().contains(trimmed)
         }
     }
 }

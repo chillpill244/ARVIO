@@ -54,6 +54,55 @@ Note: If you mean **DTX**, ARVIO supports **DTS-family audio formats** (DTS/DTS-
 ### Direct Download
 [Download APK](https://github.com/ProdigyV21/ARVIO/releases/latest) from the Releases page.
 
+## Building from Source
+
+### Prerequisites
+- Android SDK 34+
+- Java 17 or higher
+- Gradle 8.4+
+
+### Generate APK
+
+**Debug Build** (for development, slower):
+```bash
+./gradlew assembleDebug
+# Output: app/build/outputs/apk/debug/app-debug.apk (~93 MB)
+```
+
+**Beta Build** (for public testing, optimized):
+```bash
+./gradlew assembleBeta
+# Output: app/build/outputs/apk/beta/app-beta.apk (~46 MB)
+# 5-8x faster than debug, with crash reporting & analytics
+```
+
+**Release Build** (production):
+```bash
+./gradlew assembleRelease
+# Output: app/build/outputs/apk/release/app-release.apk
+# Requires keystore.properties with signing credentials
+```
+
+### Installation
+
+Install APK on Android TV device:
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Testing
+
+Run unit tests:
+```bash
+./gradlew test
+```
+
+Run static analysis:
+```bash
+./gradlew detekt    # Code quality checks
+./gradlew lint      # Android lint checks
+```
+
 ## Star History
 
 <p align="center">

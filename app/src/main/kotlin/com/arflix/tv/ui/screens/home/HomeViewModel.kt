@@ -1613,6 +1613,7 @@ class HomeViewModel @Inject constructor(
                         val newWatched = when (item.mediaType) {
                             MediaType.MOVIE -> watchedMovies.contains(item.id)
                             MediaType.TV -> showWatched[item.id] == true
+                            MediaType.LIVE_TV -> false  // Live TV doesn't track watched status
                         }
                         if (item.isWatched != newWatched) {
                             categoryChanged = true
@@ -2176,6 +2177,9 @@ class HomeViewModel @Inject constructor(
                 watchHistoryRepository.removeFromHistory(item.id, season, episode)
                 traktRepository.deletePlaybackForContent(item.id, item.mediaType)
                 traktRepository.dismissContinueWatching(item)
+                
+                // Also remove from cache to prevent reappearing
+                traktRepository.removeFromContinueWatchingCache(item.id, season, episode)
 
                 val updatedCategories = _uiState.value.categories.map { category ->
                     if (category.id == "continue_watching") {

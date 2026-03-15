@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import com.arflix.tv.BuildConfig
+import com.arflix.tv.util.Constants
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -141,7 +142,7 @@ fun PlayerScreen(
     startPositionMs: Long? = null,
     viewModel: PlayerViewModel = hiltViewModel(),
     onBack: () -> Unit = {},
-    onPlayNext: (Int, Int, String?, String?) -> Unit = { _, _, _, _ -> }
+    onPlayNext: (Int, Int, String?, String?, String?) -> Unit = { _, _, _, _, _ -> }
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
@@ -155,6 +156,7 @@ fun PlayerScreen(
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
     var progress by remember { mutableFloatStateOf(0f) }
+    var isInLastMinute by remember { mutableStateOf(false) }  // Track if in last 60 seconds
 
     // Skip overlay state - shows +10/-10 without showing full controls
     var skipAmount by remember { mutableIntStateOf(0) }
@@ -181,6 +183,7 @@ fun PlayerScreen(
     val nextEpisodeButtonFocusRequester = remember { FocusRequester() }
     val containerFocusRequester = remember { FocusRequester() }
     val skipIntroFocusRequester = remember { FocusRequester() }
+    val nextEpisodeOverlayFocusRequester = remember { FocusRequester() }
 
     // Focus state - 0=Play, 1=Subtitles
     var focusedButton by remember { mutableIntStateOf(0) }
@@ -299,7 +302,8 @@ fun PlayerScreen(
         mapOf(
             "Accept" to "*/*",
             "Accept-Encoding" to "identity",
-            "Connection" to "keep-alive"
+            "Connection" to "keep-alive",
+            "User-Agent" to Constants.CUSTOM_AGENT
         )
     }
     val playbackCookieJar = remember { PlaybackCookieJar() }
@@ -943,6 +947,9 @@ fun PlayerScreen(
             }
             isPlaying = exoPlayer.isPlaying
             isBuffering = exoPlayer.playbackState == Player.STATE_BUFFERING
+            
+            // Check if we're in the last minute (60 seconds)
+            isInLastMinute = duration > 0L && (duration - currentPosition) <= 60_000L && (duration - currentPosition) > 0L
 
             // Buffering watchdog - detect long buffering but do not force a source error popup.
             if (isBuffering && hasPlaybackStarted) {
@@ -1093,11 +1100,15 @@ fun PlayerScreen(
             if (exoPlayer.playbackState == Player.STATE_ENDED && mediaType == MediaType.TV) {
                 if (seasonNumber != null && episodeNumber != null) {
                     val selected = uiState.selectedStream
+                    val nextEpisode = episodeNumber + 1
+                    // Try to build IPTV URL for instant next episode
+                    val iptvNextUrl = viewModel.buildNextEpisodeUrl(seasonNumber, nextEpisode)
                     onPlayNext(
                         seasonNumber,
-                        episodeNumber + 1,
+                        nextEpisode,
                         selected?.addonId?.takeIf { it.isNotBlank() },
-                        selected?.source?.takeIf { it.isNotBlank() }
+                        selected?.source?.takeIf { it.isNotBlank() },
+                        iptvNextUrl
                     )
                 }
             }
@@ -1400,6 +1411,7 @@ fun PlayerScreen(
         // Keep PlayerView mounted as soon as we have a stream URL.
         // A real video surface must exist during startup, otherwise some streams never transition out of buffering.
         if (uiState.selectedStreamUrl != null) {
+            val subtitleStyle = uiState.subtitleStyle
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
@@ -1407,25 +1419,33 @@ fun PlayerScreen(
                         useController = false
                         setKeepContentOnPlayerReset(true)
 
-                        // Enable subtitle view with Netflix-style: bold white text with black outline
+                        // Apply user-configured subtitle style (Netflix-style defaults)
                         subtitleView?.apply {
-                            // Use CaptionStyleCompat from ui package
+                            // Netflix-style subtitle configuration
+                            val backgroundAlpha = (subtitleStyle.backgroundOpacity * 255).toInt()
+                            val backgroundWithAlpha = android.graphics.Color.argb(
+                                backgroundAlpha,
+                                0,  // Black background
+                                0,
+                                0
+                            )
+                            
                             setStyle(
                                 androidx.media3.ui.CaptionStyleCompat(
-                                    android.graphics.Color.WHITE,                    // Foreground color
-                                    android.graphics.Color.TRANSPARENT,              // Background color (transparent = no box)
-                                    android.graphics.Color.TRANSPARENT,              // Window color
-                                    androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE,  // Text outline
-                                    android.graphics.Color.BLACK,                    // Edge color (black outline)
-                                    android.graphics.Typeface.DEFAULT_BOLD           // Bold typeface
+                                    android.graphics.Color.WHITE,                         // Always white text
+                                    backgroundWithAlpha,                                  // Black background with user opacity
+                                    android.graphics.Color.TRANSPARENT,                   // Window color (transparent)
+                                    androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE,  // Text outline for readability
+                                    android.graphics.Color.BLACK,                         // Black outline
+                                    subtitleStyle.fontFamily.getTypeface()                // User's chosen font family
                                 )
                             )
                             // Normalize embedded subtitle styling to keep size consistent
                             setApplyEmbeddedStyles(false)
                             setApplyEmbeddedFontSizes(false)
-                            // Set subtitle text size - not too big, not too small (like Netflix)
-                            setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 24f)
-                            // Position subtitles at bottom with some margin
+                            // Apply user's font size
+                            setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subtitleStyle.fontSize.toFloat())
+                            // Always position at bottom (Netflix style)
                             setBottomPaddingFraction(0.08f)
                         }
                     }
@@ -1517,6 +1537,36 @@ fun PlayerScreen(
                 .zIndex(5f) // Ensure it's above the controls overlay scrim.
                 .padding(start = 32.dp, bottom = if (showControls) 120.dp else 32.dp)
         )
+        
+        // Next Episode overlay (appears in last minute for TV shows)
+        if (mediaType == MediaType.TV && seasonNumber != null && episodeNumber != null) {
+            NextEpisodeButton(
+                hasNextEpisode = true,
+                isInLastMinute = isInLastMinute,
+                controlsVisible = showControls,
+                seasonNumber = seasonNumber,
+                nextEpisodeNumber = episodeNumber + 1,
+                onPlayNext = {
+                    coroutineScope.launch {
+                        val selected = uiState.selectedStream
+                        val nextEpisode = episodeNumber + 1
+                        val iptvNextUrl = viewModel.buildNextEpisodeUrl(seasonNumber, nextEpisode)
+                        onPlayNext(
+                            seasonNumber,
+                            nextEpisode,
+                            selected?.addonId?.takeIf { it.isNotBlank() },
+                            selected?.source?.takeIf { it.isNotBlank() },
+                            iptvNextUrl
+                        )
+                    }
+                },
+                focusRequester = nextEpisodeOverlayFocusRequester,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .zIndex(5f)
+                    .padding(end = 32.dp, bottom = if (showControls) 120.dp else 32.dp)
+            )
+        }
 
         // Netflix-style Controls Overlay
         AnimatedVisibility(
@@ -1849,6 +1899,8 @@ fun PlayerScreen(
                             focusRequester = sourceButtonFocusRequester,
                             onFocusChanged = { sourceButtonFocused = it },
                             onClick = {
+                                // Refresh VOD sources in case initial background fetch timed out
+                                viewModel.refreshVodSources()
                                 showSourceMenu = true
                                 showControls = true
                             },
@@ -1881,12 +1933,18 @@ fun PlayerScreen(
                                     val season = seasonNumber ?: return@PlayerTextButtonFocusable
                                     val episode = episodeNumber ?: return@PlayerTextButtonFocusable
                                     val selected = uiState.selectedStream
-                                    onPlayNext(
-                                        season,
-                                        episode + 1,
-                                        selected?.addonId?.takeIf { it.isNotBlank() },
-                                        selected?.source?.takeIf { it.isNotBlank() }
-                                    )
+                                    val nextEpisode = episode + 1
+                                    coroutineScope.launch {
+                                        // Try to build IPTV URL for instant next episode
+                                        val iptvNextUrl = viewModel.buildNextEpisodeUrl(season, nextEpisode)
+                                        onPlayNext(
+                                            season,
+                                            nextEpisode,
+                                            selected?.addonId?.takeIf { it.isNotBlank() },
+                                            selected?.source?.takeIf { it.isNotBlank() },
+                                            iptvNextUrl
+                                        )
+                                    }
                                 },
                                 onLeftKey = {
                                     sourceButtonFocusRequester.requestFocus()

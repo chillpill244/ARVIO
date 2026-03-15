@@ -29,10 +29,10 @@ private fun profileCardLayoutModeKey(profileId: String): Preferences.Key<String>
 }
 
 fun normalizeCardLayoutMode(raw: String?): String {
-    return if (raw?.trim()?.equals(CARD_LAYOUT_MODE_POSTER, ignoreCase = true) == true) {
-        CARD_LAYOUT_MODE_POSTER
-    } else {
+    return if (raw?.trim()?.equals(CARD_LAYOUT_MODE_LANDSCAPE, ignoreCase = true) == true) {
         CARD_LAYOUT_MODE_LANDSCAPE
+    } else {
+        CARD_LAYOUT_MODE_POSTER
     }
 }
 
@@ -56,6 +56,6 @@ fun rememberCardLayoutMode(): CardLayoutMode {
         }
             .distinctUntilChanged()
     }
-    val mode by modeFlow.collectAsState(initial = CardLayoutMode.LANDSCAPE)
+    val mode by modeFlow.collectAsState(initial = CardLayoutMode.POSTER)
     return mode
 }

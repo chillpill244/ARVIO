@@ -355,6 +355,14 @@ class StreamRepository @Inject constructor(
     }
 
     /**
+     * Clear the stream result cache. Called after VOD catalog refresh
+     * to ensure fresh IPTV sources are fetched on next stream resolution.
+     */
+    fun clearStreamCache() {
+        synchronized(streamResultCache) { streamResultCache.clear() }
+    }
+
+    /**
      * Load addons from Supabase profile (called on login)
      * Merges cloud addons with local defaults
      */
@@ -625,7 +633,7 @@ class StreamRepository @Inject constructor(
     // Subtitles should not block playback but need enough time on slow connections.
     private val SUBTITLE_TIMEOUT_MS = 8_000L
     // If addons return nothing, allow Xtream VOD lookup to recover playback.
-    private val VOD_LOOKUP_TIMEOUT_MS = 6_000L
+    private val VOD_LOOKUP_TIMEOUT_MS = 12_000L
     // If addons already returned streams, keep VOD lookup shorter to avoid UI delay.
     private val VOD_APPEND_TIMEOUT_MS = 3_000L
     private val STREAM_RESULT_CACHE_TTL_MS = 120_000L
@@ -725,8 +733,24 @@ class StreamRepository @Inject constructor(
         }
         val streams = streamJobs.awaitAll().flatten().toMutableList()
 
-        // Keep core source lookup fully addon-driven and non-blocking.
-        // IPTV VOD enrichment is appended separately in ViewModels.
+        // Append IPTV VOD sources if available
+        try {
+            val vodSources = withTimeoutOrNull(VOD_LOOKUP_TIMEOUT_MS) {
+                iptvRepository.findMovieVodSource(
+                    title = title,
+                    year = year,
+                    imdbId = imdbId,
+                    tmdbId = null,
+                    allowNetwork = true
+                )
+            } ?: emptyList()
+            if (vodSources.isNotEmpty()) {
+                val existingUrls = streams.mapNotNull { it.url }.toSet()
+                streams.addAll(vodSources.filter { it.url !in existingUrls })
+            }
+        } catch (e: Exception) {
+            System.err.println("[StreamRepository] IPTV VOD lookup failed for movie: ${e.message}")
+        }
 
         val result = StreamResult(streams, subtitles)
         synchronized(streamResultCache) {
@@ -741,7 +765,7 @@ class StreamRepository @Inject constructor(
         year: Int? = null,
         tmdbId: Int? = null,
         timeoutMs: Long = 15_000L
-    ): StreamSource? = withContext(Dispatchers.IO) {
+    ): List<StreamSource> = withContext(Dispatchers.IO) {
         withTimeoutOrNull(timeoutMs.coerceIn(500L, 90_000L)) {
             runCatching {
                 iptvRepository.findMovieVodSource(
@@ -753,8 +777,8 @@ class StreamRepository @Inject constructor(
                 )
             }.onFailure { e ->
                 System.err.println("[VOD] resolveMovieVodOnly failed: ${e.message}")
-            }.getOrNull()
-        }
+            }.getOrNull() ?: emptyList()
+        } ?: emptyList()
     }
 
     /**
@@ -955,8 +979,25 @@ class StreamRepository @Inject constructor(
         }
         val streams = streamJobs.awaitAll().flatten().toMutableList()
 
-        // Keep core source lookup fully addon-driven and non-blocking.
-        // IPTV VOD enrichment is appended separately in ViewModels.
+        // Append IPTV VOD and Series sources if available
+        try {
+            val vodSources = withTimeoutOrNull(VOD_LOOKUP_TIMEOUT_MS) {
+                iptvRepository.findEpisodeVodSource(
+                    title = title,
+                    season = season,
+                    episode = episode,
+                    imdbId = imdbId,
+                    tmdbId = tmdbId,
+                    allowNetwork = true
+                )
+            } ?: emptyList()
+            if (vodSources.isNotEmpty()) {
+                val existingUrls = streams.mapNotNull { it.url }.toSet()
+                streams.addAll(vodSources.filter { it.url !in existingUrls })
+            }
+        } catch (e: Exception) {
+            System.err.println("[StreamRepository] IPTV VOD/Series lookup failed for episode: ${e.message}")
+        }
 
         val result = StreamResult(streams, subtitles)
         synchronized(streamResultCache) {
@@ -972,7 +1013,7 @@ class StreamRepository @Inject constructor(
         title: String = "",
         tmdbId: Int? = null,
         timeoutMs: Long = 45_000L
-    ): StreamSource? = withContext(Dispatchers.IO) {
+    ): List<StreamSource> = withContext(Dispatchers.IO) {
         val result = withTimeoutOrNull(timeoutMs.coerceIn(500L, 90_000L)) {
             runCatching {
                 iptvRepository.findEpisodeVodSource(
@@ -985,9 +1026,12 @@ class StreamRepository @Inject constructor(
                 )
             }.onFailure { e ->
                 System.err.println("[VOD] resolveEpisodeVodOnly failed: ${e.message}")
-            }.getOrNull()
+                if (e is ClassCastException) {
+                    System.err.println("[VOD] Cast error details: ${e.stackTraceToString()}")
+                }
+            }.getOrNull() ?: emptyList()
         }
-        result
+        result ?: emptyList()
     }
 
     suspend fun prefetchEpisodeVod(
@@ -1199,11 +1243,8 @@ class StreamRepository @Inject constructor(
                 base = resolved.behaviorHints?.proxyHeaders?.request.orEmpty(),
                 extra = emptyMap()
             ).toMutableMap()
-
-            if (headers.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
                 headers["User-Agent"] =
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
+                    Constants.CUSTOM_AGENT
             if (headers.keys.none { it.equals("Accept", ignoreCase = true) }) {
                 headers["Accept"] = "*/*"
             }

@@ -182,4 +182,139 @@ class ResultTest {
 
         assertThat(appException).isInstanceOf(AppException.Unknown::class.java)
     }
+
+    @Test
+    fun `getOrElse returns value on success`() {
+        val result: Result<Int> = Result.success(42)
+        val value = result.getOrElse { -1 }
+
+        assertThat(value).isEqualTo(42)
+    }
+
+    @Test
+    fun `getOrElse returns fallback on error`() {
+        val result: Result<Int> = Result.error(AppException.Network.TIMEOUT)
+        val value = result.getOrElse { e -> -1 }
+
+        assertThat(value).isEqualTo(-1)
+    }
+
+    @Test
+    fun `getOrElse provides exception to lambda`() {
+        val exception = AppException.Network.NO_CONNECTION
+        val result: Result<Int> = Result.error(exception)
+        var capturedError: AppException? = null
+
+        result.getOrElse { e ->
+            capturedError = e
+            -1
+        }
+
+        assertThat(capturedError).isEqualTo(exception)
+    }
+
+    @Test
+    fun `map returns same error when mapping error result`() {
+        val result: Result<Int> = Result.error(AppException.Network.TIMEOUT)
+        val mapped = result.map { it * 2 }
+
+        assertThat(mapped).isEqualTo(result)
+    }
+
+    @Test
+    fun `flatMap with nested success`() {
+        val result = Result.success(10)
+            .flatMap { Result.success(it + 5) }
+            .flatMap { Result.success(it * 2) }
+
+        assertThat(result.getOrNull()).isEqualTo(30)
+    }
+
+    @Test
+    fun `error with message creates Unknown exception`() {
+        val result: Result<String> = Result.error("Something went wrong")
+
+        assertThat(result.isError).isTrue()
+        assertThat(result.exceptionOrNull()!!.message).isEqualTo("Something went wrong")
+    }
+
+    @Test
+    fun `error with throwable converts to AppException`() {
+        val result: Result<String> = Result.error(IllegalStateException("test"))
+
+        assertThat(result.isError).isTrue()
+        assertThat(result.exceptionOrNull()).isInstanceOf(AppException.Unknown::class.java)
+    }
+
+    @Test
+    fun `UnknownHostException converts to Network exception`() {
+        val throwable: Throwable = java.net.UnknownHostException("No DNS")
+        val appException = throwable.toAppException()
+
+        assertThat(appException).isInstanceOf(AppException.Network::class.java)
+        assertThat(appException.message).contains("internet")
+    }
+
+    @Test
+    fun `ConnectException converts to Network exception`() {
+        val throwable: Throwable = java.net.ConnectException("Connection refused")
+        val appException = throwable.toAppException()
+
+        assertThat(appException).isInstanceOf(AppException.Network::class.java)
+        assertThat(appException.message).contains("connect")
+    }
+
+    @Test
+    fun `AppException returns itself when converted`() {
+        val original = AppException.Auth.SESSION_EXPIRED
+        val result = original.toAppException()
+
+        assertThat(result).isSameInstanceAs(original)
+    }
+
+    @Test
+    fun `unknown exception preserves original message`() {
+        val original = RuntimeException("Custom error message")
+        val converted = original.toAppException()
+
+        assertThat(converted.message).isEqualTo("Custom error message")
+    }
+
+    @Test
+    fun `exception with null message uses default`() {
+        val throwable = RuntimeException(null as String?)
+        val converted = throwable.toAppException()
+
+        assertThat(converted.message).isEqualTo("An unexpected error occurred")
+    }
+
+    @Test
+    fun `onSuccess returns original result`() {
+        val result: Result<String> = Result.success("test")
+        val returned = result.onSuccess { /* do nothing */ }
+
+        assertThat(returned).isSameInstanceAs(result)
+    }
+
+    @Test
+    fun `onError returns original result`() {
+        val result: Result<String> = Result.error(AppException.Network.TIMEOUT)
+        val returned = result.onError { /* do nothing */ }
+
+        assertThat(returned).isSameInstanceAs(result)
+    }
+
+    @Test
+    fun `chaining onSuccess and onError`() {
+        var successValue: String? = null
+        var errorValue: AppException? = null
+
+        val result: Result<String> = Result.success("hello")
+        result
+            .onSuccess { successValue = it }
+            .onError { errorValue = it }
+
+        assertThat(successValue).isEqualTo("hello")
+        assertThat(errorValue).isNull()
+    }
 }

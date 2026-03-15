@@ -139,18 +139,18 @@ class MediaRepository @Inject constructor(
 
     fun getDefaultCatalogConfigs(): List<CatalogConfig> {
         return listOf(
-            CatalogConfig("favorite_tv", "Favorite TV", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
+            CatalogConfig("trending_telugu", "Trending Telugu Movies", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
+            CatalogConfig("trending_indian", "Trending Indian Movies", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
+            CatalogConfig("trending_shows_india", "Trending Indian TV Shows", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
             CatalogConfig("trending_movies", "Trending Movies", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
             CatalogConfig("trending_tv", "Trending Series", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
-            CatalogConfig("trending_anime", "Trending Anime", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
+            CatalogConfig("favorite_tv", "Favorite TV", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
             CatalogConfig("trending_netflix", "Trending on Netflix", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
             CatalogConfig("trending_disney", "Trending on Disney+", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
             CatalogConfig("trending_prime", "Trending on Prime Video", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
             CatalogConfig("trending_hbo", "Trending on Max", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
             CatalogConfig("trending_apple", "Trending on Apple TV+", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
-            CatalogConfig("trending_paramount", "Trending on Paramount+", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
-            CatalogConfig("trending_hulu", "Trending on Hulu", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
-            CatalogConfig("trending_peacock", "Trending on Peacock", CatalogSourceType.PREINSTALLED, isPreinstalled = true)
+            CatalogConfig("trending_hulu", "Trending on Hulu", CatalogSourceType.PREINSTALLED, isPreinstalled = true)
         )
     }
     
@@ -158,7 +158,7 @@ class MediaRepository @Inject constructor(
      * Fetch home screen categories
      * Uses improved filters for better quality results:
      * - Trending: Uses daily TMDB trending (updates every day)
-     * - Anime: Uses "anime" keyword (210024) for accurate anime content
+     * - Indian Movies: Uses "IN" origin country for accurate Indian content
      * - Provider categories: wider recency window to keep full rows populated
      */
     suspend fun getHomeCategories(): List<Category> = coroutineScope {
@@ -175,25 +175,25 @@ class MediaRepository @Inject constructor(
         // Wider windows keep rows filled up to 40 items consistently.
         calendar.add(Calendar.MONTH, -12)
         val twelveMonthsAgo = dateFormat.format(calendar.time)
-        // Anime needs a wider horizon for slower seasonal cycles.
-        calendar.time = Calendar.getInstance().time
-        calendar.add(Calendar.MONTH, -18)
-        val eighteenMonthsAgo = dateFormat.format(calendar.time)
 
         // Main trending - TMDB's daily trending for fresh content
         val trendingMovies = async { fetchUpTo40 { page -> tmdbApi.getTrendingMovies(apiKey, page = page) } }
         val trendingTv = async { fetchUpTo40 { page -> tmdbApi.getTrendingTv(apiKey, page = page) } }
 
-        // Anime: popularity.desc tracks current buzz, air_date filter for currently airing
-        val trendingAnime = async {
+        // Indian Movies: popularity.desc tracks current buzz, release_date filter for recent releases
+        val trendingIndian = async {
+            // Indian cinema - 6 months window for regional content
+            val indianCalendar = Calendar.getInstance()
+            indianCalendar.add(Calendar.MONTH, -6)
+            val sixMonthsAgo = dateFormat.format(indianCalendar.time)
             fetchUpTo40 { page ->
-                tmdbApi.discoverTv(
+                tmdbApi.discoverMovies(
                     apiKey,
-                    genres = "16",
-                    keywords = "210024",  // "anime" keyword ID
+                    region = "IN", // India region
+                    originCountry = "IN", // Indian productions
                     sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = eighteenMonthsAgo,
+                    minVoteCount = 5, // Lower threshold for regional cinema
+                    releaseDateGte = sixMonthsAgo,
                     page = page
                 )
             }
@@ -260,14 +260,20 @@ class MediaRepository @Inject constructor(
                 )
             }
         }
-        val paramount = async {
+        val telugu = async {
+            // Telugu cinema - 6 months window for regional content
+            val teluguCalendar = Calendar.getInstance()
+            teluguCalendar.add(Calendar.MONTH, -6)
+            val sixMonthsAgo = dateFormat.format(teluguCalendar.time)
             fetchUpTo40 { page ->
-                tmdbApi.discoverTv(
+                tmdbApi.discoverMovies(
                     apiKey,
-                    watchProviders = 2303, // Paramount+ Premium
+                    originalLanguage = "te", // Telugu language
+                    region = "IN", // India region
                     sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
+                    minVoteCount = 3, // Lower threshold for regional cinema
+                    releaseType = 4, // Digital releases
+                    releaseDateGte = sixMonthsAgo,
                     page = page
                 )
             }
@@ -284,14 +290,19 @@ class MediaRepository @Inject constructor(
                 )
             }
         }
-        val peacock = async {
+        val showsIndia = async {
+            // Indian TV shows - 6 months window for regional content
+            val indiaCalendar = Calendar.getInstance()
+            indiaCalendar.add(Calendar.MONTH, -6)
+            val sixMonthsAgo = dateFormat.format(indiaCalendar.time)
             fetchUpTo40 { page ->
                 tmdbApi.discoverTv(
                     apiKey,
-                    watchProviders = 386, // Peacock
+                    originCountry = "IN", // Indian productions
+                    region = "IN", // India region
                     sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
+                    minVoteCount = 5, // Lower threshold for regional content
+                    airDateGte = sixMonthsAgo,
                     page = page
                 )
             }
@@ -319,9 +330,9 @@ class MediaRepository @Inject constructor(
                 items = safeItems({ trendingTv.await() }, MediaType.TV)
             ),
             Category(
-                id = "trending_anime",
-                title = "Trending Anime",
-                items = safeItems({ trendingAnime.await() }, MediaType.TV)
+                id = "trending_indian",
+                title = "Trending Indian Movies",
+                items = safeItems({ trendingIndian.await() }, MediaType.MOVIE)
             ),
             Category(
                 id = "trending_netflix",
@@ -349,9 +360,9 @@ class MediaRepository @Inject constructor(
                 items = safeItems({ appleTv.await() }, MediaType.TV)
             ),
             Category(
-                id = "trending_paramount",
-                title = "Trending on Paramount+",
-                items = safeItems({ paramount.await() }, MediaType.TV)
+                id = "trending_telugu",
+                title = "Trending Telugu Movies",
+                items = safeItems({ telugu.await() }, MediaType.MOVIE)
             ),
             Category(
                 id = "trending_hulu",
@@ -359,9 +370,9 @@ class MediaRepository @Inject constructor(
                 items = safeItems({ hulu.await() }, MediaType.TV)
             ),
             Category(
-                id = "trending_peacock",
-                title = "Trending on Peacock",
-                items = safeItems({ peacock.await() }, MediaType.TV)
+                id = "trending_shows_india",
+                title = "Trending TV Shows India",
+                items = safeItems({ showsIndia.await() }, MediaType.TV)
             )
         )
         val nonEmpty = categories.filter { it.items.isNotEmpty() }
@@ -379,23 +390,26 @@ class MediaRepository @Inject constructor(
         val calendar = Calendar.getInstance()
         calendar.add(Calendar.MONTH, -12)
         val twelveMonthsAgo = dateFormat.format(calendar.time)
-        calendar.time = Calendar.getInstance().time
-        calendar.add(Calendar.MONTH, -18)
-        val eighteenMonthsAgo = dateFormat.format(calendar.time)
 
         val response = runCatching {
             when (categoryId) {
                 "trending_movies" -> tmdbApi.getTrendingMovies(apiKey, page = page)
                 "trending_tv" -> tmdbApi.getTrendingTv(apiKey, page = page)
-                "trending_anime" -> tmdbApi.discoverTv(
-                    apiKey,
-                    genres = "16",
-                    keywords = "210024",
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = eighteenMonthsAgo,
-                    page = page
-                )
+                "trending_indian" -> {
+                    // Indian movies - 6 months window
+                    val indianCalendar = Calendar.getInstance()
+                    indianCalendar.add(Calendar.MONTH, -6)
+                    val sixMonthsAgo = dateFormat.format(indianCalendar.time)
+                    tmdbApi.discoverMovies(
+                        apiKey,
+                        originCountry = "IN",
+                        region = "IN",
+                        sortBy = "popularity.desc",
+                        minVoteCount = 5,
+                        releaseDateGte = sixMonthsAgo,
+                        page = page
+                    )
+                }
                 "trending_netflix" -> tmdbApi.discoverTv(
                     apiKey,
                     watchProviders = 8,
@@ -436,14 +450,22 @@ class MediaRepository @Inject constructor(
                     airDateGte = twelveMonthsAgo,
                     page = page
                 )
-                "trending_paramount" -> tmdbApi.discoverTv(
-                    apiKey,
-                    watchProviders = 2303,
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
+                "trending_telugu" -> {
+                    // Telugu movies - 6 months window for regional content
+                    val teluguCalendar = Calendar.getInstance()
+                    teluguCalendar.add(Calendar.MONTH, -6)
+                    val sixMonthsAgo = dateFormat.format(teluguCalendar.time)
+                    tmdbApi.discoverMovies(
+                        apiKey,
+                        originalLanguage = "te", // Telugu language
+                        region = "IN", // India region
+                        sortBy = "popularity.desc",
+                        minVoteCount = 3, // Lower threshold for regional cinema
+                        releaseType = 4, // Digital releases
+                        releaseDateGte = sixMonthsAgo,
+                        page = page
+                    )
+                }
                 "trending_hulu" -> tmdbApi.discoverTv(
                     apiKey,
                     watchProviders = 15,
@@ -452,19 +474,26 @@ class MediaRepository @Inject constructor(
                     airDateGte = twelveMonthsAgo,
                     page = page
                 )
-                "trending_peacock" -> tmdbApi.discoverTv(
-                    apiKey,
-                    watchProviders = 386,
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
+                "trending_shows_india" -> {
+                    // Indian TV shows - 6 months window
+                    val indiaCalendar = Calendar.getInstance()
+                    indiaCalendar.add(Calendar.MONTH, -6)
+                    val sixMonthsAgo = dateFormat.format(indiaCalendar.time)
+                    tmdbApi.discoverTv(
+                        apiKey,
+                        originCountry = "IN",
+                        region = "IN",
+                        sortBy = "popularity.desc",
+                        minVoteCount = 5,
+                        airDateGte = sixMonthsAgo,
+                        page = page
+                    )
+                }
                 else -> null
             }
         }.getOrNull() ?: return CategoryPageResult(emptyList(), hasMore = false)
 
-        val mediaType = if (categoryId == "trending_movies") MediaType.MOVIE else MediaType.TV
+        val mediaType = if (categoryId == "trending_movies" || categoryId == "trending_telugu" || categoryId == "trending_indian") MediaType.MOVIE else MediaType.TV
         val items = response.results
             .map { it.toMediaItem(mediaType) }
             .distinctBy { "${it.mediaType.name}_${it.id}" }
@@ -494,6 +523,7 @@ class MediaRepository @Inject constructor(
                         when (type) {
                             MediaType.MOVIE -> getMovieDetails(tmdbId)
                             MediaType.TV -> getTvDetails(tmdbId)
+                            MediaType.LIVE_TV -> null
                         }
                     }.getOrNull()
                 }
@@ -546,6 +576,7 @@ class MediaRepository @Inject constructor(
                         when (type) {
                             MediaType.MOVIE -> getMovieDetails(tmdbId)
                             MediaType.TV -> getTvDetails(tmdbId)
+                            MediaType.LIVE_TV -> null
                         }
                     }.getOrNull()
                 }
@@ -712,6 +743,7 @@ class MediaRepository @Inject constructor(
         val requestedType = when (mediaType) {
             MediaType.MOVIE -> "movie"
             MediaType.TV -> "series"
+            MediaType.LIVE_TV -> return null
         }
         val meta = runCatching {
             streamRepository.getAddonMeta(
@@ -1375,7 +1407,7 @@ class MediaRepository @Inject constructor(
     private fun fetchUrl(url: String): String? {
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "Mozilla/5.0 (Android TV; ARVIO)")
+            .header("User-Agent", Constants.CUSTOM_AGENT)
             .build()
         return runCatching {
             okHttpClient.newCall(request).execute().use { response ->

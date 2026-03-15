@@ -2,8 +2,10 @@ package com.arflix.tv.ui.screens.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.arflix.tv.data.model.IptvChannel
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
+import com.arflix.tv.data.repository.IptvRepository
 import com.arflix.tv.data.repository.MediaRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -24,13 +26,15 @@ data class SearchUiState(
     val results: List<MediaItem> = emptyList(),
     val movieResults: List<MediaItem> = emptyList(),
     val tvResults: List<MediaItem> = emptyList(),
+    val livetvResults: List<IptvChannel> = emptyList(),
     val cardLogoUrls: Map<String, String> = emptyMap(),
     val error: String? = null
 )
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val mediaRepository: MediaRepository
+    private val mediaRepository: MediaRepository,
+    private val iptvRepository: IptvRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
@@ -68,7 +72,12 @@ class SearchViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
             try {
-                val results = mediaRepository.search(query)
+                // Search TMDB and IPTV in parallel
+                val mediaResultsDeferred = async { mediaRepository.search(query) }
+                val iptvResultsDeferred = async { searchLiveTV(query) }
+
+                val results = mediaResultsDeferred.await()
+                val livetvChannels = iptvResultsDeferred.await()
 
                 // Smart sorting: prioritize main content over documentaries/specials
                 // 1. Exact/close title matches first
@@ -128,6 +137,7 @@ class SearchViewModel @Inject constructor(
                     results = sortedResults,
                     movieResults = movies,
                     tvResults = tvShows,
+                    livetvResults = livetvChannels,
                     cardLogoUrls = logoMap
                 )
             } catch (e: Exception) {
@@ -136,6 +146,23 @@ class SearchViewModel @Inject constructor(
                     error = e.message
                 )
             }
+        }
+    }
+
+    private suspend fun searchLiveTV(query: String): List<IptvChannel> {
+        return try {
+            val snapshot = iptvRepository.getCachedSnapshotOrNull() ?: return emptyList()
+            if (snapshot.channels.isEmpty()) return emptyList()
+
+            val queryLower = query.lowercase()
+            snapshot.channels.filter { channel ->
+                val channelNameLower = channel.name.lowercase()
+                channelNameLower.contains(queryLower)
+            }.sortedBy { channel ->
+                !channel.name.lowercase().startsWith(queryLower)
+            }.take(16)  // Limit to 16 results like movie/TV results
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 

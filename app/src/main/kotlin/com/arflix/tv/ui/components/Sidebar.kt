@@ -28,6 +28,8 @@ import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,6 +58,8 @@ import com.arflix.tv.ui.theme.TextSecondary
 enum class SidebarItem(val icon: ImageVector, val label: String) {
     SEARCH(Icons.Outlined.Search, "Search"),
     HOME(Icons.Outlined.Home, "Home"),
+    MOVIES(Icons.Outlined.Movie, "Movies"),
+    SERIES(Icons.Outlined.PlayCircle, "Series"),
     WATCHLIST(Icons.Outlined.Bookmark, "Watchlist"),
     TV(Icons.Outlined.LiveTv, "TV"),
     SETTINGS(Icons.Outlined.Settings, "Settings")
@@ -72,12 +76,12 @@ fun Sidebar(
     onItemSelected: (SidebarItem) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val centerItems = listOf(SidebarItem.SEARCH, SidebarItem.HOME, SidebarItem.WATCHLIST, SidebarItem.TV)
+    val centerItems = listOf(SidebarItem.SEARCH, SidebarItem.HOME, SidebarItem.MOVIES, SidebarItem.SERIES, SidebarItem.WATCHLIST, SidebarItem.TV)
     val bottomItem = SidebarItem.SETTINGS
     val hasProfile = profile != null
-    // With profile: index 0 = profile, 1-4 = center items, 5 = settings. Without: 0-3 = center, 4 = settings.
+    // With profile: index 0 = profile, 1-6 = center items, 7 = settings. Without: 0-5 = center, 6 = settings.
     val centerFocusedIndex = if (hasProfile) focusedIndex - 1 else focusedIndex
-    val settingsFocused = if (hasProfile) focusedIndex == 5 else focusedIndex == 4
+    val settingsFocused = if (hasProfile) focusedIndex == 7 else focusedIndex == 6
 
     // Sidebar: subtle transparent gradient so backdrop shows through
     Box(
@@ -95,26 +99,28 @@ fun Sidebar(
             )
     ) {
         Column(
-            modifier = Modifier.fillMaxHeight(),
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Profile at top
             if (hasProfile) {
-                Spacer(modifier = Modifier.height(7.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 SidebarProfileAvatar(
                     profile = profile!!,
                     isFocused = isSidebarFocused && focusedIndex == 0
                 )
-                Spacer(modifier = Modifier.height(28.dp))
+                Spacer(modifier = Modifier.height(20.dp))
             }
 
             // Flexible space - pushes center group down
             Spacer(modifier = Modifier.weight(1f))
 
-            // Center group: Search, Home, Watchlist, TV (vertically centered)
+            // Center group: Search, Home, Movies, Series, Watchlist, TV (vertically centered)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(28.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 centerItems.forEachIndexed { index, item ->
                     SidebarIcon(
@@ -134,7 +140,7 @@ fun Sidebar(
                 isSelected = bottomItem == selectedItem,
                 isFocused = isSidebarFocused && settingsFocused,
             )
-            Spacer(modifier = Modifier.height(7.dp))
+            Spacer(modifier = Modifier.height(4.dp))
         }
     }
 }

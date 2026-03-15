@@ -21,9 +21,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,20 +39,25 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.tv.foundation.lazy.grid.TvGridCells
-import androidx.tv.foundation.lazy.grid.TvLazyVerticalGrid
-import androidx.tv.foundation.lazy.grid.itemsIndexed
-import androidx.tv.foundation.lazy.grid.rememberTvLazyGridState
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.unit.Dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.ui.components.LoadingIndicator
+import com.arflix.tv.ui.components.CardContent
 import com.arflix.tv.ui.components.MediaCard
 import com.arflix.tv.ui.components.Sidebar
 import com.arflix.tv.ui.components.SidebarItem
 import com.arflix.tv.ui.components.Toast
 import com.arflix.tv.ui.components.ToastType as ComponentToastType
 import com.arflix.tv.ui.components.TopBarClock
+import com.arflix.tv.ui.components.CardLayoutMode
+import com.arflix.tv.ui.components.rememberCardLayoutMode
 import com.arflix.tv.ui.theme.ArflixTypography
 import com.arflix.tv.ui.theme.BackgroundDark
 import com.arflix.tv.ui.theme.Pink
@@ -61,10 +66,8 @@ import com.arflix.tv.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import android.os.SystemClock
 
-/**
- * Watchlist screen - matches webapp design with grid layout
- */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun WatchlistScreen(
@@ -73,60 +76,93 @@ fun WatchlistScreen(
     onNavigateToDetails: (MediaType, Int) -> Unit = { _, _ -> },
     onNavigateToHome: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
-    onNavigateToTv: () -> Unit = {},
+    onNavigateToMovies: () -> Unit = {},
+    onNavigateToSeries: () -> Unit = {},
+    onNavigateToTv: (String?, String?) -> Unit = { _, _ -> },
     onNavigateToSettings: () -> Unit = {},
     onSwitchProfile: () -> Unit = {},
     onBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val usePosterCards = false
-    val configuration = LocalConfiguration.current
-    val gridColumns = when {
-        configuration.screenWidthDp >= 2200 -> 5
-        configuration.screenWidthDp >= 1600 -> 4
-        else -> 3
-    }
-    val cardWidth = when (gridColumns) {
-        5 -> 240.dp
-        4 -> 250.dp
-        else -> 230.dp
-    }
+    val cardLayoutMode = rememberCardLayoutMode()
+    val usePosterCards = cardLayoutMode == CardLayoutMode.POSTER
+    val cardWidth = if (usePosterCards) 140.dp else 200.dp
     
     var isSidebarFocused by remember { mutableStateOf(false) }
     val hasProfile = currentProfile != null
     val maxSidebarIndex = if (hasProfile) SidebarItem.entries.size else SidebarItem.entries.size - 1
-    var sidebarFocusIndex by remember { mutableIntStateOf(if (hasProfile) 3 else 2) } // WATCHLIST
+    var sidebarFocusIndex by remember { mutableIntStateOf(if (hasProfile) 5 else 4) } // WATCHLIST
     val rootFocusRequester = remember { FocusRequester() }
-    val gridFocusRequester = remember { FocusRequester() }
-    val scope = rememberCoroutineScope()
-    val gridState = rememberTvLazyGridState()
-    var focusedGridIndex by remember { mutableIntStateOf(0) }
-
-    // Keep the focused card in view with smooth animated scrolling.
-    LaunchedEffect(focusedGridIndex, uiState.items.size) {
-        if (uiState.items.isEmpty()) return@LaunchedEffect
-        val safe = focusedGridIndex.coerceIn(0, uiState.items.lastIndex)
-        val distance = abs(gridState.firstVisibleItemIndex - safe)
-        if (distance > 24) {
-            gridState.scrollToItem(safe)
-        } else {
-            gridState.animateScrollToItem(safe)
-        }
+    var focusedSectionIndex by remember { mutableIntStateOf(0) } // 0=Movies, 1=Series
+    var focusedItemIndex by remember { mutableIntStateOf(0) }
+    var enterKeyDownTimeMs by remember { mutableLongStateOf(0L) }
+    val longPressThresholdMs = 500L  // Hold time required to trigger long-press
+    val lazyColumnState = rememberLazyListState()
+    
+    // Helper to detect IPTV items
+    val isIptvItem: (com.arflix.tv.data.model.MediaItem) -> Boolean = { item: com.arflix.tv.data.model.MediaItem ->
+        item.status?.startsWith("iptv:") == true
+    }
+    
+    // Helper to extract IPTV channel ID from status field
+    val getIptvChannelId: (com.arflix.tv.data.model.MediaItem) -> String? = { item: com.arflix.tv.data.model.MediaItem ->
+        item.status?.removePrefix("iptv:")
+    }
+    
+    // Get the sections that have content
+    val sections = listOf(
+        Pair("movies", uiState.movies),
+        Pair("series", uiState.series),
+        Pair("livetv", uiState.liveTv)
+    ).filter { it.second.isNotEmpty() }
+    
+    // Helper to get focused item
+    val getFocusedItem: () -> com.arflix.tv.data.model.MediaItem? = {
+        if (focusedSectionIndex < sections.size && focusedItemIndex < sections[focusedSectionIndex].second.size) {
+            sections[focusedSectionIndex].second[focusedItemIndex]
+        } else null
     }
 
     LaunchedEffect(Unit) {
         rootFocusRequester.requestFocus()
     }
 
-    LaunchedEffect(uiState.isLoading, uiState.items.isEmpty()) {
-        if (!uiState.isLoading && uiState.items.isEmpty()) {
+    // Reset focus to top when content becomes available or changes
+    LaunchedEffect(sections.size, uiState.movies.size, uiState.series.size) {
+        if (sections.isNotEmpty() && !isSidebarFocused) {
+            // Reset to first section and first item when data changes
+            if (focusedSectionIndex >= sections.size) {
+                focusedSectionIndex = 0
+                focusedItemIndex = 0
+            }
+        }
+    }
+
+    // Scroll to top when content loads or screen is first composed
+    LaunchedEffect(sections.size) {
+        if (sections.isNotEmpty()) {
+            // Always scroll to top when sections are populated
+            lazyColumnState.scrollToItem(0)
+        }
+    }
+
+    // Auto-scroll LazyColumn when navigating between sections
+    LaunchedEffect(focusedSectionIndex, sections.size) {
+        if (!isSidebarFocused && sections.isNotEmpty() && focusedSectionIndex < sections.size) {
+            lazyColumnState.animateScrollToItem(focusedSectionIndex)
+        }
+    }
+
+    val totalItems = uiState.movies.size + uiState.series.size + uiState.liveTv.size
+    LaunchedEffect(uiState.isLoading, totalItems) {
+        if (!uiState.isLoading && totalItems == 0) {
             // Empty screen must always have a deterministic focus target.
             isSidebarFocused = true
-            sidebarFocusIndex = if (hasProfile) 3 else SidebarItem.WATCHLIST.ordinal
-        } else if (!uiState.isLoading && uiState.items.isNotEmpty() && !isSidebarFocused) {
+            sidebarFocusIndex = if (hasProfile) 5 else SidebarItem.WATCHLIST.ordinal
+        } else if (!uiState.isLoading && totalItems > 0 && !isSidebarFocused) {
             // Ensure first card can receive focus when content becomes available.
             delay(80)
-            runCatching { gridFocusRequester.requestFocus() }
+            runCatching { rootFocusRequester.requestFocus() }
         }
     }
     
@@ -135,11 +171,6 @@ fun WatchlistScreen(
             .fillMaxSize()
             .background(BackgroundDark)
             .focusRequester(rootFocusRequester)
-            .onFocusChanged {
-                if (it.hasFocus && uiState.items.isEmpty()) {
-                    isSidebarFocused = true
-                }
-            }
             .focusable()
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
@@ -154,37 +185,58 @@ fun WatchlistScreen(
                         }
                         Key.DirectionLeft -> {
                             if (!isSidebarFocused) {
-                                isSidebarFocused = true
-                                true
+                                if (focusedItemIndex > 0) {
+                                    focusedItemIndex--
+                                    true
+                                } else {
+                                    isSidebarFocused = true
+                                    true
+                                }
                             } else {
                                 false
                             }
                         }
                         Key.DirectionRight -> {
                             if (isSidebarFocused) {
-                                if (uiState.items.isNotEmpty()) {
+                                if (totalItems > 0) {
                                     isSidebarFocused = false
-                                    scope.launch {
-                                        delay(40)
-                                        runCatching { gridFocusRequester.requestFocus() }
-                                    }
+                                    focusedSectionIndex = 0
+                                    focusedItemIndex = 0
                                 }
                                 true
                             } else {
-                                false
+                                val currentSection = sections.getOrNull(focusedSectionIndex)
+                                if (currentSection != null && focusedItemIndex < currentSection.second.size - 1) {
+                                    focusedItemIndex++
+                                    true
+                                } else {
+                                    false
+                                }
                             }
                         }
                         Key.DirectionUp -> {
                             if (isSidebarFocused && sidebarFocusIndex > 0) {
                                 sidebarFocusIndex = (sidebarFocusIndex - 1).coerceIn(0, maxSidebarIndex)
                                 true
-                            } else false
+                            } else if (!isSidebarFocused && focusedSectionIndex > 0) {
+                                focusedSectionIndex--
+                                focusedItemIndex = 0
+                                true
+                            } else {
+                                false
+                            }
                         }
                         Key.DirectionDown -> {
                             if (isSidebarFocused && sidebarFocusIndex < maxSidebarIndex) {
                                 sidebarFocusIndex = (sidebarFocusIndex + 1).coerceIn(0, maxSidebarIndex)
                                 true
-                            } else false
+                            } else if (!isSidebarFocused && focusedSectionIndex < sections.size - 1) {
+                                focusedSectionIndex++
+                                focusedItemIndex = 0
+                                true
+                            } else {
+                                false
+                            }
                         }
                         Key.Enter, Key.DirectionCenter -> {
                             if (isSidebarFocused) {
@@ -195,17 +247,53 @@ fun WatchlistScreen(
                                     when (SidebarItem.entries[itemIndex]) {
                                         SidebarItem.SEARCH -> onNavigateToSearch()
                                         SidebarItem.HOME -> onNavigateToHome()
+                                        SidebarItem.MOVIES -> onNavigateToMovies()
+                                        SidebarItem.SERIES -> onNavigateToSeries()
                                         SidebarItem.WATCHLIST -> { }
-                                        SidebarItem.TV -> onNavigateToTv()
+                                        SidebarItem.TV -> onNavigateToTv(null, null)
                                         SidebarItem.SETTINGS -> onNavigateToSettings()
                                     }
                                 }
                                 true
-                            } else false
+                            } else {
+                                // Record when Enter key was pressed (for long-press detection)
+                                enterKeyDownTimeMs = SystemClock.elapsedRealtime()
+                                true
+                            }
                         }
                         else -> false
                     }
-                } else false
+                } else if (event.type == KeyEventType.KeyUp) {
+                    when (event.key) {
+                        Key.Enter, Key.DirectionCenter -> {
+                            if (!isSidebarFocused) {
+                                // Check if Enter was held long enough for long-press
+                                val holdDurationMs = SystemClock.elapsedRealtime() - enterKeyDownTimeMs
+                                val isLongPress = holdDurationMs >= longPressThresholdMs
+                                
+                                val focusedItem = getFocusedItem()
+                                if (focusedItem != null) {
+                                    if (isLongPress) {
+                                        // Long-press: show removal prompt
+                                        // viewModel.removeFromWatchlist(focusedItem)
+                                    } else {
+                                        // Short-press: navigate to details or TV screen
+                                        if (isIptvItem(focusedItem)) {
+                                            val channelId = getIptvChannelId(focusedItem)
+                                            onNavigateToTv(channelId, null)
+                                        } else {
+                                            onNavigateToDetails(focusedItem.mediaType, focusedItem.id)
+                                        }
+                                    }
+                                }
+                            }
+                            true
+                        }
+                        else -> false
+                    }
+                } else {
+                    false
+                }
             }
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
@@ -220,8 +308,10 @@ fun WatchlistScreen(
                     when (item) {
                         SidebarItem.SEARCH -> onNavigateToSearch()
                         SidebarItem.HOME -> onNavigateToHome()
+                        SidebarItem.MOVIES -> onNavigateToMovies()
+                        SidebarItem.SERIES -> onNavigateToSeries()
                         SidebarItem.WATCHLIST -> { }
-                        SidebarItem.TV -> onNavigateToTv()
+                        SidebarItem.TV -> onNavigateToTv(null, null)
                         SidebarItem.SETTINGS -> onNavigateToSettings()
                     }
                 }
@@ -262,7 +352,7 @@ fun WatchlistScreen(
                             LoadingIndicator(color = Pink, size = 64.dp)
                         }
                     }
-                    uiState.items.isEmpty() -> {
+                    totalItems == 0 -> {
                         Box(
                             modifier = Modifier.weight(1f),
                             contentAlignment = Alignment.Center
@@ -292,29 +382,52 @@ fun WatchlistScreen(
                         }
                     }
                     else -> {
-                        // Grid of items - 4 columns like screenshot
-                        TvLazyVerticalGrid(
-                            columns = TvGridCells.Fixed(gridColumns),
-                            state = gridState,
-                            contentPadding = PaddingValues(top = 8.dp, bottom = 48.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(24.dp),
+                        // Two horizontal sections for Movies and Series
+                        LazyColumn(
+                            state = lazyColumnState,
                             modifier = Modifier
                                 .weight(1f)
-                                .focusRequester(gridFocusRequester)
-                                .onFocusChanged { 
-                                    if (it.hasFocus) {
-                                        isSidebarFocused = false
-                                    }
-                                }
+                                .fillMaxWidth()
+                                .focusable(),
+                            contentPadding = PaddingValues(bottom = 48.dp),
+                            verticalArrangement = Arrangement.spacedBy(32.dp),
+                            userScrollEnabled = false
                         ) {
-                            itemsIndexed(uiState.items) { index, item ->
-                                MediaCard(
-                                    item = item,
-                                    width = cardWidth,
+                            itemsIndexed(
+                                items = sections,
+                                key = { _, (type, _) -> type },
+                                contentType = { _, _ -> "watchlist_section" }
+                            ) { sectionIdx, (sectionType, items) ->
+                                val title = when (sectionType) {
+                                    "movies" -> "Movies"
+                                    "series" -> "Series"
+                                    "livetv" -> "Favorite TV"
+                                    else -> sectionType.replaceFirstChar { it.uppercase() }
+                                }
+                                val isThisSectionFocused = focusedSectionIndex == sectionIdx && !isSidebarFocused
+                                
+                                WatchlistItemsSection(
+                                    title = title,
+                                    items = items,
+                                    cardWidth = cardWidth,
                                     isLandscape = !usePosterCards,
-                                    onFocused = { focusedGridIndex = index },
-                                    onClick = { onNavigateToDetails(item.mediaType, item.id) }
+                                    onItemClick = { item ->
+                                        if (isIptvItem(item)) {
+                                            // Navigate to TV screen with this channel
+                                            val channelId = getIptvChannelId(item)
+                                            onNavigateToTv(channelId, null)  // streamUrl will be looked up in TvScreen
+                                        } else {
+                                            // Navigate to details for regular items
+                                            onNavigateToDetails(item.mediaType, item.id)
+                                        }
+                                    },
+                                    // onItemLongPress = { viewModel.removeFromWatchlist(it) },
+                                    focusedItemIndex = if (isThisSectionFocused) focusedItemIndex else -1,
+                                    onItemFocused = { index -> 
+                                        if (!isSidebarFocused && focusedSectionIndex == sectionIdx) {
+                                            focusedItemIndex = index
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -341,3 +454,54 @@ fun WatchlistScreen(
         }
     }
 }
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun WatchlistItemsSection(
+    title: String,
+    items: List<com.arflix.tv.data.model.MediaItem>,
+    cardWidth: Dp,
+    isLandscape: Boolean,
+    onItemClick: (com.arflix.tv.data.model.MediaItem) -> Unit,
+    onItemLongPress: (com.arflix.tv.data.model.MediaItem) -> Unit = { },
+    focusedItemIndex: Int = -1,
+    onItemFocused: (Int) -> Unit = { }
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = title,
+            style = ArflixTypography.sectionTitle,
+            color = TextPrimary,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        
+        val lazyListState = rememberLazyListState()
+        LazyRow(
+            state = lazyListState,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            itemsIndexed(
+                items = items,
+                key = { _, item -> "${item.mediaType.name}-${item.id}" },
+                contentType = { _, item -> "${item.mediaType.name}_card" }
+            ) { index, item ->
+                val itemIsFocused = index == focusedItemIndex && focusedItemIndex >= 0
+                MediaCard(
+                    content = CardContent.Media(item),
+                    width = cardWidth,
+                    isLandscape = isLandscape,
+                    isFocusedOverride = itemIsFocused,
+                    enableSystemFocus = false,
+                    onFocused = { onItemFocused(index) },
+                    onClick = { onItemClick(item) },
+                    onLongPress = { onItemLongPress(item) }
+                )
+            }
+        }
+    }
+}
+
+
