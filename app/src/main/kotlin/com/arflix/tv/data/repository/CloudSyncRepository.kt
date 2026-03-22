@@ -40,6 +40,9 @@ class CloudSyncRepository @Inject constructor(
 ) {
     private val gson = Gson()
 
+    /** Callback invoked after a successful push so realtime listeners can skip the echo. */
+    var onPushCompleted: (() -> Unit)? = null
+
     enum class RestoreResult { RESTORED, NO_BACKUP, FAILED }
 
     // ── Data class for per-profile settings stored in cloud ──
@@ -268,7 +271,9 @@ class CloudSyncRepository @Inject constructor(
         val payload = runCatching { buildCloudSnapshotJson() }.getOrElse {
             return Result.failure(it)
         }
-        return authRepository.saveAccountSyncPayload(payload)
+        val result = authRepository.saveAccountSyncPayload(payload)
+        if (result.isSuccess) onPushCompleted?.invoke()
+        return result
     }
 
     // ══════════════════════════════════════════════════════════

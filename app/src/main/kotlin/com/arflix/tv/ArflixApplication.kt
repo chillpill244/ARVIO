@@ -18,7 +18,9 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.arflix.tv.network.OkHttpProvider
 import com.arflix.tv.data.repository.AuthRepository
+import com.arflix.tv.data.repository.AuthState
 import com.arflix.tv.data.repository.CloudSyncRepository
+import com.arflix.tv.data.repository.RealtimeSyncManager
 import com.arflix.tv.data.repository.ProfileManager
 import com.arflix.tv.util.AppLogger
 import com.arflix.tv.util.CrashlyticsProvider
@@ -47,6 +49,8 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
     lateinit var authRepository: AuthRepository
     @Inject
     lateinit var cloudSyncRepository: CloudSyncRepository
+    @Inject
+    lateinit var realtimeSyncManager: RealtimeSyncManager
 
     override fun onCreate() {
         super.onCreate()
@@ -58,12 +62,28 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
         // Initialize crash reporting (gracefully handles missing Firebase config)
         CrashlyticsProvider.initialize()
         // Initialize active profile asynchronously to avoid blocking cold start.
+        // Wire realtime push notification
+        cloudSyncRepository.onPushCompleted = { realtimeSyncManager.markPush() }
+
         appScope.launch {
             runCatching { profileManager.initialize() }
             if (!authRepository.getCurrentUserId().isNullOrBlank()) {
                 // Pull cloud state shortly after startup for faster cross-device sync.
                 delay(3_000L)
                 runCatching { cloudSyncRepository.pullFromCloud() }
+                // Start realtime WebSocket listener for instant cross-device sync
+                realtimeSyncManager.start()
+            }
+        }
+
+        // Observe auth state: start realtime on login, stop on logout
+        appScope.launch {
+            authRepository.authState.collect { state ->
+                if (state is AuthState.Authenticated) {
+                    realtimeSyncManager.start()
+                } else {
+                    realtimeSyncManager.stop()
+                }
             }
         }
     }
