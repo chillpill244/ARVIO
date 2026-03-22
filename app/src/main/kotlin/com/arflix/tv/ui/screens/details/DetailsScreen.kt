@@ -669,10 +669,16 @@ fun DetailsScreen(
                     onEpisodeClick = { idx ->
                         val ep = uiState.episodes.getOrNull(idx)
                         if (ep != null) {
-                            onNavigateToPlayer(
-                                mediaType, mediaId,
-                                ep.seasonNumber, ep.episodeNumber, uiState.imdbId, null, null, null, null
-                            )
+                            episodeIndex = idx
+                            if (isMobile) {
+                                showStreamSelector = true
+                                viewModel.loadStreams(uiState.imdbId, ep.seasonNumber, ep.episodeNumber)
+                            } else {
+                                onNavigateToPlayer(
+                                    mediaType, mediaId,
+                                    ep.seasonNumber, ep.episodeNumber, uiState.imdbId, null, null, null, null
+                                )
+                            }
                         }
                     },
                     onCastClick = { idx ->

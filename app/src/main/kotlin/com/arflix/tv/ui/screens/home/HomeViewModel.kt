@@ -1550,7 +1550,13 @@ class HomeViewModel @Inject constructor(
             // Trakt items are merged last and generally have the most authoritative next-episode.
             val sameEpisode = source.mediaType != MediaType.TV ||
                 (source.season == existing.season && source.episode == existing.episode)
-            val picked = if (source.progress >= existing.progress) source else existing
+            // When episodes differ, always use the newer source as base to prevent
+            // stale episode position from bleeding into the next episode.
+            val picked = if (sameEpisode) {
+                if (source.progress >= existing.progress) source else existing
+            } else {
+                source  // Different episode: always prefer the more recent/authoritative source
+            }
             mergedByShow[key] = picked.copy(
                 // Only carry resume position/duration forward if it's the SAME episode.
                 // Different episode = fresh start, so use the new source's data (which is 0 for "up next").

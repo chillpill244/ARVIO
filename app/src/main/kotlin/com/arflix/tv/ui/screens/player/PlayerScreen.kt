@@ -43,13 +43,23 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FitScreen
+import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeMute
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -102,6 +112,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
@@ -185,6 +196,8 @@ fun PlayerScreen(
     var currentVolume by remember { mutableIntStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)) }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
     var showVolumeIndicator by remember { mutableStateOf(false) }
+    var showAspectIndicator by remember { mutableStateOf(false) }
+    var aspectIndicatorTrigger by remember { mutableIntStateOf(0) }
     var isMuted by remember { mutableStateOf(false) }
     var volumeBeforeMute by remember { mutableIntStateOf(currentVolume) }
 
@@ -193,6 +206,9 @@ fun PlayerScreen(
     val trackbarFocusRequester = remember { FocusRequester() }
     val subtitleButtonFocusRequester = remember { FocusRequester() }
     val sourceButtonFocusRequester = remember { FocusRequester() }
+    val rewindButtonFocusRequester = remember { FocusRequester() }
+    val forwardButtonFocusRequester = remember { FocusRequester() }
+    val aspectButtonFocusRequester = remember { FocusRequester() }
     val nextEpisodeButtonFocusRequester = remember { FocusRequester() }
     val containerFocusRequester = remember { FocusRequester() }
     val skipIntroFocusRequester = remember { FocusRequester() }
@@ -201,6 +217,7 @@ fun PlayerScreen(
     var focusedButton by remember { mutableIntStateOf(0) }
     var showSubtitleMenu by remember { mutableStateOf(false) }
     var showSourceMenu by remember { mutableStateOf(false) }
+    var playerResizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var subtitleMenuIndex by remember { mutableIntStateOf(0) }
     var subtitleMenuTab by remember { mutableIntStateOf(0) } // 0 = Subtitles, 1 = Audio
 
@@ -922,9 +939,16 @@ fun PlayerScreen(
     }
 
     // Auto-hide volume indicator
+    LaunchedEffect(aspectIndicatorTrigger) {
+        if (aspectIndicatorTrigger > 0) {
+            showAspectIndicator = true
+            kotlinx.coroutines.delay(1200)
+            showAspectIndicator = false
+        }
+    }
     LaunchedEffect(showVolumeIndicator) {
         if (showVolumeIndicator) {
-            delay(2000)
+            kotlinx.coroutines.delay(1500)
             showVolumeIndicator = false
         }
     }
@@ -1220,6 +1244,19 @@ fun PlayerScreen(
     }
 
     val isTouchDevice = LocalDeviceType.current.isTouchDevice()
+    val aspectModeLabel = when (playerResizeMode) {
+        AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "Zoom"
+        AspectRatioFrameLayout.RESIZE_MODE_FILL -> "Fill"
+        else -> "Fit"
+    }
+    val cycleAspectRatio: () -> Unit = {
+        playerResizeMode = when (playerResizeMode) {
+            AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+        }
+        aspectIndicatorTrigger++
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1228,13 +1265,26 @@ fun PlayerScreen(
             .focusable()
             .then(
                 if (isTouchDevice) {
-                    Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        if (uiState.error == null && !showSubtitleMenu && !showSourceMenu) {
-                            showControls = !showControls
-                        }
+                    Modifier.pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = {
+                                if (uiState.error == null && !showSubtitleMenu && !showSourceMenu) {
+                                    showControls = !showControls
+                                }
+                            },
+                            onDoubleTap = { offset ->
+                                if (uiState.error == null && !showSubtitleMenu && !showSourceMenu) {
+                                    val halfWidth = size.width / 2
+                                    if (offset.x < halfWidth) {
+                                        // Double-tap left side: rewind 10 seconds
+                                        queueControlsSeek(-10_000L)
+                                    } else {
+                                        // Double-tap right side: forward 10 seconds
+                                        queueControlsSeek(10_000L)
+                                    }
+                                }
+                            }
+                        )
                     }
                 } else {
                     Modifier
@@ -1478,6 +1528,7 @@ fun PlayerScreen(
                         player = exoPlayer
                         useController = false
                         setKeepContentOnPlayerReset(true)
+                        resizeMode = playerResizeMode
 
                         // Enable subtitle view with Netflix-style: bold white text with black outline
                         subtitleView?.apply {
@@ -1504,6 +1555,7 @@ fun PlayerScreen(
                 },
                 update = { playerView ->
                     playerView.player = exoPlayer
+                    playerView.resizeMode = playerResizeMode
                 },
                 modifier = Modifier.fillMaxSize()
             )
@@ -1585,9 +1637,9 @@ fun PlayerScreen(
             },
             focusRequester = skipIntroFocusRequester,
             modifier = Modifier
-                .align(Alignment.BottomStart)
+                .align(Alignment.BottomEnd)
                 .zIndex(5f) // Ensure it's above the controls overlay scrim.
-                .padding(start = 32.dp, bottom = if (showControls) 120.dp else 32.dp)
+                .padding(end = if (isTouchDevice) 24.dp else 48.dp, bottom = if (showControls) 90.dp else 32.dp)
         )
 
         // Netflix-style Controls Overlay
@@ -1705,101 +1757,133 @@ fun PlayerScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
-                        .padding(horizontal = 48.dp, vertical = 24.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colorStops = arrayOf(
+                                    0.0f to Color.Transparent,
+                                    0.3f to Color.Black.copy(alpha = 0.2f),
+                                    1.0f to Color.Black.copy(alpha = 0.7f)
+                                )
+                            )
+                        )
+                        .padding(horizontal = if (isTouchDevice) 24.dp else 48.dp, vertical = if (isTouchDevice) 16.dp else 24.dp)
                 ) {
-                    // Progress bar row with play button - FIRST
+                    // Icon buttons row - left-aligned, tight above trackbar (avoids subtitle overlap)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val smallBtn = if (isTouchDevice) 24.dp else 28.dp
+                        val smallIcon = if (isTouchDevice) 17.dp else 19.dp
+                        val midBtn = if (isTouchDevice) 28.dp else 30.dp
+                        val midIcon = if (isTouchDevice) 20.dp else 22.dp
+                        val bigBtn = if (isTouchDevice) 34.dp else 38.dp
+                        val bigIcon = if (isTouchDevice) 26.dp else 28.dp
+                        val gap = if (isTouchDevice) 10.dp else 14.dp
+                        val wideGap = if (isTouchDevice) 14.dp else 18.dp
+
+                        // Subtitles
+                        PlayerIconButton(icon = Icons.Default.ClosedCaption, contentDescription = "Subtitles & Audio",
+                            focusRequester = subtitleButtonFocusRequester, size = smallBtn, iconSize = smallIcon,
+                            onFocusChanged = { if (it) focusedButton = 1 },
+                            onClick = { showSubtitleMenu = true; subtitleMenuIndex = 0 },
+                            onLeftKey = { if (mediaType == MediaType.TV) nextEpisodeButtonFocusRequester.requestFocus() else aspectButtonFocusRequester.requestFocus() },
+                            onRightKey = { sourceButtonFocusRequester.requestFocus() },
+                            onDownKey = { trackbarFocusRequester.requestFocus() })
+
+                        Spacer(modifier = Modifier.width(gap))
+
+                        // Sources
+                        PlayerIconButton(icon = Icons.Default.Folder, contentDescription = "Sources",
+                            focusRequester = sourceButtonFocusRequester, size = smallBtn, iconSize = smallIcon,
+                            onFocusChanged = {},
+                            onClick = { showSourceMenu = true; showControls = true },
+                            onLeftKey = { subtitleButtonFocusRequester.requestFocus() },
+                            onRightKey = { rewindButtonFocusRequester.requestFocus() },
+                            onDownKey = { trackbarFocusRequester.requestFocus() })
+
+                        Spacer(modifier = Modifier.width(wideGap))
+
+                        // Rewind 10s
+                        PlayerIconButton(icon = Icons.Default.Replay10, contentDescription = "Rewind 10s",
+                            focusRequester = rewindButtonFocusRequester, size = midBtn, iconSize = midIcon,
+                            onFocusChanged = {},
+                            onClick = { queueControlsSeek(-10_000L) },
+                            onLeftKey = { sourceButtonFocusRequester.requestFocus() },
+                            onRightKey = { playButtonFocusRequester.requestFocus() },
+                            onDownKey = { trackbarFocusRequester.requestFocus() })
+
+                        Spacer(modifier = Modifier.width(gap))
+
+                        // Play/Pause - center, largest
+                        PlayerIconButton(icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            focusRequester = playButtonFocusRequester, size = bigBtn, iconSize = bigIcon,
+                            onFocusChanged = { if (it) focusedButton = 0 },
+                            onClick = { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() },
+                            onLeftKey = { rewindButtonFocusRequester.requestFocus() },
+                            onRightKey = { forwardButtonFocusRequester.requestFocus() },
+                            onDownKey = { trackbarFocusRequester.requestFocus() },
+                            onUpKey = { val sv = uiState.activeSkipInterval != null && !uiState.skipIntervalDismissed; if (sv) skipIntroFocusRequester.requestFocus() })
+
+                        Spacer(modifier = Modifier.width(gap))
+
+                        // Forward 10s - own focus requester
+                        PlayerIconButton(icon = Icons.Default.Forward10, contentDescription = "Forward 10s",
+                            focusRequester = forwardButtonFocusRequester, size = midBtn, iconSize = midIcon,
+                            onFocusChanged = {},
+                            onClick = { queueControlsSeek(10_000L) },
+                            onLeftKey = { playButtonFocusRequester.requestFocus() },
+                            onRightKey = { aspectButtonFocusRequester.requestFocus() },
+                            onDownKey = { trackbarFocusRequester.requestFocus() })
+
+                        Spacer(modifier = Modifier.width(wideGap))
+
+                        // Aspect Ratio
+                        PlayerIconButton(icon = Icons.Default.AspectRatio, contentDescription = "Aspect: $aspectModeLabel",
+                            focusRequester = aspectButtonFocusRequester, size = smallBtn, iconSize = smallIcon,
+                            onFocusChanged = {},
+                            onClick = cycleAspectRatio,
+                            onLeftKey = { forwardButtonFocusRequester.requestFocus() },
+                            onRightKey = { if (mediaType == MediaType.TV) nextEpisodeButtonFocusRequester.requestFocus() else subtitleButtonFocusRequester.requestFocus() },
+                            onDownKey = { trackbarFocusRequester.requestFocus() })
+
+                        if (mediaType == MediaType.TV) {
+                            Spacer(modifier = Modifier.width(gap))
+                            PlayerIconButton(icon = Icons.Default.SkipNext, contentDescription = "Next Episode",
+                                focusRequester = nextEpisodeButtonFocusRequester, size = smallBtn, iconSize = smallIcon,
+                                onFocusChanged = {},
+                                onClick = {
+                                    val season = seasonNumber ?: return@PlayerIconButton
+                                    val episode = episodeNumber ?: return@PlayerIconButton
+                                    val selected = uiState.selectedStream
+                                    onPlayNext(season, episode + 1, selected?.addonId?.takeIf { it.isNotBlank() }, selected?.source?.takeIf { it.isNotBlank() }, selected?.behaviorHints?.bingeGroup?.takeIf { it.isNotBlank() })
+                                },
+                                onLeftKey = { aspectButtonFocusRequester.requestFocus() },
+                                onRightKey = { subtitleButtonFocusRequester.requestFocus() },
+                                onDownKey = { trackbarFocusRequester.requestFocus() })
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(if (isTouchDevice) 4.dp else 6.dp))
+
+                    // Trackbar at the very bottom with time labels
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Focusable play/pause button - icon only with glow on focus
-                        var playButtonFocused by remember { mutableStateOf(false) }
-                        val playButtonScale by animateFloatAsState(
-                            if (playButtonFocused) 1.3f else 1f,
-                            label = "playScale"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .focusRequester(playButtonFocusRequester)
-                                .onFocusChanged { state ->
-                                    playButtonFocused = state.isFocused
-                                    if (state.isFocused) focusedButton = 0
-                                }
-                                .focusable()
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) {
-                                    if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
-                                }
-                                .graphicsLayer {
-                                    scaleX = playButtonScale
-                                    scaleY = playButtonScale
-                                }
-                                .onKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyDown) {
-                                        when (event.key) {
-                                            Key.Enter, Key.DirectionCenter -> {
-                                                if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
-                                                true
-                                            }
-                                            Key.DirectionUp -> {
-                                                val skipVisible = uiState.activeSkipInterval != null && !uiState.skipIntervalDismissed
-                                                if (skipVisible) {
-                                                    skipIntroFocusRequester.requestFocus()
-                                                    true
-                                                } else {
-                                                    false
-                                                }
-                                            }
-                                            Key.DirectionRight -> {
-                                                // Move focus to trackbar
-                                                trackbarFocusRequester.requestFocus()
-                                                true
-                                            }
-                                            Key.DirectionLeft -> {
-                                                // Seek backward when at leftmost button
-                                                queueControlsSeek(-10_000L)
-                                                true
-                                            }
-                                            Key.DirectionDown -> {
-                                                // Move to subtitle button
-                                                subtitleButtonFocusRequester.requestFocus()
-                                                true
-                                            }
-                                            else -> false
-                                        }
-                                    } else false
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (isPlaying) "Pause" else "Play",
-                                tint = Color.White,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        // Current time
                         Text(
                             text = formatTime(if (isControlScrubbing) scrubPreviewPosition else currentPosition),
-                            style = ArflixTypography.label.copy(fontSize = 13.sp),
-                            color = TextPrimary,
+                            style = ArflixTypography.label.copy(fontSize = if (isTouchDevice) 12.sp else 13.sp),
+                            color = Color.White.copy(alpha = 0.9f),
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.width(55.dp)
+                            modifier = Modifier.width(if (isTouchDevice) 48.dp else 55.dp)
                         )
 
-                        // Focusable Progress bar with scrubber
+                        // Trackbar
                         var trackbarFocused by remember { mutableStateOf(false) }
-                        val trackbarHeight by animateFloatAsState(
-                            if (trackbarFocused) 10f else 5f,
-                            label = "trackbarHeight"
-                        )
+                        val trackbarHeight by animateFloatAsState(if (trackbarFocused) 8f else 4f, label = "trackbarHeight")
                         var trackbarWidthPx by remember { mutableIntStateOf(0) }
                         Box(
                             modifier = Modifier
@@ -1809,231 +1893,51 @@ fun PlayerScreen(
                                 .focusRequester(trackbarFocusRequester)
                                 .onFocusChanged { state ->
                                     trackbarFocused = state.isFocused
-                                    if (!state.isFocused && isControlScrubbing) {
-                                        commitControlsSeekNow()
-                                    }
+                                    if (!state.isFocused && isControlScrubbing) commitControlsSeekNow()
                                 }
                                 .focusable()
                                 .pointerInput(duration) {
                                     detectHorizontalDragGestures(
-                                        onDragStart = { offset ->
-                                            if (duration > 0L && trackbarWidthPx > 0) {
-                                                val fraction = (offset.x / trackbarWidthPx).coerceIn(0f, 1f)
-                                                scrubPreviewPosition = (fraction * duration).toLong()
-                                                isControlScrubbing = true
-                                            }
-                                        },
-                                        onDragEnd = {
-                                            if (isControlScrubbing && !playerReleased) {
-                                                exoPlayer.seekTo(scrubPreviewPosition)
-                                                isControlScrubbing = false
-                                            }
-                                        },
-                                        onDragCancel = {
-                                            if (isControlScrubbing && !playerReleased) {
-                                                exoPlayer.seekTo(scrubPreviewPosition)
-                                                isControlScrubbing = false
-                                            }
-                                        },
-                                        onHorizontalDrag = { _, dragAmount ->
-                                            if (duration > 0L && trackbarWidthPx > 0) {
-                                                val deltaFraction = dragAmount / trackbarWidthPx
-                                                val deltaMs = (deltaFraction * duration).toLong()
-                                                scrubPreviewPosition = (scrubPreviewPosition + deltaMs).coerceIn(0L, duration)
-                                                isControlScrubbing = true
-                                            }
-                                        }
+                                        onDragStart = { offset -> if (duration > 0L && trackbarWidthPx > 0) { scrubPreviewPosition = ((offset.x / trackbarWidthPx).coerceIn(0f, 1f) * duration).toLong(); isControlScrubbing = true } },
+                                        onDragEnd = { if (isControlScrubbing && !playerReleased) { exoPlayer.seekTo(scrubPreviewPosition); isControlScrubbing = false } },
+                                        onDragCancel = { if (isControlScrubbing && !playerReleased) { exoPlayer.seekTo(scrubPreviewPosition); isControlScrubbing = false } },
+                                        onHorizontalDrag = { _, dragAmount -> if (duration > 0L && trackbarWidthPx > 0) { val delta = (dragAmount / trackbarWidthPx * duration).toLong(); scrubPreviewPosition = (scrubPreviewPosition + delta).coerceIn(0L, duration); isControlScrubbing = true } }
                                     )
                                 }
                                 .pointerInput(duration) {
-                                    detectTapGestures { offset ->
-                                        if (duration > 0L && trackbarWidthPx > 0 && !playerReleased) {
-                                            val fraction = (offset.x / trackbarWidthPx).coerceIn(0f, 1f)
-                                            val seekPosition = (fraction * duration).toLong()
-                                            exoPlayer.seekTo(seekPosition)
-                                        }
-                                    }
+                                    detectTapGestures { offset -> if (duration > 0L && trackbarWidthPx > 0 && !playerReleased) { exoPlayer.seekTo(((offset.x / trackbarWidthPx).coerceIn(0f, 1f) * duration).toLong()) } }
                                 }
                                 .onKeyEvent { event ->
                                     if (event.type == KeyEventType.KeyDown && trackbarFocused) {
                                         when (event.key) {
-                                            Key.DirectionLeft -> {
-                                                // Preview scrub backward and debounce real seek
-                                                queueControlsSeek(-10_000L)
-                                                true
-                                            }
-                                            Key.DirectionRight -> {
-                                                // Preview scrub forward and debounce real seek
-                                                queueControlsSeek(10_000L)
-                                                true
-                                            }
-                                            Key.Enter, Key.DirectionCenter -> {
-                                                // Commit pending scrub immediately
-                                                commitControlsSeekNow()
-                                                true
-                                            }
-                                            Key.DirectionDown -> {
-                                                // Move to subtitle button
-                                                subtitleButtonFocusRequester.requestFocus()
-                                                true
-                                            }
-                                            Key.DirectionUp -> {
-                                                // No controls above trackbar
-                                                true
-                                            }
+                                            Key.DirectionLeft -> { queueControlsSeek(-10_000L); true }
+                                            Key.DirectionRight -> { queueControlsSeek(10_000L); true }
+                                            Key.Enter, Key.DirectionCenter -> { commitControlsSeekNow(); true }
+                                            Key.DirectionUp -> { playButtonFocusRequester.requestFocus(); true }
+                                            Key.DirectionDown -> true
                                             else -> false
                                         }
                                     } else false
                                 }
-                                .background(
-                                    if (trackbarFocused) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.3f),
-                                    RoundedCornerShape(5.dp)
-                                ),
+                                .background(Color.White.copy(alpha = if (trackbarFocused) 0.25f else 0.15f), RoundedCornerShape(3.dp)),
                             contentAlignment = Alignment.CenterStart
                         ) {
-                            // Progress fill
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(
-                                        if (duration > 0) {
-                                            ((if (isControlScrubbing) scrubPreviewPosition else currentPosition).toFloat() / duration.toFloat()).coerceIn(0f, 1f)
-                                        } else {
-                                            progress
-                                        }
-                                    )
-                                    .fillMaxHeight()
-                                    .background(Pink, RoundedCornerShape(5.dp))
-                            )
-                            // Scrubber circle - only visible when focused
-                            if (trackbarFocused) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(
-                                            if (duration > 0) {
-                                                ((if (isControlScrubbing) scrubPreviewPosition else currentPosition).toFloat() / duration.toFloat()).coerceIn(0f, 1f)
-                                            } else {
-                                                progress
-                                            }
-                                        )
-                                        .wrapContentWidth(Alignment.End)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(18.dp)
-                                            .offset(x = 9.dp) // Center on progress edge
-                                            .background(Color.White, CircleShape)
-                                            .border(2.dp, Pink, CircleShape)
-                                    )
-                                }
-                            }
+                            val frac = if (duration > 0) ((if (isControlScrubbing) scrubPreviewPosition else currentPosition).toFloat() / duration.toFloat()).coerceIn(0f, 1f) else progress
+                            // Watched portion - brighter when focused
+                            Box(modifier = Modifier.fillMaxWidth(frac).fillMaxHeight().background(
+                                if (trackbarFocused) Pink else Pink.copy(alpha = 0.8f), RoundedCornerShape(3.dp)
+                            ))
                         }
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
 
-                        // Duration
                         Text(
                             text = formatTime(duration),
-                            style = ArflixTypography.label.copy(fontSize = 13.sp),
-                            color = TextSecondary,
+                            style = ArflixTypography.label.copy(fontSize = if (isTouchDevice) 12.sp else 13.sp),
+                            color = Color.White.copy(alpha = 0.5f),
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.width(55.dp)
+                            modifier = Modifier.width(if (isTouchDevice) 48.dp else 55.dp)
                         )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Text buttons row - closer to the track bar
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        // Subtitle/Audio button with proper TV focus
-                        var subtitleButtonFocused by remember { mutableStateOf(false) }
-                        PlayerTextButtonFocusable(
-                            text = "Subtitles & Audio",
-                            isFocused = subtitleButtonFocused,
-                            focusRequester = subtitleButtonFocusRequester,
-                            onFocusChanged = { focused ->
-                                subtitleButtonFocused = focused
-                                if (focused) focusedButton = 1
-                            },
-                            onClick = {
-                                showSubtitleMenu = true
-                                subtitleMenuIndex = 0
-                            },
-                            onLeftKey = {
-                                playButtonFocusRequester.requestFocus()
-                            },
-                            onRightKey = {
-                                sourceButtonFocusRequester.requestFocus()
-                            },
-                            onUpKey = {
-                                trackbarFocusRequester.requestFocus()
-                            }
-                        )
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        // Sources button
-                        var sourceButtonFocused by remember { mutableStateOf(false) }
-                        PlayerTextButtonFocusable(
-                            text = "Sources",
-                            isFocused = sourceButtonFocused,
-                            focusRequester = sourceButtonFocusRequester,
-                            onFocusChanged = { sourceButtonFocused = it },
-                            onClick = {
-                                showSourceMenu = true
-                                showControls = true
-                            },
-                            onLeftKey = {
-                                subtitleButtonFocusRequester.requestFocus()
-                            },
-                            onRightKey = {
-                                if (mediaType == MediaType.TV) {
-                                    nextEpisodeButtonFocusRequester.requestFocus()
-                                } else {
-                                    queueControlsSeek(10_000L)
-                                }
-                            },
-                            onUpKey = {
-                                trackbarFocusRequester.requestFocus()
-                            }
-                        )
-
-                        if (mediaType == MediaType.TV) {
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            // Next episode button
-                            var nextEpisodeButtonFocused by remember { mutableStateOf(false) }
-                            PlayerTextButtonFocusable(
-                                text = "Next Episode",
-                                isFocused = nextEpisodeButtonFocused,
-                                focusRequester = nextEpisodeButtonFocusRequester,
-                                onFocusChanged = { nextEpisodeButtonFocused = it },
-                                onClick = {
-                                    val season = seasonNumber ?: return@PlayerTextButtonFocusable
-                                    val episode = episodeNumber ?: return@PlayerTextButtonFocusable
-                                    val selected = uiState.selectedStream
-                                    onPlayNext(
-                                        season,
-                                        episode + 1,
-                                        selected?.addonId?.takeIf { it.isNotBlank() },
-                                        selected?.source?.takeIf { it.isNotBlank() },
-                                        selected?.behaviorHints?.bingeGroup?.takeIf { it.isNotBlank() }
-                                    )
-                                },
-                                onLeftKey = {
-                                    sourceButtonFocusRequester.requestFocus()
-                                },
-                                onRightKey = {
-                                    queueControlsSeek(10_000L)
-                                },
-                                onUpKey = {
-                                    trackbarFocusRequester.requestFocus()
-                                }
-                            )
-                        }
                     }
                 }
             }
@@ -2198,6 +2102,26 @@ fun PlayerScreen(
             }
         }
 
+        // Aspect ratio indicator - brief center popup
+        AnimatedVisibility(
+            visible = showAspectIndicator,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Box(
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 24.dp, vertical = 14.dp)
+            ) {
+                Text(
+                    text = aspectModeLabel,
+                    style = ArflixTypography.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Medium),
+                    color = Color.White
+                )
+            }
+        }
+
         // Skip overlay - shows +10/-10 when seeking without controls
         // Positioned near bottom (above trackbar area), no background, just text with shadow
         AnimatedVisibility(
@@ -2315,74 +2239,51 @@ fun PlayerScreen(
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun PlayerTextButtonFocusable(
-    text: String,
-    isFocused: Boolean,
+private fun PlayerIconButton(
+    icon: ImageVector,
+    contentDescription: String,
     focusRequester: FocusRequester,
+    size: Dp = 32.dp,
+    iconSize: Dp = 22.dp,
     onFocusChanged: (Boolean) -> Unit,
     onClick: () -> Unit,
     onLeftKey: () -> Unit = {},
     onRightKey: () -> Unit = {},
-    onUpKey: () -> Unit = {}
+    onUpKey: () -> Unit = {},
+    onDownKey: () -> Unit = {}
 ) {
-    val scale by animateFloatAsState(if (isFocused) 1.08f else 1f, label = "scale")
+    var focused by remember { mutableStateOf(false) }
+    // Focused: enlarge icon and brighten it (glow effect via scale + tint)
+    val scale by animateFloatAsState(if (focused) 1.35f else 1f, label = "iconScale")
+    val iconAlpha by animateFloatAsState(if (focused) 1f else 0.6f, label = "iconAlpha")
 
     Box(
         modifier = Modifier
+            .size(size)
             .focusRequester(focusRequester)
-            .onFocusChanged { state ->
-                onFocusChanged(state.isFocused)
-            }
+            .onFocusChanged { state -> focused = state.isFocused; onFocusChanged(state.isFocused) }
             .focusable()
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
                     when (event.key) {
-                        Key.Enter, Key.DirectionCenter -> {
-                            onClick()
-                            true
-                        }
-                        Key.DirectionLeft -> {
-                            onLeftKey()
-                            true
-                        }
-                        Key.DirectionRight -> {
-                            onRightKey()
-                            true
-                        }
-                        Key.DirectionUp -> {
-                            onUpKey()
-                            true
-                        }
+                        Key.Enter, Key.DirectionCenter -> { onClick(); true }
+                        Key.DirectionLeft -> { onLeftKey(); true }
+                        Key.DirectionRight -> { onRightKey(); true }
+                        Key.DirectionUp -> { onUpKey(); true }
+                        Key.DirectionDown -> { onDownKey(); true }
                         else -> false
                     }
                 } else false
             }
-            .clickable { onClick() }
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .background(
-                if (isFocused) Color.White else Color.White.copy(alpha = 0.1f),
-                RoundedCornerShape(20.dp)
-            )
-            .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(20.dp)
-            )
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
+            .graphicsLayer { scaleX = scale; scaleY = scale },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = text,
-            style = ArflixTypography.body.copy(
-                fontSize = 14.sp,
-                fontWeight = if (isFocused) FontWeight.SemiBold else FontWeight.Normal
-            ),
-            color = if (isFocused) Color.Black else Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White.copy(alpha = iconAlpha),
+            modifier = Modifier.size(iconSize)
         )
     }
 }

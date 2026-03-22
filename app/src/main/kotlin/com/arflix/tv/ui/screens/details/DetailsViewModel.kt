@@ -1472,9 +1472,24 @@ class DetailsViewModel @Inject constructor(
             } else null
 
             when {
-                preferredSeason != null && preferredEpisode != null -> localResume ?: cloudResume
+                preferredSeason != null && preferredEpisode != null -> {
+                    // Only use resume data that matches the requested episode.
+                    // Never let a stale entry from a different episode bleed through.
+                    val matchLocal = localResume?.takeIf { it.season == preferredSeason && it.episode == preferredEpisode }
+                    val matchCloud = cloudResume?.takeIf { it.season == preferredSeason && it.episode == preferredEpisode }
+                    matchLocal ?: matchCloud
+                }
                 cloudResume == null -> localResume
                 localResume == null -> cloudResume
+                // When both exist, prefer the one for the later episode; if same episode, prefer higher position
+                localResume.season != null && cloudResume.season != null && localResume.episode != null && cloudResume.episode != null -> {
+                    val localEp = localResume.season!! * 10000 + localResume.episode!!
+                    val cloudEp = cloudResume.season!! * 10000 + cloudResume.episode!!
+                    if (localEp > cloudEp) localResume
+                    else if (cloudEp > localEp) cloudResume
+                    else if (localResume.positionMs > cloudResume.positionMs) localResume
+                    else cloudResume
+                }
                 localResume.positionMs > cloudResume.positionMs -> localResume
                 else -> cloudResume
             }
@@ -1512,24 +1527,19 @@ class DetailsViewModel @Inject constructor(
         val normalizedDuration = if (durationSeconds > 86_400L) durationSeconds / 1000L else durationSeconds
         val normalizedPosition = if (positionSeconds > 86_400L) positionSeconds / 1000L else positionSeconds
 
+        // If both position and duration are 0, this entry has no real playback data.
+        // The progress field may be a show-level synthetic value (% of episodes watched),
+        // NOT an episode playback percentage. Don't derive a fake resume position from it.
+        if (normalizedPosition <= 0L && normalizedDuration <= 0L) {
+            return null
+        }
+
         var seconds = when {
             normalizedPosition > 0 -> normalizedPosition
             normalizedDuration > 0 && progress > 0f -> (normalizedDuration * progress).toLong()
             else -> 0L
         }
-        val runtimeSeconds = if (mediaType == MediaType.TV || progress > 0f) {
-            resolveRuntimeSeconds(tmdbId, mediaType, season, episode)
-        } else {
-            0L
-        }
-        if (seconds <= 0L && progress > 0f) {
-            if (runtimeSeconds > 0L) {
-                seconds = (runtimeSeconds * progress).toLong()
-            }
-        }
-        if (runtimeSeconds > 0L) {
-            seconds = seconds.coerceIn(1L, runtimeSeconds.coerceAtLeast(1L))
-        } else if (normalizedDuration > 0L) {
+        if (normalizedDuration > 0L && seconds > 0L) {
             seconds = seconds.coerceIn(1L, normalizedDuration.coerceAtLeast(1L))
         }
         if (seconds <= 0L) return null
