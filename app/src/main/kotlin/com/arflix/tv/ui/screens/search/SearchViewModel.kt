@@ -2,8 +2,10 @@ package com.arflix.tv.ui.screens.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.arflix.tv.data.model.IptvChannel
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
+import com.arflix.tv.data.repository.IptvRepository
 import com.arflix.tv.data.repository.MediaRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -24,13 +26,15 @@ data class SearchUiState(
     val results: List<MediaItem> = emptyList(),
     val movieResults: List<MediaItem> = emptyList(),
     val tvResults: List<MediaItem> = emptyList(),
+    val livetvResults: List<IptvChannel> = emptyList(),
     val cardLogoUrls: Map<String, String> = emptyMap(),
     val error: String? = null
 )
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val mediaRepository: MediaRepository
+    private val mediaRepository: MediaRepository,
+    private val iptvRepository: IptvRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
@@ -71,15 +75,50 @@ class SearchViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
             try {
-                val sortedResults = if (cachedSuggestionQuery.equals(query, ignoreCase = true) && cachedSuggestionResults.isNotEmpty()) {
-                    cachedSuggestionResults
-                } else {
-                    val fetched = mediaRepository.search(query)
-                    val sorted = sortResults(query, fetched)
-                    cachedSuggestionQuery = query
-                    cachedSuggestionResults = sorted
-                    sorted
-                }
+                // Search TMDB and IPTV in parallel
+                val mediaResultsDeferred = async { mediaRepository.search(query) }
+                val iptvResultsDeferred = async { searchLiveTV(query) }
+
+                val results = mediaResultsDeferred.await()
+                val livetvChannels = iptvResultsDeferred.await()
+
+                // Smart sorting: prioritize main content over documentaries/specials
+                // 1. Exact/close title matches first
+                // 2. High popularity (main releases) before low popularity (documentaries)
+                // 3. Then by year descending (newest first)
+                val queryLower = query.lowercase()
+                val sortedResults = results.sortedWith(
+                    compareBy<MediaItem> { item ->
+                        // Priority 1: Title match score (lower = better match)
+                        val titleLower = item.title.lowercase()
+                        when {
+                            titleLower == queryLower -> 0  // Exact match
+                            titleLower.startsWith(queryLower) -> 1  // Starts with query
+                            titleLower.contains(queryLower) -> 2  // Contains query
+                            else -> 3  // Partial/fuzzy match
+                        }
+                    }.thenByDescending { item ->
+                        // Priority 2: Popularity (higher = main content)
+                        // Documentary genre IDs: 99 (movie), 10763 (TV documentary)
+                        // Lower popularity for documentaries/specials
+                        val isDocumentary = item.genreIds.contains(99) || item.genreIds.contains(10763)
+                        val titleLower = item.title.lowercase()
+                        val isSpecial = titleLower.contains("making of") ||
+                                titleLower.contains("behind the") ||
+                                titleLower.contains("special") ||
+                                titleLower.contains("documentary") ||
+                                titleLower.contains("featurette")
+
+                        if (isDocumentary || isSpecial) {
+                            item.popularity * 0.1f  // Deprioritize documentaries/specials
+                        } else {
+                            item.popularity
+                        }
+                    }.thenByDescending { item ->
+                        // Priority 3: Year (newest first)
+                        item.year.toIntOrNull() ?: 0
+                    }
+                )
 
                 // Separate into movies and TV shows
                 val movies = sortedResults.filter { it.mediaType == MediaType.MOVIE }
@@ -101,6 +140,7 @@ class SearchViewModel @Inject constructor(
                     results = sortedResults,
                     movieResults = movies,
                     tvResults = tvShows,
+                    livetvResults = livetvChannels,
                     cardLogoUrls = logoMap
                 )
             } catch (e: Exception) {
@@ -109,6 +149,23 @@ class SearchViewModel @Inject constructor(
                     error = e.message
                 )
             }
+        }
+    }
+
+    private suspend fun searchLiveTV(query: String): List<IptvChannel> {
+        return try {
+            val snapshot = iptvRepository.getCachedSnapshotOrNull() ?: return emptyList()
+            if (snapshot.channels.isEmpty()) return emptyList()
+
+            val queryLower = query.lowercase()
+            snapshot.channels.filter { channel ->
+                val channelNameLower = channel.name.lowercase()
+                channelNameLower.contains(queryLower)
+            }.sortedBy { channel ->
+                !channel.name.lowercase().startsWith(queryLower)
+            }.take(16)  // Limit to 16 results like movie/TV results
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 

@@ -143,4 +143,151 @@ class UiStateTest {
         assertThat(state).isInstanceOf(UiState.Error::class.java)
         assertThat(state.exceptionOrNull()).isEqualTo(exception)
     }
+
+    @Test
+    fun `Error isRetryable delegates to AppException`() {
+        val networkError = UiState.Error(AppException.Network.TIMEOUT)
+        val authError = UiState.Error(AppException.Auth.SESSION_EXPIRED)
+
+        assertThat(networkError.isRetryable).isTrue()
+        assertThat(authError.isRetryable).isFalse()
+    }
+
+    @Test
+    fun `Error message delegates to AppException`() {
+        val error = UiState.Error(AppException.Network("Custom network error"))
+
+        assertThat(error.message).isEqualTo("Custom network error")
+    }
+
+    @Test
+    fun `Error errorCode delegates to AppException`() {
+        val error = UiState.Error(AppException.Network.NO_CONNECTION)
+
+        assertThat(error.errorCode).isEqualTo("ERR_NO_CONNECTION")
+    }
+
+    @Test
+    fun `map transforms through nested data`() {
+        val state: UiState<List<Int>> = UiState.Success(listOf(1, 2, 3))
+        val mapped = state.map { it.sum() }
+
+        assertThat(mapped.getOrNull()).isEqualTo(6)
+    }
+
+    @Test
+    fun `getOrNull returns null for Loading`() {
+        val state: UiState<String> = UiState.Loading()
+
+        assertThat(state.getOrNull()).isNull()
+    }
+
+    @Test
+    fun `getOrNull returns null for Idle`() {
+        val state: UiState<String> = UiState.Idle
+
+        assertThat(state.getOrNull()).isNull()
+    }
+
+    @Test
+    fun `exceptionOrNull returns null for Success`() {
+        val state: UiState<String> = UiState.Success("test")
+
+        assertThat(state.exceptionOrNull()).isNull()
+    }
+
+    @Test
+    fun `exceptionOrNull returns null for Loading`() {
+        val state: UiState<String> = UiState.Loading()
+
+        assertThat(state.exceptionOrNull()).isNull()
+    }
+
+    @Test
+    fun `exceptionOrNull returns null for Idle`() {
+        val state: UiState<String> = UiState.Idle
+
+        assertThat(state.exceptionOrNull()).isNull()
+    }
+
+    @Test
+    fun `error with retry action can be invoked`() {
+        var retryCalled = false
+        val state: UiState<String> = UiState.error(
+            AppException.Network.TIMEOUT,
+            retryAction = { retryCalled = true }
+        )
+
+        (state as UiState.Error).retryAction?.invoke()
+
+        assertThat(retryCalled).isTrue()
+    }
+
+    @Test
+    fun `toUiState extension with retry action`() {
+        var retryCalled = false
+        val result: Result<String> = Result.error(AppException.Network.NO_CONNECTION)
+        val state = result.toUiState { retryCalled = true }
+
+        (state as UiState.Error).retryAction?.invoke()
+
+        assertThat(retryCalled).isTrue()
+    }
+
+    @Test
+    fun `map preserves Error retry action`() {
+        var retryCalled = false
+        val state: UiState<Int> = UiState.Error(
+            AppException.Network.TIMEOUT,
+            retryAction = { retryCalled = true }
+        )
+        val mapped = state.map { it * 2 }
+
+        (mapped as UiState.Error).retryAction?.invoke()
+
+        assertThat(retryCalled).isTrue()
+    }
+
+    @Test
+    fun `Loading with custom message`() {
+        val state: UiState<String> = UiState.loading("Loading movies...")
+
+        assertThat(state.isLoading).isTrue()
+        assertThat((state as UiState.Loading).message).isEqualTo("Loading movies...")
+    }
+
+    @Test
+    fun `Success can hold nullable data`() {
+        val state: UiState<String?> = UiState.Success(null)
+
+        assertThat(state.isSuccess).isTrue()
+        assertThat(state.getOrNull()).isNull()
+    }
+
+    @Test
+    fun `Success can hold complex types`() {
+        data class ComplexData(val items: List<String>, val count: Int)
+        val data = ComplexData(listOf("a", "b"), 2)
+        val state: UiState<ComplexData> = UiState.Success(data)
+
+        assertThat(state.getOrNull()).isEqualTo(data)
+    }
+
+    @Test
+    fun `state equality works correctly`() {
+        val state1: UiState<String> = UiState.Success("test")
+        val state2: UiState<String> = UiState.Success("test")
+        val state3: UiState<String> = UiState.Success("different")
+
+        assertThat(state1).isEqualTo(state2)
+        assertThat(state1).isNotEqualTo(state3)
+    }
+
+    @Test
+    fun `Idle is singleton`() {
+        val idle1: UiState<String> = UiState.Idle
+        val idle2: UiState<Int> = UiState.Idle
+
+        assertThat(idle1).isSameInstanceAs(idle2)
+    }
 }

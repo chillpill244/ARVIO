@@ -151,9 +151,16 @@ fun StreamSelector(
         listOf("All sources") + addonTabs.map { it.label }
     }
 
-    // Sort streams: quality (4K > 1080p > 720p), then largest size first
+    // Sort streams: matchScore (higher = better match), then quality (4K > 1080p > 720p), then largest size first
     val sortedStreams = remember(streams, streams.size) {
         streams.sortedWith { a, b ->
+            // 0. Higher matchScore first (better similarity match)
+            val matchScoreA = a.matchScore
+            val matchScoreB = b.matchScore
+            if (matchScoreA != matchScoreB) {
+                return@sortedWith matchScoreB.compareTo(matchScoreA) // Descending: higher score first
+            }
+
             // 1. Higher quality first (4K > 1080p > 720p > 480p)
             val qualityA = qualityScore(a.quality)
             val qualityB = qualityScore(b.quality)
@@ -161,14 +168,14 @@ fun StreamSelector(
                 return@sortedWith qualityB - qualityA // Descending: higher quality first
             }
 
-            // 3. Larger size first (parse from display string for consistency)
+            // 2. Larger size first (parse from display string for consistency)
             val sizeA = getSizeBytes(a)
             val sizeB = getSizeBytes(b)
             if (sizeA != sizeB) {
                 return@sortedWith sizeB.compareTo(sizeA) // Descending: larger size first
             }
 
-            // 4. Tie-breaker: sort by source name alphabetically for stable ordering
+            // 3. Tie-breaker: sort by source name alphabetically for stable ordering
             a.source.compareTo(b.source)
         }
     }

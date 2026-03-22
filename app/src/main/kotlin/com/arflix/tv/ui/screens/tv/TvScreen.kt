@@ -1,5 +1,6 @@
 ﻿
 @file:Suppress("UnsafeOptInUsageError")
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package com.arflix.tv.ui.screens.tv
 
@@ -8,6 +9,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -31,11 +33,16 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -51,6 +58,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -110,6 +119,7 @@ import kotlin.math.abs
 
 private enum class TvFocusZone {
     SIDEBAR,
+    SEARCH,
     GROUPS,
     GUIDE
 }
@@ -123,6 +133,8 @@ fun TvScreen(
     initialStreamUrl: String? = null,
     onNavigateToHome: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
+    onNavigateToMovies: () -> Unit = {},
+    onNavigateToSeries: () -> Unit = {},
     onNavigateToWatchlist: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     onSwitchProfile: () -> Unit = {},
@@ -132,14 +144,17 @@ fun TvScreen(
     val context = LocalContext.current
     val isMobile = LocalDeviceType.current.isTouchDevice()
 
-    var focusZone by rememberSaveable { mutableStateOf(if (uiState.isConfigured) TvFocusZone.GROUPS else TvFocusZone.SIDEBAR) }
+    var focusZone by rememberSaveable { mutableStateOf(if (uiState.isConfigured) TvFocusZone.SEARCH else TvFocusZone.SIDEBAR) }
+    var searchActive by remember { mutableStateOf(false) }
     val hasProfile = currentProfile != null
     val maxSidebarIndex = topBarMaxIndex(hasProfile)
-    var sidebarFocusIndex by rememberSaveable { mutableIntStateOf(if (hasProfile) 4 else 3) }
+    var sidebarFocusIndex by rememberSaveable { mutableIntStateOf(if (hasProfile) 6 else 5) }
     var groupIndex by rememberSaveable { mutableIntStateOf(0) }
     var channelIndex by rememberSaveable { mutableIntStateOf(0) }
     var selectedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
     var playingChannelId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Track if user has explicitly clicked to play (prevents auto-play)
+    var userHasClickedPlay by remember { mutableStateOf(false) }
     // When launched from Home with a stream URL, start in fullscreen immediately
     // to avoid a flash of the TV page channel list.
     var isFullScreen by rememberSaveable { mutableStateOf(initialStreamUrl != null) }
@@ -158,8 +173,9 @@ fun TvScreen(
     val selectedGroup = groups.getOrNull(safeGroupIndex).orEmpty()
     val channels = uiState.filteredChannels(selectedGroup)
     val safeChannelIndex = channelIndex.coerceIn(0, (channels.size - 1).coerceAtLeast(0))
-    val selectedChannel = selectedChannelId?.let { uiState.channelLookup[it] }
-    val playingChannel = selectedChannel ?: playingChannelId?.let { uiState.channelLookup[it] }
+    // playingChannel should ONLY use playingChannelId, NOT selectedChannelId
+    // selectedChannelId is just for visual focus/highlighting
+    val playingChannel = playingChannelId?.let { uiState.channelLookup[it] }
 
     // Auto-select channel when navigated from Home "Favorite TV" row.
     // If initialStreamUrl was provided, playback already started instantly —
@@ -169,11 +185,14 @@ fun TvScreen(
             val channel = uiState.channelLookup[initialChannelId]
             if (channel != null) {
                 selectedChannelId = channel.id
-                // Only set playingChannelId if not already playing (instant start already did it)
-                if (playingChannelId != channel.id) {
-                    playingChannelId = channel.id
+                // Only auto-play if initialStreamUrl was provided (explicit navigation from Home)
+                if (initialStreamUrl != null) {
+                    userHasClickedPlay = true
+                    if (playingChannelId != channel.id) {
+                        playingChannelId = channel.id
+                    }
+                    isFullScreen = true
                 }
-                isFullScreen = true
             }
         }
     }
@@ -200,6 +219,19 @@ fun TvScreen(
     LaunchedEffect(safeChannelIndex, focusZone, channels.size) {
         if (focusZone == TvFocusZone.GUIDE && channels.isNotEmpty()) {
             smoothScrollTo(channelsListState, safeChannelIndex)
+        }
+    }
+    // Click-to-play model: Only update selectedChannelId for visual feedback, 
+    // but don't auto-play. User must press Enter/OK to play.
+    LaunchedEffect(safeChannelIndex, focusZone) {
+        if (focusZone == TvFocusZone.GUIDE && channels.isNotEmpty()) {
+            kotlinx.coroutines.delay(150L) // small debounce
+            val focusedChannel = channels.getOrNull(safeChannelIndex)
+            if (focusedChannel != null) {
+                // Only update selectedChannelId for visual feedback, NEVER playingChannelId
+                selectedChannelId = focusedChannel.id
+                // DO NOT set playingChannelId here - only on explicit Enter key press
+            }
         }
     }
     LaunchedEffect(uiState.isConfigured, uiState.isLoading, uiState.snapshot.channels.size, groups.size) {
@@ -325,6 +357,7 @@ fun TvScreen(
     LaunchedEffect(Unit) {
         if (initialStreamUrl != null && initialChannelId != null) {
             playingChannelId = initialChannelId
+            userHasClickedPlay = true // Coming from Home with explicit selection
             isFullScreen = true
             lastPreparedStreamUrl = initialStreamUrl
             prepareStream(initialStreamUrl)
@@ -340,31 +373,50 @@ fun TvScreen(
         prepareStream(stream)
     }
 
-    LaunchedEffect(isFullScreen, miniPlayerView, fullPlayerView) {
+    // Ensure smooth player surface handoff between mini and fullscreen views
+    LaunchedEffect(isFullScreen) {
         if (isPlayerReleased) return@LaunchedEffect
+        // Small delay to ensure target view is fully created before attaching player
+        kotlinx.coroutines.delay(50L)
+        
         if (isFullScreen) {
+            // Detach from mini first
             miniPlayerView?.player = null
-            val targetView = fullPlayerView ?: return@LaunchedEffect
-            // Use postDelayed to ensure the view has been laid out after composition
-            targetView.postDelayed({
-                if (!isPlayerReleased) {
-                    targetView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    targetView.player = exoPlayer
-                    targetView.requestLayout()
-                    targetView.invalidate()
+            // Wait for fullscreen view to be ready, retry up to 200ms
+            var attempts = 0
+            while (fullPlayerView == null && attempts < 4) {
+                kotlinx.coroutines.delay(50L)
+                attempts++
+            }
+            fullPlayerView?.let { view ->
+                view.post {
+                    if (!isPlayerReleased) {
+                        view.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        view.player = exoPlayer
+                        view.requestLayout()
+                        view.invalidate()
+                    }
                 }
-            }, 50)
+            }
         } else {
+            // Detach from fullscreen first
             fullPlayerView?.player = null
-            val targetView = miniPlayerView ?: return@LaunchedEffect
-            targetView.postDelayed({
-                if (!isPlayerReleased) {
-                    targetView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    targetView.player = exoPlayer
-                    targetView.requestLayout()
-                    targetView.invalidate()
+            // Wait for mini view to be ready
+            var attempts = 0
+            while (miniPlayerView == null && attempts < 4) {
+                kotlinx.coroutines.delay(50L)
+                attempts++
+            }
+            miniPlayerView?.let { view ->
+                view.post {
+                    if (!isPlayerReleased) {
+                        view.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        view.player = exoPlayer
+                        view.requestLayout()
+                        view.invalidate()
+                    }
                 }
-            }, 50)
+            }
         }
     }
 
@@ -425,10 +477,18 @@ fun TvScreen(
                                 return@onPreviewKeyEvent true
                             }
                             Key.Enter, Key.DirectionCenter -> {
-                                // Toggle EPG info overlay
-                                showFullscreenOverlay = !showFullscreenOverlay
-                                if (showFullscreenOverlay) {
+                                // If focused channel != playing channel, play it
+                                // Otherwise, toggle EPG overlay
+                                if (selectedChannelId != null && selectedChannelId != playingChannelId) {
+                                    playingChannelId = selectedChannelId
+                                    showFullscreenOverlay = true
                                     fullscreenOverlayTrigger = System.currentTimeMillis()
+                                } else {
+                                    // Toggle EPG info overlay
+                                    showFullscreenOverlay = !showFullscreenOverlay
+                                    if (showFullscreenOverlay) {
+                                        fullscreenOverlayTrigger = System.currentTimeMillis()
+                                    }
                                 }
                                 return@onPreviewKeyEvent true
                             }
@@ -440,8 +500,9 @@ fun TvScreen(
                                     val nextChannel = channels[nextIdx]
                                     channelIndex = nextIdx
                                     selectedChannelId = nextChannel.id
-                                    playingChannelId = nextChannel.id
-                                    // Show overlay briefly on channel switch
+                                    // Don't auto-play - let user explicitly select with Enter
+                                    // playingChannelId = nextChannel.id
+                                    // Show overlay briefly on channel focus
                                     showFullscreenOverlay = true
                                     fullscreenOverlayTrigger = System.currentTimeMillis()
                                 }
@@ -455,8 +516,9 @@ fun TvScreen(
                                     val prevChannel = channels[prevIdx]
                                     channelIndex = prevIdx
                                     selectedChannelId = prevChannel.id
-                                    playingChannelId = prevChannel.id
-                                    // Show overlay briefly on channel switch
+                                    // Don't auto-play - let user explicitly select with Enter
+                                    // playingChannelId = prevChannel.id
+                                    // Show overlay briefly on channel focus
                                     showFullscreenOverlay = true
                                     fullscreenOverlayTrigger = System.currentTimeMillis()
                                 }
@@ -488,7 +550,7 @@ fun TvScreen(
                                 return@onPreviewKeyEvent true
                             }
 
-                            TvFocusZone.SIDEBAR -> Unit
+                            TvFocusZone.SIDEBAR, TvFocusZone.SEARCH -> Unit
                         }
                     }
 
@@ -500,6 +562,8 @@ fun TvScreen(
                                 when (topBarFocusedItem(sidebarFocusIndex, hasProfile)) {
                                     SidebarItem.SEARCH -> onNavigateToSearch()
                                     SidebarItem.HOME -> onNavigateToHome()
+                                    SidebarItem.MOVIES -> onNavigateToMovies()
+                                    SidebarItem.SERIES -> onNavigateToSeries()
                                     SidebarItem.WATCHLIST -> onNavigateToWatchlist()
                                     SidebarItem.TV -> Unit
                                     SidebarItem.SETTINGS -> onNavigateToSettings()
@@ -509,6 +573,11 @@ fun TvScreen(
                             true
                         }
 
+TvFocusZone.SEARCH -> {
+                            searchActive = true
+                            false
+                        }
+                        
                         TvFocusZone.GROUPS -> {
                             channelIndex = 0
                             focusZone = TvFocusZone.GUIDE
@@ -517,11 +586,13 @@ fun TvScreen(
 
                         TvFocusZone.GUIDE -> {
                             channels.getOrNull(safeChannelIndex)?.let { channel ->
+                                selectedChannelId = channel.id
+                                userHasClickedPlay = true // User explicitly clicked
                                 if (playingChannelId == channel.id) {
-                                    selectedChannelId = channel.id
+                                    // Already playing this channel - go fullscreen
                                     isFullScreen = true
                                 } else {
-                                    selectedChannelId = channel.id
+                                    // First click - start playing in mini player
                                     playingChannelId = channel.id
                                 }
                             }
@@ -533,7 +604,14 @@ fun TvScreen(
                         Key.Back, Key.Escape -> {
                             when (focusZone) {
                                 TvFocusZone.SIDEBAR -> onBack()
-                                TvFocusZone.GROUPS -> focusZone = TvFocusZone.SIDEBAR
+                                TvFocusZone.SEARCH -> {
+                                    if (searchActive) {
+                                        searchActive = false
+                                    } else {
+                                        focusZone = TvFocusZone.SIDEBAR
+                                    }
+                                }
+                                TvFocusZone.GROUPS -> focusZone = TvFocusZone.SEARCH
                                 TvFocusZone.GUIDE -> focusZone = TvFocusZone.GROUPS
                             }
                             true
@@ -544,7 +622,8 @@ fun TvScreen(
                                 TvFocusZone.SIDEBAR -> if (sidebarFocusIndex > 0) {
                                     sidebarFocusIndex = (sidebarFocusIndex - 1).coerceIn(0, maxSidebarIndex)
                                 }
-                                TvFocusZone.GROUPS -> Unit
+                                TvFocusZone.SEARCH -> { searchActive = false; focusZone = TvFocusZone.SIDEBAR }
+                                TvFocusZone.GROUPS -> focusZone = TvFocusZone.SEARCH
                                 TvFocusZone.GUIDE -> focusZone = TvFocusZone.GROUPS
                             }
                             true
@@ -555,6 +634,7 @@ fun TvScreen(
                                 TvFocusZone.SIDEBAR -> if (sidebarFocusIndex < maxSidebarIndex) {
                                     sidebarFocusIndex = (sidebarFocusIndex + 1).coerceIn(0, maxSidebarIndex)
                                 }
+                                TvFocusZone.SEARCH -> if (!searchActive && groups.isNotEmpty()) focusZone = TvFocusZone.GROUPS
                                 TvFocusZone.GROUPS -> if (channels.isNotEmpty()) focusZone = TvFocusZone.GUIDE
                                 TvFocusZone.GUIDE -> Unit
                             }
@@ -564,8 +644,8 @@ fun TvScreen(
                         Key.DirectionUp -> {
                             when (focusZone) {
                                 TvFocusZone.SIDEBAR -> Unit
-
-                                TvFocusZone.GROUPS -> if (groupIndex > 0) groupIndex-- else focusZone = TvFocusZone.SIDEBAR
+                                TvFocusZone.SEARCH -> if (!searchActive) focusZone = TvFocusZone.SIDEBAR
+                                TvFocusZone.GROUPS -> if (groupIndex > 0) groupIndex-- else focusZone = TvFocusZone.SEARCH
                                 TvFocusZone.GUIDE -> if (channelIndex > 0) channelIndex--
                             }
                             true
@@ -573,8 +653,12 @@ fun TvScreen(
 
                         Key.DirectionDown -> {
                             when (focusZone) {
-                                TvFocusZone.SIDEBAR -> if (groups.isNotEmpty()) focusZone = TvFocusZone.GROUPS
-
+                                TvFocusZone.SIDEBAR -> if (groups.isNotEmpty()) focusZone = TvFocusZone.SEARCH
+                                TvFocusZone.SEARCH -> if (groups.isNotEmpty()) {
+                                    searchActive = false
+                                    focusZone = TvFocusZone.GROUPS
+                                    groupIndex = 0
+                                }
                                 TvFocusZone.GROUPS -> if (groupIndex < groups.size - 1) groupIndex++
                                 TvFocusZone.GUIDE -> if (channelIndex < channels.size - 1) channelIndex++
                             }
@@ -593,7 +677,7 @@ fun TvScreen(
                                     true
                                 } ?: false
 
-                                TvFocusZone.SIDEBAR -> false
+                                TvFocusZone.SIDEBAR, TvFocusZone.SEARCH -> false
                             }
                         }
 
@@ -647,13 +731,12 @@ fun TvScreen(
                                 groups = groups,
                                 favoriteGroups = uiState.snapshot.favoriteGroups.toSet(),
                                 focusedGroupIndex = safeGroupIndex,
-                                isFocused = focusZone == TvFocusZone.GROUPS,
+                                isGroupsFocused = focusZone == TvFocusZone.GROUPS,
+                                isSearchFocused = focusZone == TvFocusZone.SEARCH,
+                                isSearchActive = searchActive,
                                 listState = groupsListState,
-                                onGroupClick = { index ->
-                                    groupIndex = index
-                                    focusZone = TvFocusZone.GROUPS
-                                    channelIndex = 0
-                                },
+                                searchQuery = uiState.query,
+                                onSearchQueryChange = { viewModel.setQuery(it) },
                                 modifier = Modifier
                                     .width(if (isMobile) 160.dp else 214.dp)
                                     .fillMaxHeight()
@@ -791,15 +874,19 @@ fun TvScreen(
                                 useController = false
                                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                                 setKeepContentOnPlayerReset(true)
-                                setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                // Use BLACK shutter to avoid transparent flickering during player attachment
+                                setShutterBackgroundColor(android.graphics.Color.BLACK)
                             }
                         },
                         modifier = Modifier.fillMaxSize(),
                         update = { playerView ->
                             fullPlayerView = playerView
-                            // Do NOT assign player here; let the LaunchedEffect handle it via postDelayed
-                            // to ensure the view has been laid out first (avoids black screen).
+                            // Always ensure player is attached when this view is active
                             playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                            if (playerView.player !== exoPlayer) {
+                                // Attach player directly in update to ensure immediate rendering
+                                playerView.player = exoPlayer
+                            }
                         }
                     )
 
@@ -854,9 +941,12 @@ private fun CategoryRail(
     groups: List<String>,
     favoriteGroups: Set<String>,
     focusedGroupIndex: Int,
-    isFocused: Boolean,
+    isGroupsFocused: Boolean,
+    isSearchFocused: Boolean,
+    isSearchActive: Boolean = false,
     listState: LazyListState,
-    onGroupClick: (Int) -> Unit = {},
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -864,12 +954,59 @@ private fun CategoryRail(
             .background(Color.White.copy(alpha = 0.045f), RoundedCornerShape(14.dp))
             .padding(horizontal = 8.dp, vertical = 10.dp)
     ) {
+        val searchFocusRequester = remember { FocusRequester() }
+        
+        LaunchedEffect(isSearchFocused) {
+            if (isSearchFocused) {
+                searchFocusRequester.requestFocus()
+            }
+        }
+        
         Text(
             text = "Categories",
             style = ArflixTypography.caption.copy(fontSize = 11.sp, letterSpacing = 0.7.sp),
             color = TextSecondary.copy(alpha = 0.7f),
-            modifier = Modifier.padding(start = 8.dp, bottom = 6.dp, top = 1.dp)
+            modifier = Modifier.padding(start = 6.dp, bottom = 4.dp, top = 2.dp)
         )
+        
+        // Search bar for filtering categories (matches Movies/Series styling)
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            placeholder = { androidx.compose.material3.Text("Search", color = TextSecondary.copy(alpha = 0.5f)) },
+            textStyle = ArflixTypography.body.copy(color = Color.White.copy(alpha = 1f), fontSize = 12.sp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .padding(top = 0.dp, bottom = 3.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .focusRequester(searchFocusRequester)
+                .background(
+                    if (isSearchFocused) Color.White.copy(alpha = 0.12f) else Color.Transparent
+                )
+                .then(
+                    if (isSearchFocused) Modifier.border(
+                        width = 1.5.dp,
+                        color = Color.White.copy(alpha = 0.7f),
+                        shape = RoundedCornerShape(2.dp)
+                    ) else Modifier
+                ),
+            singleLine = true,
+            readOnly = !isSearchActive,
+            enabled = true,
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { onSearchQueryChange("") }) {
+                        Icon(
+                            imageVector = Icons.Filled.Clear,
+                            contentDescription = "Clear search",
+                            tint = TextSecondary
+                        )
+                    }
+                }
+            }
+        )
+        
         LazyColumn(
             state = listState,
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -878,9 +1015,8 @@ private fun CategoryRail(
             itemsIndexed(groups, key = { _, group -> group }, contentType = { _, _ -> "category_group" }) { index, group ->
                 GroupRailItem(
                     name = group,
-                    isFocused = isFocused && index == focusedGroupIndex,
-                    isFavorite = favoriteGroups.contains(group),
-                    onClick = { onGroupClick(index) }
+                    isFocused = isGroupsFocused && index == focusedGroupIndex,
+                    isFavorite = favoriteGroups.contains(group)
                 )
             }
         }
@@ -991,7 +1127,8 @@ private fun FullscreenEpgOverlay(
                         style = ArflixTypography.sectionTitle.copy(fontSize = if (isMobile) 14.sp else 22.sp),
                         color = Color.White,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.basicMarquee()
                     )
                     Text(
                         text = channel.group,
@@ -1097,7 +1234,9 @@ private fun FullscreenEpgOverlay(
                         Text(
                             text = channel.name,
                             style = ArflixTypography.sectionTitle.copy(fontSize = if (isMobile) 14.sp else 20.sp),
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 1,
+                            modifier = Modifier.basicMarquee()
                         )
                     }
                 }
@@ -1168,7 +1307,7 @@ private fun HeroPreviewPanel(
                 Spacer(modifier = Modifier.height(6.dp))
                 Text("Select a channel to start preview", style = ArflixTypography.body.copy(fontSize = 16.sp), color = TextSecondary)
                 Spacer(modifier = Modifier.height(2.dp))
-                Text("OK: play  |  OK again: fullscreen", style = ArflixTypography.caption.copy(fontSize = 11.sp), color = TextSecondary.copy(alpha = 0.8f))
+                Text("OK: play  |  OK again: fullscreen  |  Long Press: favorite", style = ArflixTypography.caption.copy(fontSize = 11.sp), color = TextSecondary.copy(alpha = 0.8f))
             }
         }
         return
@@ -1210,7 +1349,7 @@ private fun HeroPreviewPanel(
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
+                    modifier = Modifier.weight(1f, fill = false).basicMarquee()
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))
@@ -1544,7 +1683,7 @@ private fun GuideChannelRow(
                         color = primaryText,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier.weight(1f, fill = false).basicMarquee()
                     )
                     if (isPlaying) {
                         Spacer(modifier = Modifier.width(5.dp))

@@ -7,6 +7,7 @@ import com.arflix.tv.data.model.CatalogConfig
 import com.arflix.tv.data.model.Profile
 import com.arflix.tv.data.repository.ContinueWatchingItem
 import com.arflix.tv.ui.components.CARD_LAYOUT_MODE_LANDSCAPE
+import com.arflix.tv.ui.components.CARD_LAYOUT_MODE_POSTER
 import com.arflix.tv.ui.components.normalizeCardLayoutMode
 import com.arflix.tv.util.settingsDataStore
 import com.google.gson.Gson
@@ -127,7 +128,7 @@ class CloudSyncRepository @Inject constructor(
                         defaultSubtitle = prefs[defaultSubtitleKeyFor(profile.id)] ?: "Off",
                         defaultAudioLanguage = prefs[defaultAudioLanguageKeyFor(profile.id)] ?: "Auto (Original)",
                         cardLayoutMode = normalizeCardLayoutMode(
-                            prefs[cardLayoutModeKeyFor(profile.id)] ?: CARD_LAYOUT_MODE_LANDSCAPE
+                            prefs[cardLayoutModeKeyFor(profile.id)] ?: CARD_LAYOUT_MODE_POSTER
                         ),
                         frameRateMatchingMode = normalizeFrameRateMode(
                             prefs[frameRateMatchingModeKeyFor(profile.id)] ?: "Off"

@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import com.arflix.tv.ui.components.LoadingIndicator
 import com.arflix.tv.ui.components.QrCodeImage
@@ -94,6 +95,8 @@ import com.arflix.tv.data.model.CatalogSourceType
 import com.arflix.tv.ui.components.AppTopBar
 import com.arflix.tv.ui.components.AppTopBarContentTopInset
 import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.data.repository.IptvRefreshInterval
+import com.arflix.tv.ui.components.FrostedGlassBackground
 import com.arflix.tv.ui.components.SidebarItem
 import com.arflix.tv.ui.components.topBarFocusedItem
 import com.arflix.tv.ui.components.topBarMaxIndex
@@ -117,6 +120,8 @@ fun SettingsScreen(
     autoStartCloudAuth: Boolean = false,
     onNavigateToHome: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
+    onNavigateToMovies: () -> Unit = {},
+    onNavigateToSeries: () -> Unit = {},
     onNavigateToTv: () -> Unit = {},
     onNavigateToWatchlist: () -> Unit = {},
     onSwitchProfile: () -> Unit = {},
@@ -168,6 +173,10 @@ fun SettingsScreen(
     var subtitlePickerIndex by remember { mutableIntStateOf(0) }
     var showAudioLanguagePicker by remember { mutableStateOf(false) }
     var audioLanguagePickerIndex by remember { mutableIntStateOf(0) }
+    var showRefreshIntervalPicker by remember { mutableStateOf(false) }
+    var refreshIntervalPickerIndex by remember { mutableIntStateOf(0) }
+    var showSubtitleStylePicker by remember { mutableStateOf(false) }
+    var subtitleStylePickerIndex by remember { mutableIntStateOf(0) }
 
     val sections = remember { listOf("general", "iptv", "catalogs", "addons", "accounts") }
 
@@ -186,6 +195,14 @@ fun SettingsScreen(
         audioLanguagePickerIndex = options.indexOfFirst { it.equals(uiState.defaultAudioLanguage, ignoreCase = true) }
             .coerceAtLeast(0)
         showAudioLanguagePicker = true
+    }
+    val openRefreshIntervalPicker = {
+        val intervals = IptvRefreshInterval.entries
+        refreshIntervalPickerIndex = intervals.indexOf(uiState.iptvRefreshInterval).coerceAtLeast(0)
+        showRefreshIntervalPicker = true
+    }
+    val openSubtitleStylePicker = {
+        showSubtitleStylePicker = true
     }
 
     LaunchedEffect(Unit) {
@@ -225,7 +242,7 @@ fun SettingsScreen(
 
         val maxIndex = when (sectionIndex) {
             0 -> 6 // General: 7 items
-            1 -> 2 // IPTV
+            1 -> 3 // IPTV: Configure + Refresh + Auto Refresh + Delete
             2 -> uiState.catalogs.size // Catalogs
             3 -> uiState.addons.size // Addons
             4 -> 3 // Accounts
@@ -246,6 +263,12 @@ fun SettingsScreen(
             iptvEpgUrl = uiState.iptvEpgUrl
             iptvXtreamUsername = ""
             iptvXtreamPassword = ""
+        } else {
+            // When opening the dialog, initialize with current values
+            iptvM3uUrl = uiState.iptvM3uUrl
+            iptvEpgUrl = uiState.iptvEpgUrl
+            iptvXtreamUsername = uiState.iptvXtreamUsername
+            iptvXtreamPassword = uiState.iptvXtreamPassword
         }
     }
 
@@ -266,6 +289,7 @@ fun SettingsScreen(
         }
     }
 
+    FrostedGlassBackground {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -275,7 +299,7 @@ fun SettingsScreen(
             .onPreviewKeyEvent { event ->
                     if (isTouchDevice) return@onPreviewKeyEvent false
                     // BLOCKER FIX: Ignore main screen navigation if modals are open
-                    if (showCustomAddonInput || showSubtitlePicker || showAudioLanguagePicker || showIptvInput || showCatalogInput || uiState.showCloudPairDialog || uiState.showCloudEmailPasswordDialog) return@onPreviewKeyEvent false
+                    if (showCustomAddonInput || showSubtitlePicker || showAudioLanguagePicker || showIptvInput || showCatalogInput || showRefreshIntervalPicker || showSubtitleStylePicker || uiState.showCloudPairDialog || uiState.showCloudEmailPasswordDialog) return@onPreviewKeyEvent false
 
                 if (event.type == KeyEventType.KeyDown) {
                     val currentSection = sections.getOrNull(sectionIndex).orEmpty()
@@ -390,8 +414,8 @@ fun SettingsScreen(
                                 Zone.CONTENT -> {
                                     // Dynamic max based on current section
                                     val maxIndex = when (sectionIndex) {
-                                        0 -> 6 // General: 7 items
-                                        1 -> 2 // IPTV: Configure + Refresh + Delete
+                                        0 -> 7 // General: 8 items (includes Subtitle Style)
+                                        1 -> 3 // IPTV: Configure + Refresh + Auto Refresh + Delete
                                         2 -> uiState.catalogs.size // Catalogs: Add + N catalogs
                                         3 -> uiState.addons.size // Addons: N addons + "Add Custom" button
                                         4 -> 3 // Accounts: Cloud + Trakt + Switch Profile + App Update
@@ -418,6 +442,8 @@ fun SettingsScreen(
                                         when (topBarFocusedItem(sidebarFocusIndex, hasProfile)) {
                                             SidebarItem.SEARCH -> onNavigateToSearch()
                                             SidebarItem.HOME -> onNavigateToHome()
+                                            SidebarItem.MOVIES -> onNavigateToMovies()
+                                            SidebarItem.SERIES -> onNavigateToSeries()
                                             SidebarItem.TV -> onNavigateToTv()
                                             SidebarItem.WATCHLIST -> onNavigateToWatchlist()
                                             SidebarItem.SETTINGS -> { /* Already here */ }
@@ -437,6 +463,7 @@ fun SettingsScreen(
                                                 4 -> viewModel.setAutoPlayNext(!uiState.autoPlayNext)
                                                 5 -> viewModel.setAutoPlaySingleSource(!uiState.autoPlaySingleSource)
                                                 6 -> viewModel.cycleAutoPlayMinQuality()
+                                                7 -> openSubtitleStylePicker()
                                             }
                                         }
                                         1 -> { // IPTV
@@ -448,6 +475,9 @@ fun SettingsScreen(
                                                     viewModel.refreshIptv(force = true)
                                                 }
                                                 2 -> {
+                                                    openRefreshIntervalPicker()
+                                                }
+                                                3 -> {
                                                     viewModel.clearIptvConfig()
                                                 }
                                             }
@@ -497,14 +527,14 @@ fun SettingsScreen(
                                         }
                                         4 -> { // Accounts
                                             when (contentFocusIndex) {
-                                                0 -> { // Cloud account
-                                                    if (uiState.isLoggedIn) {
-                                                        viewModel.logout()
-                                                    } else {
-                                                        viewModel.startCloudAuth()
-                                                    }
-                                                }
-                                                1 -> { // Trakt
+                                                // 0 -> { // Cloud account
+                                                //     if (uiState.isLoggedIn) {
+                                                //         viewModel.logout()
+                                                //     } else {
+                                                //         viewModel.startCloudAuth()
+                                                //     }
+                                                // }
+                                                0 -> { // Trakt
                                                     if (uiState.isTraktAuthenticated) {
                                                         viewModel.disconnectTrakt()
                                                     } else if (uiState.isTraktPolling) {
@@ -513,7 +543,7 @@ fun SettingsScreen(
                                                         viewModel.startTraktAuth()
                                                     }
                                                 }
-                                                2 -> { // Switch Profile
+                                                1 -> { // Switch Profile
                                                     onSwitchProfile()
                                                 }
                                                 3 -> { // App Update
@@ -554,6 +584,7 @@ fun SettingsScreen(
                             autoPlayNext = uiState.autoPlayNext,
                             autoPlaySingleSource = uiState.autoPlaySingleSource,
                             autoPlayMinQuality = uiState.autoPlayMinQuality,
+                            subtitleStyle = uiState.subtitleStyle,
                             focusedIndex = -1,
                             onSubtitleClick = openSubtitlePicker,
                             onAudioLanguageClick = openAudioLanguagePicker,
@@ -561,7 +592,8 @@ fun SettingsScreen(
                             onFrameRateMatchingClick = { viewModel.cycleFrameRateMatchingMode() },
                             onAutoPlayToggle = { viewModel.setAutoPlayNext(it) },
                             onAutoPlaySingleSourceToggle = { viewModel.setAutoPlaySingleSource(it) },
-                            onAutoPlayMinQualityClick = { viewModel.cycleAutoPlayMinQuality() }
+                            onAutoPlayMinQualityClick = { viewModel.cycleAutoPlayMinQuality() },
+                            onSubtitleStyleClick = openSubtitleStylePicker
                         )
                         "iptv" -> IptvSettings(
                             m3uUrl = uiState.iptvM3uUrl,
@@ -573,9 +605,12 @@ fun SettingsScreen(
                             statusType = uiState.iptvStatusType,
                             progressText = uiState.iptvProgressText,
                             progressPercent = uiState.iptvProgressPercent,
+                            refreshInterval = uiState.iptvRefreshInterval,
+                            lastRefreshTime = uiState.iptvLastRefreshTime,
                             focusedIndex = -1,
                             onConfigure = { showIptvInput = true },
-                            onRefresh = { viewModel.refreshIptv() },
+                            onRefreshClick = { viewModel.refreshIptv() },
+                            onOpenRefreshIntervalPicker = openRefreshIntervalPicker,
                             onDelete = { viewModel.clearIptvConfig() }
                         )
                         "catalogs" -> CatalogsSettings(
@@ -674,13 +709,12 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.weight(1f))
                     
                     Text(
-                        text = "ARVIO V${BuildConfig.VERSION_NAME}",
+                        text = "MUVIO V${BuildConfig.VERSION_NAME}",
                         style = ArflixTypography.caption,
                         color = TextSecondary.copy(alpha = 0.5f),
                         modifier = Modifier.padding(start = 16.dp)
                     )
                 }
-
                 // Content area
                 Column(
                     modifier = Modifier
@@ -698,6 +732,7 @@ fun SettingsScreen(
                             autoPlayNext = uiState.autoPlayNext,
                             autoPlaySingleSource = uiState.autoPlaySingleSource,
                             autoPlayMinQuality = uiState.autoPlayMinQuality,
+                            subtitleStyle = uiState.subtitleStyle,
                             focusedIndex = if (activeZone == Zone.CONTENT) contentFocusIndex else -1,
                             onSubtitleClick = openSubtitlePicker,
                             onAudioLanguageClick = openAudioLanguagePicker,
@@ -705,7 +740,8 @@ fun SettingsScreen(
                             onFrameRateMatchingClick = { viewModel.cycleFrameRateMatchingMode() },
                             onAutoPlayToggle = { viewModel.setAutoPlayNext(it) },
                             onAutoPlaySingleSourceToggle = { viewModel.setAutoPlaySingleSource(it) },
-                            onAutoPlayMinQualityClick = { viewModel.cycleAutoPlayMinQuality() }
+                            onAutoPlayMinQualityClick = { viewModel.cycleAutoPlayMinQuality() },
+                            onSubtitleStyleClick = openSubtitleStylePicker
                         )
                         "iptv" -> IptvSettings(
                             m3uUrl = uiState.iptvM3uUrl,
@@ -717,9 +753,12 @@ fun SettingsScreen(
                             statusType = uiState.iptvStatusType,
                             progressText = uiState.iptvProgressText,
                             progressPercent = uiState.iptvProgressPercent,
+                            refreshInterval = uiState.iptvRefreshInterval,
+                            lastRefreshTime = uiState.iptvLastRefreshTime,
                             focusedIndex = if (activeZone == Zone.CONTENT) contentFocusIndex else -1,
                             onConfigure = { showIptvInput = true },
-                            onRefresh = { viewModel.refreshIptv() },
+                            onRefreshClick = { viewModel.refreshIptv(force = true) },
+                            onOpenRefreshIntervalPicker = openRefreshIntervalPicker,
                             onDelete = { viewModel.clearIptvConfig() }
                         )
                         "catalogs" -> CatalogsSettings(
@@ -768,6 +807,7 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
         }
 
         // Custom Addon Input Modal
@@ -901,6 +941,31 @@ fun SettingsScreen(
                     showAudioLanguagePicker = false
                 },
                 onDismiss = { showAudioLanguagePicker = false }
+            )
+        }
+
+        if (showRefreshIntervalPicker && sectionIndex == 1) {
+            SubtitlePickerModal(
+                title = "Auto Refresh Interval",
+                options = IptvRefreshInterval.entries.map { it.displayName },
+                selected = uiState.iptvRefreshInterval.displayName,
+                focusedIndex = refreshIntervalPickerIndex,
+                onFocusChange = { refreshIntervalPickerIndex = it },
+                onSelect = { selected ->
+                    val interval = IptvRefreshInterval.entries.find { it.displayName == selected }
+                        ?: IptvRefreshInterval.DISABLED
+                    viewModel.setIptvRefreshInterval(interval)
+                    showRefreshIntervalPicker = false
+                },
+                onDismiss = { showRefreshIntervalPicker = false }
+            )
+        }
+
+        if (showSubtitleStylePicker) {
+            SubtitleStyleModal(
+                style = uiState.subtitleStyle,
+                onStyleChange = { viewModel.updateSubtitleStyle(it) },
+                onDismiss = { showSubtitleStylePicker = false }
             )
         }
 
@@ -1883,6 +1948,7 @@ private fun GeneralSettings(
     autoPlayNext: Boolean,
     autoPlaySingleSource: Boolean,
     autoPlayMinQuality: String,
+    subtitleStyle: com.arflix.tv.ui.screens.settings.SubtitleStyle,
     focusedIndex: Int,
     onSubtitleClick: () -> Unit,
     onAudioLanguageClick: () -> Unit,
@@ -1890,7 +1956,8 @@ private fun GeneralSettings(
     onFrameRateMatchingClick: () -> Unit,
     onAutoPlayToggle: (Boolean) -> Unit,
     onAutoPlaySingleSourceToggle: (Boolean) -> Unit,
-    onAutoPlayMinQualityClick: () -> Unit
+    onAutoPlayMinQualityClick: () -> Unit,
+    onSubtitleStyleClick: () -> Unit
 ) {
     Column {
         Text(
@@ -1977,6 +2044,25 @@ private fun GeneralSettings(
             isFocused = focusedIndex == 6,
             onClick = onAutoPlayMinQualityClick
         )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Subtitle Styling Section
+        Text(
+            text = "Subtitle Appearance",
+            style = ArflixTypography.sectionTitle,
+            color = TextPrimary,
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
+
+        SettingsRow(
+            icon = Icons.Default.Subtitles,
+            title = "Subtitle Style",
+            subtitle = "Size: ${subtitleStyle.fontSize}sp, Font: ${subtitleStyle.fontFamily.displayName}, Opacity: ${(subtitleStyle.backgroundOpacity * 100).toInt()}%",
+            value = "CUSTOMIZE",
+            isFocused = focusedIndex == 7,
+            onClick = onSubtitleStyleClick
+        )
     }
 }
 
@@ -1992,9 +2078,12 @@ private fun IptvSettings(
     statusType: ToastType,
     progressText: String?,
     progressPercent: Int,
+    refreshInterval: IptvRefreshInterval,
+    lastRefreshTime: Long?,
     focusedIndex: Int,
     onConfigure: () -> Unit,
-    onRefresh: () -> Unit,
+    onRefreshClick: () -> Unit,
+    onOpenRefreshIntervalPicker: () -> Unit,
     onDelete: () -> Unit
 ) {
     Column {
@@ -2016,19 +2105,32 @@ private fun IptvSettings(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        val refreshSubtitle = when {
-            isLoading -> "Refreshing channels and EPG..."
-            error != null -> error
-            epgUrl.isBlank() -> "Reload playlist now"
-            else -> "Reload playlist and EPG now"
-        }
         SettingsRow(
             icon = Icons.Default.Link,
             title = "Refresh IPTV Data",
-            subtitle = refreshSubtitle,
+            subtitle = if (isLoading) "Refreshing..." else "Tap to refresh playlist now",
             value = if (isLoading) "LOADING" else "REFRESH",
             isFocused = focusedIndex == 1,
-            onClick = onRefresh
+            onClick = onRefreshClick
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        val intervalSubtitle = buildString {
+            append(refreshInterval.displayName)
+            if (lastRefreshTime != null && lastRefreshTime > 0) {
+                val lastRefreshFormatted = java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(lastRefreshTime))
+                append(" | Last: $lastRefreshFormatted")
+            }
+        }
+        SettingsRow(
+            icon = Icons.Default.Refresh,
+            title = "Auto Refresh",
+            subtitle = intervalSubtitle,
+            value = "CHANGE",
+            isFocused = focusedIndex == 2,
+            onClick = onOpenRefreshIntervalPicker
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -2038,7 +2140,7 @@ private fun IptvSettings(
             title = "Delete M3U Playlist",
             subtitle = if (m3uUrl.isBlank()) "No playlist configured" else "Remove M3U, EPG and favorites",
             value = if (m3uUrl.isBlank()) "EMPTY" else "DELETE",
-            isFocused = focusedIndex == 2,
+            isFocused = focusedIndex == 3,
             onClick = onDelete
         )
 
@@ -2610,22 +2712,22 @@ private fun AccountsSettings(
             modifier = Modifier.padding(bottom = 24.dp)
         )
 
-        AccountRow(
-            name = "ARVIO Cloud",
-            description = cloudEmail ?: "Optional account for syncing profiles, addons, catalogs and IPTV settings",
-            isConnected = isCloudAuthenticated,
-            isPolling = false,
-            authCode = null,
-            authUrl = null,
-            isFocused = focusedIndex == 0,
-            onConnect = {
-                onConnectCloud()
-            },
-            onDisconnect = onDisconnectCloud,
-            expirationText = cloudHint
-        )
+        // AccountRow(
+        //     name = "ARVIO Cloud",
+        //     description = cloudEmail ?: "Optional account for syncing profiles, addons, catalogs and IPTV settings",
+        //     isConnected = isCloudAuthenticated,
+        //     isPolling = false,
+        //     authCode = null,
+        //     authUrl = null,
+        //     isFocused = focusedIndex == 0,
+        //     onConnect = {
+        //         onConnectCloud()
+        //     },
+        //     onDisconnect = onDisconnectCloud,
+        //     expirationText = cloudHint
+        // )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        // Spacer(modifier = Modifier.height(16.dp))
 
         // Trakt.tv
         AccountRow(
@@ -2635,7 +2737,7 @@ private fun AccountsSettings(
             isPolling = isTraktPolling,
             authCode = traktCode,
             authUrl = traktUrl,
-            isFocused = focusedIndex == 1,
+            isFocused = focusedIndex == 0,
             onConnect = { if (isTraktPolling) onCancelTrakt() else onConnectTrakt() },
             onDisconnect = onDisconnectTrakt,
             expirationText = null  // Don't show expiration - Trakt tokens auto-refresh
@@ -2648,7 +2750,7 @@ private fun AccountsSettings(
             title = "Switch Profile",
             description = "Change to a different user profile",
             actionLabel = "SWITCH",
-            isFocused = focusedIndex == 2,
+            isFocused = focusedIndex == 1,
             onClick = onSwitchProfile
         )
 
@@ -3763,5 +3865,214 @@ private fun SubtitlePickerModal(
                 modifier = Modifier.fillMaxWidth()
             )
         }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun SubtitleStyleModal(
+    style: com.arflix.tv.ui.screens.settings.SubtitleStyle,
+    onStyleChange: (com.arflix.tv.ui.screens.settings.SubtitleStyle) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var focusedIndex by remember { mutableIntStateOf(0) }
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.85f))
+            .focusRequester(focusRequester)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    when (event.key) {
+                        Key.Back, Key.Escape -> {
+                            onDismiss()
+                            true
+                        }
+                        Key.DirectionUp -> {
+                            focusedIndex = (focusedIndex - 1).coerceAtLeast(0)
+                            true
+                        }
+                        Key.DirectionDown -> {
+                            focusedIndex = (focusedIndex + 1).coerceAtMost(2)
+                            true
+                        }
+                        Key.DirectionLeft -> {
+                            when (focusedIndex) {
+                                0 -> { // Font Size
+                                    val newSize = (style.fontSize - 2).coerceAtLeast(12)
+                                    onStyleChange(style.copy(fontSize = newSize))
+                                }
+                                2 -> { // Opacity
+                                    val newOpacity = (style.backgroundOpacity - 0.1f).coerceAtLeast(0f)
+                                    onStyleChange(style.copy(backgroundOpacity = newOpacity))
+                                }
+                            }
+                            true
+                        }
+                        Key.DirectionRight -> {
+                            when (focusedIndex) {
+                                0 -> { // Font Size
+                                    val newSize = (style.fontSize + 2).coerceAtMost(32)
+                                    onStyleChange(style.copy(fontSize = newSize))
+                                }
+                                2 -> { // Opacity
+                                    val newOpacity = (style.backgroundOpacity + 0.1f).coerceAtMost(1f)
+                                    onStyleChange(style.copy(backgroundOpacity = newOpacity))
+                                }
+                            }
+                            true
+                        }
+                        Key.Enter, Key.DirectionCenter -> {
+                            when (focusedIndex) {
+                                1 -> { // Font Family - cycle through options
+                                    val fonts = com.arflix.tv.ui.screens.settings.SubtitleFont.entries
+                                    val currentIndex = fonts.indexOf(style.fontFamily)
+                                    val nextIndex = (currentIndex + 1) % fonts.size
+                                    onStyleChange(style.copy(fontFamily = fonts[nextIndex]))
+                                }
+                            }
+                            true
+                        }
+                        else -> false
+                    }
+                } else false
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .width(650.dp)
+                .background(BackgroundElevated, RoundedCornerShape(16.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                .padding(36.dp),
+            horizontalAlignment = Alignment.Start
+        ) {
+            Text(
+                text = "Subtitle Style",
+                style = ArflixTypography.sectionTitle,
+                color = TextPrimary,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+
+            // Preview
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .background(Color(0xFF1a1a1a), RoundedCornerShape(12.dp))
+                    .padding(16.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Text(
+                    text = "Sample Subtitle",
+                    fontSize = style.fontSize.sp,
+                    color = Color.White,
+                    fontFamily = when (style.fontFamily) {
+                        com.arflix.tv.ui.screens.settings.SubtitleFont.DEFAULT -> androidx.compose.ui.text.font.FontFamily.Default
+                        com.arflix.tv.ui.screens.settings.SubtitleFont.SANS_SERIF -> androidx.compose.ui.text.font.FontFamily.SansSerif
+                        com.arflix.tv.ui.screens.settings.SubtitleFont.SERIF -> androidx.compose.ui.text.font.FontFamily.Serif
+                        com.arflix.tv.ui.screens.settings.SubtitleFont.MONOSPACE -> androidx.compose.ui.text.font.FontFamily.Monospace
+                    },
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    modifier = Modifier
+                        .background(
+                            Color.Black.copy(alpha = style.backgroundOpacity),
+                            RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Font Size
+            SubtitleStyleRow(
+                title = "Font Size",
+                value = "${style.fontSize}sp",
+                hint = "◄ ►",
+                isFocused = focusedIndex == 0
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Font Family
+            SubtitleStyleRow(
+                title = "Font Family",
+                value = style.fontFamily.displayName,
+                hint = "Enter to cycle",
+                isFocused = focusedIndex == 1
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Opacity
+            SubtitleStyleRow(
+                title = "Background Opacity",
+                value = "${(style.backgroundOpacity * 100).toInt()}%",
+                hint = "◄ ►",
+                isFocused = focusedIndex == 2
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Text(
+                text = "Press Back/Escape to close",
+                style = ArflixTypography.caption,
+                color = TextSecondary.copy(alpha = 0.6f),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubtitleStyleRow(
+    title: String,
+    value: String,
+    hint: String,
+    isFocused: Boolean
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (isFocused) Color.White.copy(alpha = 0.1f) else BackgroundElevated,
+                RoundedCornerShape(10.dp)
+            )
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) Pink else Color.Transparent,
+                shape = RoundedCornerShape(10.dp)
+            )
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = ArflixTypography.body,
+                color = TextPrimary
+            )
+            if (isFocused) {
+                Text(
+                    text = hint,
+                    style = ArflixTypography.caption,
+                    color = TextSecondary.copy(alpha = 0.7f)
+                )
+            }
+        }
+        Text(
+            text = value,
+            style = ArflixTypography.body,
+            color = if (isFocused) Pink else TextSecondary
+        )
     }
 }

@@ -42,11 +42,19 @@ data class MediaItem(
     // Popularity score from TMDB (higher = more mainstream content)
     val popularity: Float = 0f,
     // Placeholder card - shows skeleton loading animation
-    val isPlaceholder: Boolean = false
+    val isPlaceholder: Boolean = false,
+    // IMDB ID for stream lookups (may differ from TMDB ID)
+    val imdbId: String? = null,
+    // Pre-populated VOD streams from IPTV sources (bypasses stream fetching)
+    val vodStreams: List<StreamSource>? = null,
+    // IPTV Series ID - for direct get_series_info lookup (bypasses name matching)
+    val iptvSeriesId: String? = null,
+    // IPTV Movie ID - for direct get_vod_info lookup (bypasses name matching)
+    val iptvMovieId: String? = null
 ) : Serializable
 
 enum class MediaType {
-    MOVIE, TV
+    MOVIE, TV, LIVE_TV
 }
 
 /**
@@ -144,7 +152,10 @@ data class StreamSource(
     val subtitles: List<Subtitle> = emptyList(),
     // Stremio "sources" are commonly tracker URLs. Keeping them helps P2P playback (TorrServer) work
     // across more addons.
-    val sources: List<String> = emptyList()
+    val sources: List<String> = emptyList(),
+    // Match score for sorting by similarity (0.0-1.0, higher = better match)
+    // Used for IPTV VOD sources to sort by TMDB/IMDB/title match confidence
+    val matchScore: Float = 0f
 ) : Serializable
 
 /**
@@ -259,6 +270,100 @@ data class AddonStreamResult(
     val addonId: String,
     val addonName: String,
     val error: Exception? = null
+) : Serializable
+
+/**
+ * IPTV Series match result for stream selection UI.
+ * Represents a potential match from the IPTV provider's series catalog.
+ */
+@Immutable
+data class IptvSeriesMatch(
+    val seriesId: Int,
+    val seriesName: String,
+    val providerName: String = "IPTV",
+    val confidence: Float,             // 0.0 - 1.0 confidence score
+    val matchMethod: String,           // "tmdb_id", "imdb_id", "title_canonical", "title_tokens"
+    val episodeCount: Int = 0,         // Number of episodes available
+    val coverUrl: String? = null       // Poster/cover image from provider
+) : Serializable
+
+/**
+ * Cached IPTV series episode info for instant URL building.
+ */
+@Immutable
+data class IptvSeriesEpisodeInfo(
+    val seriesId: Int,
+    val season: Int,
+    val episode: Int,
+    val streamId: Int,
+    val containerExtension: String?,
+    val title: String
+) : Serializable
+
+/**
+ * Series context for continue watching and next episode navigation.
+ * Stored alongside watch history to enable instant episode URL building.
+ */
+@Immutable
+data class IptvSeriesContext(
+    val seriesId: Int,
+    val seriesName: String,
+    val cachedAtMs: Long
+) : Serializable
+
+/**
+ * Full series info from IPTV provider's get_series_info API.
+ * Contains all metadata needed to populate DetailsScreen without TMDB.
+ */
+@Immutable
+data class IptvSeriesFullInfo(
+    val seriesId: Int,
+    val name: String,
+    val plot: String?,
+    val cast: String?,
+    val director: String?,
+    val genre: String?,
+    val releaseDate: String?,
+    val rating: String?,
+    val coverUrl: String?,
+    val backdropUrl: String?,
+    val youtubeTrailer: String?,
+    val seasons: List<IptvSeasonInfo>,
+    val episodes: List<IptvEpisodeInfo>,
+    val cachedAtMs: Long = System.currentTimeMillis()
+) : Serializable
+
+/**
+ * Season info from IPTV get_series_info response.
+ */
+@Immutable
+data class IptvSeasonInfo(
+    val seasonNumber: Int,
+    val name: String,
+    val overview: String?,
+    val episodeCount: Int,
+    val coverUrl: String?,
+    val airDate: String?,
+    val voteAverage: Float = 0f
+) : Serializable
+
+/**
+ * Episode info from IPTV get_series_info response.
+ */
+@Immutable
+data class IptvEpisodeInfo(
+    val streamId: Int,
+    val seasonNumber: Int,
+    val episodeNumber: Int,
+    val title: String,
+    val plot: String?,
+    val releaseDate: String?,
+    val duration: String?,
+    val stillPath: String?,
+    val containerExtension: String?,
+    val rating: Float = 0f,
+    val tmdbId: Int? = null,
+    val bitrate: Int = 0
 ) : Serializable
 
 

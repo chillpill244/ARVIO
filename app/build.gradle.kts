@@ -17,17 +17,18 @@ plugins {
 android {
     namespace = "com.arflix.tv"
     compileSdk = 35
+    buildToolsVersion = "36.1.0"
 
     flavorDimensions += "distribution"
 
     defaultConfig {
-        applicationId = "com.arvio.tv"
+        applicationId = "com.muvio.tv"
         // Fire TV devices can be as low as Android 7.1 (API 25) or lower depending on model/OS.
         // Lower minSdk to maximize compatibility and avoid "There was a problem parsing the package".
         minSdk = 21
         targetSdk = 35
-        versionCode = 194
-        versionName = "1.9.2"
+        versionCode = 200
+        versionName = "2.0.0"
         buildConfigField("String", "GITHUB_OWNER", "\"ProdigyV21\"")
         buildConfigField("String", "GITHUB_REPO", "\"ARVIO\"")
 
@@ -45,10 +46,6 @@ android {
     }
 
     productFlavors {
-        create("play") {
-            dimension = "distribution"
-            buildConfigField("Boolean", "SELF_UPDATE_ENABLED", "false")
-        }
         create("sideload") {
             dimension = "distribution"
             buildConfigField("Boolean", "SELF_UPDATE_ENABLED", "true")
@@ -123,6 +120,33 @@ android {
             // Enable crash reporting but disable analytics
             buildConfigField("Boolean", "ENABLE_CRASH_REPORTING", "true")
             buildConfigField("Boolean", "ENABLE_ANALYTICS", "false")
+        }
+
+        // Beta build for public beta testing - optimized for performance and size
+        create("beta") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".beta"
+            versionNameSuffix = "-beta"
+            signingConfig = signingConfigs.getByName("debug")
+
+            // Optimize for performance and smaller download size
+            isMinifyEnabled = true
+            isShrinkResources = true
+            
+            // Remove debug symbols for faster execution
+            isDebuggable = false
+            isJniDebuggable = false
+            renderscriptOptimLevel = 3
+
+            // ProGuard rules for optimization
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+
+            // Enable crash reporting for beta feedback
+            buildConfigField("Boolean", "ENABLE_CRASH_REPORTING", "true")
+            buildConfigField("Boolean", "ENABLE_ANALYTICS", "true")
         }
     }
 
@@ -216,6 +240,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
     implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
     implementation("androidx.media3:media3-datasource-okhttp:$media3Version")
+    implementation("androidx.media3:media3-datasource:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
     implementation("androidx.media3:media3-common:$media3Version")

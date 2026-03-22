@@ -1586,7 +1586,6 @@ class HomeViewModel @Inject constructor(
                 val showKey = continueWatchingKey(item.mediaType, item.id)
                 dismissedContinueWatchingKeys.contains(showKey) || persistedDismissedKeys.contains(showKey)
             }
-            .filter { it.progress in 1..99 }
             .take(Constants.MAX_CONTINUE_WATCHING)
     }
 
@@ -1792,6 +1791,7 @@ class HomeViewModel @Inject constructor(
                     }
                 }
 
+                // Performance: Only create new lists/objects when watched status actually changes
                 var anyChange = false
                 val updatedCategories = categories.map { category ->
                     if (category.id == "continue_watching") {
@@ -1802,6 +1802,7 @@ class HomeViewModel @Inject constructor(
                             val newWatched = when (item.mediaType) {
                                 MediaType.MOVIE -> watchedMovies.contains(item.id)
                                 MediaType.TV -> showWatched[item.id] == true
+                                MediaType.LIVE_TV -> false  // Live TV doesn't track watched status
                             }
                             if (item.isWatched != newWatched) {
                                 categoryChanged = true
@@ -2449,6 +2450,9 @@ class HomeViewModel @Inject constructor(
                 traktRepository.removeFromContinueWatchingCache(item.id, null, null)
                 traktRepository.dismissContinueWatching(item)
                 runCatching { cloudSyncRepository.pushToCloud() }
+                
+                // Also remove from cache to prevent reappearing
+                traktRepository.removeFromContinueWatchingCache(item.id, season, episode)
 
                 val updatedCategories = _uiState.value.categories.map { category ->
                     if (category.id == "continue_watching") {

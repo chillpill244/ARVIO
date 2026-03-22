@@ -75,6 +75,7 @@ import com.arflix.tv.data.repository.AuthRepository
 import com.arflix.tv.data.repository.AuthState
 import com.arflix.tv.data.repository.LauncherContinueWatchingRepository
 import com.arflix.tv.data.repository.LauncherContinueWatchingRequest
+import com.arflix.tv.data.repository.MediaRepository
 import com.arflix.tv.data.repository.ProfileRepository
 import com.arflix.tv.data.repository.TraktRepository
 import com.arflix.tv.data.repository.toLauncherContinueWatchingRequest
@@ -113,6 +114,8 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var launcherContinueWatchingRepository: Lazy<LauncherContinueWatchingRepository>
+    @Inject
+    lateinit var mediaRepository: Lazy<MediaRepository>
 
     private var jankStats: JankStats? = null
     private var pendingLauncherRequest by mutableStateOf<LauncherContinueWatchingRequest?>(null)
@@ -156,6 +159,7 @@ class MainActivity : ComponentActivity() {
                         profileRepository = profileRepository.get(),
                         traktRepository = traktRepository.get(),
                         launcherContinueWatchingRepository = launcherContinueWatchingRepository.get(),
+                        mediaRepository = mediaRepository.get(),
                         pendingLauncherRequest = pendingLauncherRequest,
                         onConsumeLauncherRequest = { pendingLauncherRequest = null },
                         preloadedCategories = startupState.categories,
@@ -326,6 +330,7 @@ fun ArflixApp(
     profileRepository: ProfileRepository,
     traktRepository: TraktRepository,
     launcherContinueWatchingRepository: LauncherContinueWatchingRepository,
+    mediaRepository: com.arflix.tv.data.repository.MediaRepository,
     pendingLauncherRequest: LauncherContinueWatchingRequest? = null,
     onConsumeLauncherRequest: () -> Unit = {},
     preloadedCategories: List<com.arflix.tv.data.model.Category> = emptyList(),
@@ -396,7 +401,8 @@ fun ArflixApp(
                         profileRepository.clearActiveProfile()
                     }
                 },
-                onExitApp = onExitApp
+                onExitApp = onExitApp,
+                mediaRepository = mediaRepository
             )
         }
         if (showBottomBar) {

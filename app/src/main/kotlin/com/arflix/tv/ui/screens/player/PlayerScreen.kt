@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import com.arflix.tv.BuildConfig
+import com.arflix.tv.util.Constants
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -170,6 +171,7 @@ fun PlayerScreen(
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
     var progress by remember { mutableFloatStateOf(0f) }
+    var isInLastMinute by remember { mutableStateOf(false) }  // Track if in last 60 seconds
 
     // Skip overlay state - shows +10/-10 without showing full controls
     var skipAmount by remember { mutableIntStateOf(0) }
@@ -196,6 +198,7 @@ fun PlayerScreen(
     val nextEpisodeButtonFocusRequester = remember { FocusRequester() }
     val containerFocusRequester = remember { FocusRequester() }
     val skipIntroFocusRequester = remember { FocusRequester() }
+    val nextEpisodeOverlayFocusRequester = remember { FocusRequester() }
 
     // Focus state - 0=Play, 1=Subtitles
     var focusedButton by remember { mutableIntStateOf(0) }
@@ -247,6 +250,10 @@ fun PlayerScreen(
     // AtomicBoolean gives cross-thread visibility; Compose state drives recomposition.
     val playerReleasedAtomic = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     var playerReleased by remember { mutableStateOf(false) }
+    // Mid-playback error recovery state
+    var midPlaybackRefreshAttempted by remember { mutableStateOf(false) }
+    var midPlaybackRetryCount by remember { mutableIntStateOf(0) }
+    val maxMidPlaybackRetries = 2
 
     // Load media
     LaunchedEffect(mediaType, mediaId, seasonNumber, episodeNumber, imdbId, preferredAddonId, preferredSourceName, preferredBingeGroup, startPositionMs) {
@@ -263,6 +270,8 @@ fun PlayerScreen(
         triedStreamIndexes = emptySet()
         isAutoAdvancing = false
         userSelectedSourceManually = false
+        midPlaybackRefreshAttempted = false
+        midPlaybackRetryCount = 0
         viewModel.loadMedia(
             mediaType = mediaType,
             mediaId = mediaId,
@@ -321,7 +330,8 @@ fun PlayerScreen(
         mapOf(
             "Accept" to "*/*",
             "Accept-Encoding" to "identity",
-            "Connection" to "keep-alive"
+            "Connection" to "keep-alive",
+            "User-Agent" to Constants.CUSTOM_AGENT
         )
     }
     val playbackCookieJar = remember { PlaybackCookieJar() }
@@ -559,6 +569,59 @@ fun PlayerScreen(
                             ) {
                                 return
                             }
+
+                            // MID-PLAYBACK ERROR RECOVERY
+                            // Handle errors that occur after playback has started (URL expiration, network issues)
+                            if (hasPlaybackStarted) {
+                                val isNetworkOrUrlError =
+                                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+                                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
+                                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ||
+                                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
+                                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_TIMEOUT
+
+                                if (isNetworkOrUrlError) {
+                                    // Check HTTP status for expired URL indicators (403 Forbidden, 410 Gone)
+                                    // STRICT: Only refresh on explicit auth/expiration errors, NOT on transient network issues
+                                    val errorMsg = error.message.orEmpty().lowercase()
+                                    val isDefinitelyExpiredUrl = ("403" in errorMsg && "forbidden" in errorMsg) ||
+                                        ("410" in errorMsg && "gone" in errorMsg)
+
+                                    // Try refreshing the stream URL ONLY for confirmed URL expiration (debrid TTL exceeded)
+                                    // Avoid refreshing on transient network/timeout errors (prevents 30min hiccup issue)
+                                    if (!midPlaybackRefreshAttempted && isDefinitelyExpiredUrl) {
+                                        midPlaybackRefreshAttempted = true
+                                        val currentPosition = this@apply.currentPosition
+                                        val duration = this@apply.duration.coerceAtLeast(1L)
+                                        val progressPercent = ((currentPosition.toDouble() / duration) * 100).toInt()
+                                        // Save position before refresh
+                                        viewModel.saveProgress(
+                                            currentPosition,
+                                            duration,
+                                            progressPercent,
+                                            this@apply.isPlaying,
+                                            this@apply.playbackState
+                                        )
+                                        // Re-resolve stream to get fresh URL
+                                        uiState.selectedStream?.let { viewModel.selectStream(it) }
+                                        return
+                                    }
+
+                                    // Simple retry for transient network issues
+                                    if (midPlaybackRetryCount < maxMidPlaybackRetries) {
+                                        midPlaybackRetryCount += 1
+                                        val wasPlaying = playWhenReady
+                                        val currentPosition = this@apply.currentPosition
+                                        stop()
+                                        // Seek to last position
+                                        seekTo(currentPosition)
+                                        prepare()
+                                        playWhenReady = wasPlaying
+                                        return
+                                    }
+                                }
+                            }
+
                             if (!playbackIssueReported) {
                                 playbackIssueReported = true
                                 viewModel.onSelectedStreamPlaybackFailure()
@@ -761,6 +824,8 @@ fun PlayerScreen(
                 dvStartupFallbackStage = 0
                 blackVideoRecoveryStage = 0
                 blackVideoReadySinceMs = null
+                midPlaybackRefreshAttempted = false
+                midPlaybackRetryCount = 0
             }
             val streamHeaders = uiState.selectedStream
                 ?.behaviorHints
@@ -777,6 +842,8 @@ fun PlayerScreen(
             playbackIssueReported = false
             rebufferRecoverAttempted = false
             longRebufferCount = 0
+            midPlaybackRefreshAttempted = false
+            midPlaybackRetryCount = 0
 
             val subtitleConfigs = buildExternalSubtitleConfigurations(uiState.subtitles)
             val mediaItemBuilder = MediaItem.Builder().setUri(Uri.parse(url))
@@ -809,15 +876,15 @@ fun PlayerScreen(
             }
 
             val resumePosition = uiState.savedPosition
-            if (resumePosition > 0L) {
-                exoPlayer.setMediaSource(mediaSource, resumePosition)
-            } else {
-                exoPlayer.setMediaSource(mediaSource)
-            }
+                if (resumePosition > 0L) {
+                    exoPlayer.setMediaSource(mediaSource, resumePosition)
+                } else {
+                    exoPlayer.setMediaSource(mediaSource)
+                }
             // Let ExoPlayer's LoadControl handle buffering (bufferForPlaybackMs = 500ms).
             // No manual startup gate — trust the CDN/debrid to deliver fast enough.
-            exoPlayer.playWhenReady = true
-            exoPlayer.prepare()
+                exoPlayer.playWhenReady = true
+                exoPlayer.prepare()
 
             // Prefer currently selected subtitle language (if any), otherwise keep text disabled.
             val subtitle = uiState.selectedSubtitle
@@ -862,6 +929,35 @@ fun PlayerScreen(
         } ?: uiState.subtitles.firstOrNull {
             subtitle.url.isNotBlank() && it.url == subtitle.url && it.groupIndex != null && it.trackIndex != null
         } ?: subtitle
+
+        // Handle embedded subtitles via track override (early return).
+        if (resolvedSubtitle.isEmbedded) {
+            val groupIndex = resolvedSubtitle.groupIndex
+            val trackIndex = resolvedSubtitle.trackIndex
+            if (groupIndex != null && trackIndex != null) {
+                try {
+                    val tracks = exoPlayer.currentTracks
+                    if (groupIndex < tracks.groups.size) {
+                        val trackGroup = tracks.groups[groupIndex].mediaTrackGroup
+                        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                            .buildUpon()
+                            .setOverrideForType(
+                                androidx.media3.common.TrackSelectionOverride(trackGroup, trackIndex)
+                            )
+                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                            .build()
+                    }
+                } catch (e: Exception) {
+                    System.err.println("[PLAYER] failed to override embedded subtitle track: ${e.message}")
+                }
+            } else {
+                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                    .buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    .build()
+            }
+            return@LaunchedEffect
+        }
 
         val groupIndex = resolvedSubtitle.groupIndex
         val trackIndex = resolvedSubtitle.trackIndex
@@ -967,6 +1063,9 @@ fun PlayerScreen(
             }
             isPlaying = exoPlayer.isPlaying
             isBuffering = exoPlayer.playbackState == Player.STATE_BUFFERING
+            
+            // Check if we're in the last minute (60 seconds)
+            isInLastMinute = duration > 0L && (duration - currentPosition) <= 60_000L && (duration - currentPosition) > 0L
 
             // Buffering watchdog - detect long buffering but do not force a source error popup.
             if (isBuffering && hasPlaybackStarted) {
@@ -1132,12 +1231,15 @@ fun PlayerScreen(
             if (exoPlayer.playbackState == Player.STATE_ENDED && mediaType == MediaType.TV) {
                 if (seasonNumber != null && episodeNumber != null) {
                     val selected = uiState.selectedStream
+                    val nextEpisode = episodeNumber + 1
+                    // Try to build IPTV URL for instant next episode
+                    val iptvNextUrl = viewModel.buildNextEpisodeUrl(seasonNumber, nextEpisode)
                     onPlayNext(
                         seasonNumber,
-                        episodeNumber + 1,
+                        nextEpisode,
                         selected?.addonId?.takeIf { it.isNotBlank() },
                         selected?.source?.takeIf { it.isNotBlank() },
-                        selected?.behaviorHints?.bingeGroup?.takeIf { it.isNotBlank() }
+                        iptvNextUrl
                     )
                 }
             }
@@ -1472,6 +1574,7 @@ fun PlayerScreen(
         // Keep PlayerView mounted as soon as we have a stream URL.
         // A real video surface must exist during startup, otherwise some streams never transition out of buffering.
         if (uiState.selectedStreamUrl != null) {
+            val subtitleStyle = uiState.subtitleStyle
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
@@ -1479,25 +1582,33 @@ fun PlayerScreen(
                         useController = false
                         setKeepContentOnPlayerReset(true)
 
-                        // Enable subtitle view with Netflix-style: bold white text with black outline
+                        // Apply user-configured subtitle style (Netflix-style defaults)
                         subtitleView?.apply {
-                            // Use CaptionStyleCompat from ui package
+                            // Netflix-style subtitle configuration
+                            val backgroundAlpha = (subtitleStyle.backgroundOpacity * 255).toInt()
+                            val backgroundWithAlpha = android.graphics.Color.argb(
+                                backgroundAlpha,
+                                0,  // Black background
+                                0,
+                                0
+                            )
+                            
                             setStyle(
                                 androidx.media3.ui.CaptionStyleCompat(
-                                    android.graphics.Color.WHITE,                    // Foreground color
-                                    android.graphics.Color.TRANSPARENT,              // Background color (transparent = no box)
-                                    android.graphics.Color.TRANSPARENT,              // Window color
-                                    androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE,  // Text outline
-                                    android.graphics.Color.BLACK,                    // Edge color (black outline)
-                                    android.graphics.Typeface.DEFAULT_BOLD           // Bold typeface
+                                    android.graphics.Color.WHITE,                         // Always white text
+                                    backgroundWithAlpha,                                  // Black background with user opacity
+                                    android.graphics.Color.TRANSPARENT,                   // Window color (transparent)
+                                    androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE,  // Text outline for readability
+                                    android.graphics.Color.BLACK,                         // Black outline
+                                    subtitleStyle.fontFamily.getTypeface()                // User's chosen font family
                                 )
                             )
                             // Normalize embedded subtitle styling to keep size consistent
                             setApplyEmbeddedStyles(false)
                             setApplyEmbeddedFontSizes(false)
-                            // Set subtitle text size - not too big, not too small (like Netflix)
-                            setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 24f)
-                            // Position subtitles at bottom with some margin
+                            // Apply user's font size
+                            setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subtitleStyle.fontSize.toFloat())
+                            // Always position at bottom (Netflix style)
                             setBottomPaddingFraction(0.08f)
                         }
                     }
@@ -1589,6 +1700,36 @@ fun PlayerScreen(
                 .zIndex(5f) // Ensure it's above the controls overlay scrim.
                 .padding(start = 32.dp, bottom = if (showControls) 120.dp else 32.dp)
         )
+        
+        // Next Episode overlay (appears in last minute or during end credits for TV shows)
+        if (mediaType == MediaType.TV && seasonNumber != null && episodeNumber != null) {
+            NextEpisodeButton(
+                hasNextEpisode = true,
+                isInLastMinute = isInLastMinute || uiState.isInOutro,
+                controlsVisible = showControls,
+                seasonNumber = seasonNumber,
+                nextEpisodeNumber = episodeNumber + 1,
+                onPlayNext = {
+                    coroutineScope.launch {
+                        val selected = uiState.selectedStream
+                        val nextEpisode = episodeNumber + 1
+                        val iptvNextUrl = viewModel.buildNextEpisodeUrl(seasonNumber, nextEpisode)
+                        onPlayNext(
+                            seasonNumber,
+                            nextEpisode,
+                            selected?.addonId?.takeIf { it.isNotBlank() },
+                            selected?.source?.takeIf { it.isNotBlank() },
+                            iptvNextUrl
+                        )
+                    }
+                },
+                focusRequester = nextEpisodeOverlayFocusRequester,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .zIndex(5f)
+                    .padding(end = 32.dp, bottom = if (showControls) 120.dp else 32.dp)
+            )
+        }
 
         // Netflix-style Controls Overlay
         AnimatedVisibility(
@@ -1983,6 +2124,8 @@ fun PlayerScreen(
                             focusRequester = sourceButtonFocusRequester,
                             onFocusChanged = { sourceButtonFocused = it },
                             onClick = {
+                                // Refresh VOD sources in case initial background fetch timed out
+                                viewModel.refreshVodSources()
                                 showSourceMenu = true
                                 showControls = true
                             },
@@ -2015,13 +2158,18 @@ fun PlayerScreen(
                                     val season = seasonNumber ?: return@PlayerTextButtonFocusable
                                     val episode = episodeNumber ?: return@PlayerTextButtonFocusable
                                     val selected = uiState.selectedStream
-                                    onPlayNext(
-                                        season,
-                                        episode + 1,
-                                        selected?.addonId?.takeIf { it.isNotBlank() },
-                                        selected?.source?.takeIf { it.isNotBlank() },
-                                        selected?.behaviorHints?.bingeGroup?.takeIf { it.isNotBlank() }
-                                    )
+                                    val nextEpisode = episode + 1
+                                    coroutineScope.launch {
+                                        // Try to build IPTV URL for instant next episode
+                                        val iptvNextUrl = viewModel.buildNextEpisodeUrl(season, nextEpisode)
+                                        onPlayNext(
+                                            season,
+                                            nextEpisode,
+                                            selected?.addonId?.takeIf { it.isNotBlank() },
+                                            selected?.source?.takeIf { it.isNotBlank() },
+                                            iptvNextUrl
+                                        )
+                                    }
                                 },
                                 onLeftKey = {
                                     sourceButtonFocusRequester.requestFocus()

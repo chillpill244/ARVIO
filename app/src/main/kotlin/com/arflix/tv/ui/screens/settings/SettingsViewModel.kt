@@ -12,10 +12,12 @@ import com.arflix.tv.data.model.CatalogConfig
 import com.arflix.tv.data.model.Profile
 import com.arflix.tv.data.repository.AuthRepository
 import com.arflix.tv.data.repository.AuthState
+import com.arflix.tv.ArflixApplication
 import com.arflix.tv.data.repository.CatalogRepository
 import com.arflix.tv.data.repository.CloudSyncRepository
 import com.arflix.tv.data.repository.IptvRepository
 import com.arflix.tv.data.repository.LauncherContinueWatchingRepository
+import com.arflix.tv.data.repository.IptvRefreshInterval
 import com.arflix.tv.data.repository.MediaRepository
 import com.arflix.tv.data.repository.ProfileManager
 import com.arflix.tv.data.repository.ProfileRepository
@@ -28,6 +30,7 @@ import com.arflix.tv.data.repository.WatchlistRepository
 import com.arflix.tv.data.repository.SyncProgress
 import com.arflix.tv.data.repository.SyncStatus
 import com.arflix.tv.data.repository.SyncResult
+import com.arflix.tv.ui.components.CARD_LAYOUT_MODE_POSTER
 import com.arflix.tv.ui.components.CARD_LAYOUT_MODE_LANDSCAPE
 import com.arflix.tv.ui.components.normalizeCardLayoutMode
 import com.arflix.tv.updater.ApkDownloader
@@ -59,12 +62,40 @@ enum class ToastType {
     SUCCESS, ERROR, INFO
 }
 
+data class SubtitleStyle(
+    val fontSize: Int = 18, // Font size in sp
+    val fontFamily: SubtitleFont = SubtitleFont.DEFAULT,
+    val backgroundOpacity: Float = 0.75f // 0.0 to 1.0
+) : java.io.Serializable
+
+enum class SubtitleFont(val displayName: String, val typefaceStyle: Int) {
+    DEFAULT("Default", android.graphics.Typeface.DEFAULT_BOLD.style),
+    SANS_SERIF("Sans Serif", android.graphics.Typeface.SANS_SERIF.style),
+    SERIF("Serif", android.graphics.Typeface.SERIF.style),
+    MONOSPACE("Monospace", android.graphics.Typeface.MONOSPACE.style);
+    
+    fun getTypeface(): android.graphics.Typeface {
+        return when (this) {
+            DEFAULT -> android.graphics.Typeface.DEFAULT_BOLD
+            SANS_SERIF -> android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD)
+            SERIF -> android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
+            MONOSPACE -> android.graphics.Typeface.create(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD)
+        }
+    }
+    
+    companion object {
+        fun fromDisplayName(name: String): SubtitleFont {
+            return entries.find { it.displayName.equals(name, ignoreCase = true) } ?: DEFAULT
+        }
+    }
+}
+
 data class SettingsUiState(
     val defaultSubtitle: String = "Off",
     val subtitleOptions: List<String> = emptyList(),
     val defaultAudioLanguage: String = "Auto (Original)",
     val audioLanguageOptions: List<String> = emptyList(),
-    val cardLayoutMode: String = CARD_LAYOUT_MODE_LANDSCAPE,
+    val cardLayoutMode: String = CARD_LAYOUT_MODE_POSTER,
     val frameRateMatchingMode: String = "Off",
     val autoPlayNext: Boolean = true,
     val autoPlaySingleSource: Boolean = true,
@@ -92,6 +123,8 @@ data class SettingsUiState(
     // IPTV
     val iptvM3uUrl: String = "",
     val iptvEpgUrl: String = "",
+    val iptvXtreamUsername: String = "",
+    val iptvXtreamPassword: String = "",
     val iptvChannelCount: Int = 0,
     val isIptvLoading: Boolean = false,
     val iptvError: String? = null,
@@ -110,6 +143,10 @@ data class SettingsUiState(
     val showAppUpdateDialog: Boolean = false,
     val showUnknownSourcesDialog: Boolean = false,
     val appUpdateError: String? = null,
+    val iptvRefreshInterval: IptvRefreshInterval = IptvRefreshInterval.DISABLED,
+    val iptvLastRefreshTime: Long? = null,
+    // Subtitle Styling
+    val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     // Catalogs
     val catalogs: List<CatalogConfig> = emptyList(),
     // Addons
@@ -141,6 +178,17 @@ class SettingsViewModel @Inject constructor(
     private val apkDownloader: ApkDownloader
 ) : ViewModel() {
 
+    private data class CloudProfileSettings(
+        val defaultSubtitle: String = "Off",
+        val defaultAudioLanguage: String = "Auto (Original)",
+        val cardLayoutMode: String = CARD_LAYOUT_MODE_POSTER,
+        val frameRateMatchingMode: String = "Off",
+        val autoPlayNext: Boolean = true,
+        val autoPlaySingleSource: Boolean = true,
+        val autoPlayMinQuality: String = "Any",
+        val includeSpecials: Boolean = false
+    )
+
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
@@ -161,6 +209,8 @@ class SettingsViewModel @Inject constructor(
     private fun autoPlayMinQualityKeyFor(profileId: String) = profileManager.profileStringKeyFor(profileId, "auto_play_min_quality")
     private fun includeSpecialsKey() = profileManager.profileBooleanKey("include_specials")
     private fun includeSpecialsKeyFor(profileId: String) = profileManager.profileBooleanKeyFor(profileId, "include_specials")
+    private fun subtitleStyleKey() = profileManager.profileStringKey("subtitle_style")
+    private fun subtitleStyleKeyFor(profileId: String) = profileManager.profileStringKeyFor(profileId, "subtitle_style")
     private val gson = Gson()
     private var lastObservedIptvM3u: String = ""
 
@@ -228,6 +278,18 @@ class SettingsViewModel @Inject constructor(
             val autoPlaySingleSource = prefs[autoPlaySingleSourceKey()] ?: true
             val autoPlayMinQuality = normalizeAutoPlayMinQuality(prefs[autoPlayMinQualityKey()])
             val includeSpecials = prefs[includeSpecialsKey()] ?: false
+            
+            // Load subtitle style
+            val subtitleStyleJson = prefs[subtitleStyleKey()]
+            val subtitleStyle = if (!subtitleStyleJson.isNullOrBlank()) {
+                try {
+                    gson.fromJson(subtitleStyleJson, SubtitleStyle::class.java)
+                } catch (e: Exception) {
+                    SubtitleStyle()
+                }
+            } else {
+                SubtitleStyle()
+            }
 
             // Check auth statuses
             val authState = authRepository.authState.first()
@@ -246,6 +308,8 @@ class SettingsViewModel @Inject constructor(
             val subtitleOptions = loadSubtitleOptions(defaultSub)
             val audioLanguageOptions = loadAudioLanguageOptions(defaultAudio)
             val iptvConfig = iptvRepository.observeConfig().first()
+            val iptvRefreshInterval = iptvRepository.observeRefreshInterval().first()
+            val iptvLastRefreshTime = iptvRepository.observeLastRefreshTime().first()
             val existingCatalogs = _uiState.value.catalogs.ifEmpty {
                 mediaRepository.getDefaultCatalogConfigs()
             }
@@ -262,12 +326,15 @@ class SettingsViewModel @Inject constructor(
                 autoPlaySingleSource = autoPlaySingleSource,
                 autoPlayMinQuality = autoPlayMinQuality,
                 includeSpecials = includeSpecials,
+                subtitleStyle = subtitleStyle,
                 isLoggedIn = isLoggedIn,
                 accountEmail = accountEmail,
                 isTraktAuthenticated = isTrakt,
                 traktExpiration = traktExpiration,
                 iptvM3uUrl = iptvConfig.m3uUrl,
                 iptvEpgUrl = iptvConfig.epgUrl,
+                iptvRefreshInterval = iptvRefreshInterval,
+                iptvLastRefreshTime = iptvLastRefreshTime,
                 isSelfUpdateSupported = currentState.isSelfUpdateSupported,
                 isCheckingForUpdate = currentState.isCheckingForUpdate,
                 availableAppUpdate = currentState.availableAppUpdate,
@@ -278,6 +345,8 @@ class SettingsViewModel @Inject constructor(
                 showAppUpdateDialog = currentState.showAppUpdateDialog,
                 showUnknownSourcesDialog = currentState.showUnknownSourcesDialog,
                 appUpdateError = currentState.appUpdateError,
+                iptvXtreamUsername = iptvConfig.xtreamUsername,
+                iptvXtreamPassword = iptvConfig.xtreamPassword,
                 catalogs = existingCatalogs,
                 addons = addons
             )
@@ -706,6 +775,41 @@ class SettingsViewModel @Inject constructor(
         }
     }
     
+    // ========== Subtitle Styling ==========
+    
+    fun updateSubtitleStyle(style: SubtitleStyle) {
+        viewModelScope.launch {
+            context.settingsDataStore.edit { prefs ->
+                prefs[subtitleStyleKey()] = gson.toJson(style)
+            }
+            _uiState.value = _uiState.value.copy(subtitleStyle = style)
+            syncLocalStateToCloud(silent = true)
+        }
+    }
+    
+    fun setSubtitleFontSize(size: Int) {
+        val newStyle = _uiState.value.subtitleStyle.copy(fontSize = size.coerceIn(12, 32))
+        updateSubtitleStyle(newStyle)
+    }
+    
+    fun setSubtitleFontFamily(fontFamily: SubtitleFont) {
+        val newStyle = _uiState.value.subtitleStyle.copy(fontFamily = fontFamily)
+        updateSubtitleStyle(newStyle)
+    }
+    
+    fun setSubtitleBackgroundOpacity(opacity: Float) {
+        val newStyle = _uiState.value.subtitleStyle.copy(backgroundOpacity = opacity.coerceIn(0f, 1f))
+        updateSubtitleStyle(newStyle)
+    }
+    
+    // ========== Auto Refresh ==========
+    
+    fun setAutoRefreshInterval(interval: IptvRefreshInterval) {
+        viewModelScope.launch {
+            iptvRepository.setRefreshInterval(interval)
+        }
+    }
+    
     // ========== Addon Management ==========
     
     fun toggleAddon(addonId: String) {
@@ -779,10 +883,13 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             iptvRepository.observeConfig().collect { config ->
                 val current = _uiState.value
-                if (current.iptvM3uUrl != config.m3uUrl || current.iptvEpgUrl != config.epgUrl) {
+                if (current.iptvM3uUrl != config.m3uUrl || current.iptvEpgUrl != config.epgUrl ||
+                    current.iptvXtreamUsername != config.xtreamUsername || current.iptvXtreamPassword != config.xtreamPassword) {
                     _uiState.value = current.copy(
                         iptvM3uUrl = config.m3uUrl,
-                        iptvEpgUrl = config.epgUrl
+                        iptvEpgUrl = config.epgUrl,
+                        iptvXtreamUsername = config.xtreamUsername,
+                        iptvXtreamPassword = config.xtreamPassword
                     )
                 }
                 if (!hasObservedIptvConfig) {
@@ -796,8 +903,31 @@ class SettingsViewModel @Inject constructor(
                             iptvProgressPercent = 0
                         )
                     } else if (iptvLoadJob?.isActive != true && _uiState.value.iptvChannelCount == 0) {
-                        // Auto-refresh IPTV on startup/profile switch when configured but not loaded yet.
-                        refreshIptv(showToast = false, force = false)
+                        // Check if data is already in memory (loaded by TvViewModel / HomeViewModel).
+                        val memoryCached = iptvRepository.getMemoryCachedSnapshot()
+                        if (memoryCached != null && memoryCached.channels.isNotEmpty()) {
+                            // Already loaded by another ViewModel — just sync the count, no reload.
+                            _uiState.value = _uiState.value.copy(
+                                iptvChannelCount = memoryCached.channels.size,
+                                iptvError = null
+                            )
+                        } else if (!iptvRepository.isVodCacheRefreshNeeded()) {
+                            // Within configured refresh interval — load silently from disk only,
+                            // no network fetch, no spinner.
+                            val diskCached = iptvRepository.getCachedSnapshotOrNull()
+                            if (diskCached != null && diskCached.channels.isNotEmpty()) {
+                                _uiState.value = _uiState.value.copy(
+                                    iptvChannelCount = diskCached.channels.size,
+                                    iptvError = null
+                                )
+                            } else {
+                                // No valid cache at all — do a full load.
+                                refreshIptv(showToast = false, force = false)
+                            }
+                        } else {
+                            // Interval elapsed — time to refresh from network.
+                            refreshIptv(showToast = false, force = false)
+                        }
                     }
                     return@collect
                 }
@@ -816,6 +946,18 @@ class SettingsViewModel @Inject constructor(
                         iptvProgressPercent = 0
                     )
                 }
+            }
+        }
+
+        viewModelScope.launch {
+            iptvRepository.observeRefreshInterval().collect { interval ->
+                _uiState.value = _uiState.value.copy(iptvRefreshInterval = interval)
+            }
+        }
+
+        viewModelScope.launch {
+            iptvRepository.observeLastRefreshTime().collect { timestamp ->
+                _uiState.value = _uiState.value.copy(iptvLastRefreshTime = timestamp)
             }
         }
     }
@@ -920,7 +1062,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun saveIptvConfig(m3uUrl: String, epgUrl: String) {
+    fun saveIptvConfig(m3uUrl: String, epgUrl: String, xtreamUsername: String = "", xtreamPassword: String = "") {
         viewModelScope.launch {
             val trimmedM3u = m3uUrl.trim()
             val trimmedEpg = epgUrl.trim()
@@ -934,7 +1076,7 @@ class SettingsViewModel @Inject constructor(
 
             // Prevent duplicate auto-refresh from observer right after save.
             lastObservedIptvM3u = trimmedM3u
-            iptvRepository.saveConfig(trimmedM3u, trimmedEpg)
+            iptvRepository.saveConfig(trimmedM3u, trimmedEpg, xtreamUsername.trim(), xtreamPassword.trim())
             // Push to cloud AFTER the DataStore write is confirmed, so all profiles
             // (not just the active one) have their latest IPTV config captured.
             syncLocalStateToCloud(silent = true)
@@ -966,15 +1108,8 @@ class SettingsViewModel @Inject constructor(
             return
         }
 
-        val m3uInput = if (usingXtream) "$host $user $pass" else host
-        // If no manual EPG was provided, derive Xtream XMLTV from host/user/pass.
-        val epgInput = when {
-            epg.isNotBlank() -> epg
-            usingXtream -> "$host $user $pass"
-            else -> epg
-        }
-
-        saveIptvConfig(m3uInput, epgInput)
+        // Pass credentials directly without combining into string
+        saveIptvConfig(host, epg, user, pass)
     }
 
     fun refreshIptv(showToast: Boolean = true, configured: Boolean = false, force: Boolean = true) {
@@ -991,9 +1126,13 @@ class SettingsViewModel @Inject constructor(
             iptvLoadJob = launch {
             _uiState.value = _uiState.value.copy(isIptvLoading = true, iptvError = null)
             runCatching {
+                // Clear all caches before manual refresh
+                if (force) {
+                    iptvRepository.invalidateCache()
+                }
                 val snapshot = iptvRepository.loadSnapshot(
                     forcePlaylistReload = force,
-                    forceEpgReload = false
+                    forceEpgReload = force  // Also force EPG reload on manual refresh
                 ) { progress ->
                     _uiState.value = _uiState.value.copy(
                         isIptvLoading = true,
@@ -1020,7 +1159,15 @@ class SettingsViewModel @Inject constructor(
                     toastType = if (showToast) ToastType.SUCCESS else _uiState.value.toastType
                 )
                 launch {
-                    runCatching { iptvRepository.warmXtreamVodCachesIfPossible() }
+                    if (force) {
+                        // Force warmup on manual refresh (bypasses interval check)
+                        runCatching { iptvRepository.forceWarmXtreamVodCaches() }
+                        // Clear stream cache so fresh IPTV sources are fetched
+                        runCatching { streamRepository.clearStreamCache() }
+                    } else {
+                        // On startup auto-load, only warm caches if interval has elapsed
+                        runCatching { iptvRepository.warmXtreamVodCachesIfPossible() }
+                    }
                 }
             }.onFailure { error ->
                 if (error is CancellationException) {
@@ -1064,6 +1211,13 @@ class SettingsViewModel @Inject constructor(
                 toastType = ToastType.SUCCESS
             )
             syncLocalStateToCloud(silent = true)
+        }
+    }
+
+    fun setIptvRefreshInterval(interval: IptvRefreshInterval) {
+        viewModelScope.launch {
+            iptvRepository.setRefreshInterval(interval)
+            ArflixApplication.instance.scheduleIptvRefreshIfNeeded(interval.hours)
         }
     }
     
