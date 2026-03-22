@@ -1562,6 +1562,7 @@ class TraktSyncService @Inject constructor(
                 when (mediaType) {
                     MediaType.MOVIE -> it.movie?.ids?.tmdb == tmdbId
                     MediaType.TV -> it.show?.ids?.tmdb == tmdbId
+                    MediaType.LIVE_TV -> false  // Live TV doesn't track on Trakt
                 }
             }
 
