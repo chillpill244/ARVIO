@@ -93,7 +93,7 @@ class ProfileViewModel @Inject constructor(
         // This prevents Profile 1's Trakt data from showing in Profile 2
         traktRepository.clearAllProfileCaches()
         watchlistRepository.clearWatchlistCache()
-        iptvRepository.invalidateCache()
+//        iptvRepository.invalidateCache()
 
         // Update ProfileManager's cache with the new profile ID
         // This ensures all profile-scoped keys use the correct prefix immediately
