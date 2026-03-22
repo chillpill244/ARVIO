@@ -345,7 +345,8 @@ fun PlayerScreen(
         mapOf(
             "Accept" to "*/*",
             "Accept-Encoding" to "identity",
-            "Connection" to "keep-alive"
+            "Connection" to "keep-alive",
+            "User-Agent" to Constants.CUSTOM_AGENT
         )
     }
     val playbackCookieJar = remember { PlaybackCookieJar() }

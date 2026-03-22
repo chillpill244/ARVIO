@@ -53,6 +53,9 @@ object Constants {
     const val PREF_DEFAULT_SUBTITLE = "default_subtitle"
     const val PREF_AUTO_PLAY_NEXT = "auto_play_next"
     const val PREF_TRAKT_TOKEN = "trakt_token"
+
+    // Custom User-Agent for all API calls (streams, IPTV, catalog, etc.)
+    const val CUSTOM_AGENT = "Smarterspro"
 }
 
 /**

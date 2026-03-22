@@ -2971,7 +2971,7 @@ class IptvRepository @Inject constructor(
     ): T? {
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "VLC/3.0.20 LibVLC/3.0.20")
+            .header("User-Agent", Constants.CUSTOM_AGENT)
             .header("Accept", "application/json,*/*")
             .get()
             .build()
@@ -2990,7 +2990,7 @@ class IptvRepository @Inject constructor(
     ): List<IptvChannel> {
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "VLC/3.0.20 LibVLC/3.0.20")
+            .header("User-Agent", Constants.CUSTOM_AGENT)
             .header("Accept", "*/*")
             .get()
             .build()

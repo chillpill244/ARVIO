@@ -1498,11 +1498,8 @@ class StreamRepository @Inject constructor(
                 base = resolved.behaviorHints?.proxyHeaders?.request.orEmpty(),
                 extra = emptyMap()
             ).toMutableMap()
-
-            if (headers.keys.none { it.equals("User-Agent", ignoreCase = true) }) {
                 headers["User-Agent"] =
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
+                    Constants.CUSTOM_AGENT
             if (headers.keys.none { it.equals("Accept", ignoreCase = true) }) {
                 headers["Accept"] = "*/*"
             }

@@ -1592,7 +1592,7 @@ class MediaRepository @Inject constructor(
     private fun fetchUrl(url: String): String? {
         val request = Request.Builder()
             .url(url)
-            .header("User-Agent", "Mozilla/5.0 (Android TV; ARVIO)")
+            .header("User-Agent", Constants.CUSTOM_AGENT)
             .build()
         return runCatching {
             okHttpClient.newCall(request).execute().use { response ->
