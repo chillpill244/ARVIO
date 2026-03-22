@@ -155,7 +155,7 @@ fun ProfileSelectionScreen(
         ) {
             // Title
             Text(
-                text = "ARVIO",
+                text = "MUVIO",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,

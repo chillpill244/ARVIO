@@ -738,7 +738,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.weight(1f))
                     
                     Text(
-                        text = "ARVIO V${BuildConfig.VERSION_NAME}",
+                        text = "MUVIO V${BuildConfig.VERSION_NAME}",
                         style = ArflixTypography.caption,
                         color = TextSecondary.copy(alpha = 0.5f),
                         modifier = Modifier.padding(start = 16.dp)
