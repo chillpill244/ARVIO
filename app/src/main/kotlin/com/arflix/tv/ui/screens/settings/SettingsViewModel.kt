@@ -30,6 +30,7 @@ import com.arflix.tv.network.OkHttpProvider
 import com.arflix.tv.data.repository.SyncProgress
 import com.arflix.tv.data.repository.SyncStatus
 import com.arflix.tv.data.repository.SyncResult
+import com.arflix.tv.ui.components.CARD_LAYOUT_MODE_POSTER
 import com.arflix.tv.ui.components.CARD_LAYOUT_MODE_LANDSCAPE
 import com.arflix.tv.ui.components.normalizeCardLayoutMode
 import com.arflix.tv.updater.ApkDownloader
@@ -66,7 +67,7 @@ data class SettingsUiState(
     val subtitleOptions: List<String> = emptyList(),
     val defaultAudioLanguage: String = "Auto (Original)",
     val audioLanguageOptions: List<String> = emptyList(),
-    val cardLayoutMode: String = CARD_LAYOUT_MODE_LANDSCAPE,
+    val cardLayoutMode: String = CARD_LAYOUT_MODE_POSTER,
     val frameRateMatchingMode: String = "Off",
     val autoPlayNext: Boolean = true,
     val autoPlaySingleSource: Boolean = true,
