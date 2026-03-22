@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ARVIO</string>
+    <string name="app_name">MUVIO</string>
     <string name="continue_watching">Continue Watching</string>
     <string name="trending_movies">Trending Movies</string>
     <string name="trending_series">Trending Series</string>
