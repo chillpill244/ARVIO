@@ -24,6 +24,7 @@ import com.arflix.tv.data.repository.CloudSyncRepository
 import com.arflix.tv.data.repository.LauncherContinueWatchingRepository
 import com.arflix.tv.data.repository.StreamRepository
 import com.arflix.tv.data.repository.IptvRepository
+import com.arflix.tv.data.repository.IptvRefreshInterval
 import com.arflix.tv.data.repository.SyncStatus
 import com.arflix.tv.data.repository.WatchHistoryRepository
 import com.arflix.tv.data.repository.WatchlistRepository
@@ -759,6 +760,21 @@ class HomeViewModel @Inject constructor(
                     // No disk cache — do full network load so Favorite TV row can appear
                     runCatching {
                         iptvRepository.loadSnapshot(forcePlaylistReload = false, forceEpgReload = false)
+                    }
+                }
+                
+                // Phase 1b: Check if playlist refresh is needed based on configured interval
+                val refreshInterval = iptvRepository.observeRefreshInterval().first()
+                if (refreshInterval != IptvRefreshInterval.DISABLED) {
+                    val lastRefreshMs = iptvRepository.observeLastRefreshTime().first() ?: 0L
+                    val intervalMs = refreshInterval.hours * 60 * 60_000L
+                    val timeSinceLastRefresh = System.currentTimeMillis() - lastRefreshMs
+                    
+                    if (timeSinceLastRefresh >= intervalMs) {
+                        // Interval has elapsed — do full playlist and EPG reload
+                        runCatching {
+                            iptvRepository.loadSnapshot(forcePlaylistReload = true, forceEpgReload = false)
+                        }
                     }
                 }
                 // Phase 2: Refresh EPG for favorite channels (lightweight network call)
