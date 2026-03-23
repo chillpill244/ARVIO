@@ -1581,10 +1581,22 @@ class PlayerViewModel @Inject constructor(
                     }
                     // Clean up Supabase history for the finished episode so its stale
                     // position doesn't resurface as a Continue Watching candidate.
-                    if (currentMediaType == MediaType.TV && safeSeason != null && safeEpisode != null) {
-                        watchHistoryRepository.removeFromHistory(currentMediaId, safeSeason, safeEpisode)
-                    } else if (currentMediaType == MediaType.MOVIE) {
-                        watchHistoryRepository.removeFromHistory(currentMediaId, null, null)
+                    // Retry up to 2 times if the delete fails (network flakes).
+                    val deleteType = currentMediaType
+                    val deleteId = currentMediaId
+                    val delS = safeSeason
+                    val delE = safeEpisode
+                    for (attempt in 1..2) {
+                        try {
+                            if (deleteType == MediaType.TV && delS != null && delE != null) {
+                                watchHistoryRepository.removeFromHistory(deleteId, delS, delE)
+                            } else if (deleteType == MediaType.MOVIE) {
+                                watchHistoryRepository.removeFromHistory(deleteId, null, null)
+                            }
+                            break // Success
+                        } catch (_: Exception) {
+                            if (attempt < 2) kotlinx.coroutines.delay(500)
+                        }
                     }
                 } catch (e: Exception) {
                     // Delete playback failed

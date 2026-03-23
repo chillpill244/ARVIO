@@ -985,11 +985,14 @@ class StreamRepository @Inject constructor(
                 // Extract embedded subtitles from stream
                 val embeddedSubs = stream.subtitles?.mapIndexed { index, sub ->
                     val normalizedLang = normalizeLanguageCode(sub.lang)
+                    // Use the original lang as fallback instead of hardcoding "en",
+                    // so non-English subs with unparseable codes aren't mislabeled.
+                    val langFallback = sub.lang?.trim()?.lowercase()?.take(2) ?: "und"
                     Subtitle(
                         id = sub.id ?: "${addon.id}_stream_sub_$index",
                         url = sub.url ?: "",
-                        lang = normalizedLang.ifBlank { "en" },
-                        label = buildSubtitleLabel(normalizedLang, sub.label, addon.name)
+                        lang = normalizedLang.ifBlank { langFallback },
+                        label = buildSubtitleLabel(normalizedLang.ifBlank { langFallback }, sub.label, addon.name)
                     )
                 } ?: emptyList()
 
@@ -1328,11 +1331,12 @@ class StreamRepository @Inject constructor(
                     val response = streamApi.getSubtitles(url)
                     response.subtitles?.mapIndexed { index, sub ->
                         val normalizedLang = normalizeLanguageCode(sub.lang)
+                        val langFallback = sub.lang?.trim()?.lowercase()?.take(2) ?: "und"
                         Subtitle(
                             id = sub.id ?: "${addon.id}_sub_hint_$index",
                             url = sub.url ?: "",
-                            lang = normalizedLang.ifBlank { "en" },
-                            label = buildSubtitleLabel(normalizedLang, sub.label, addon.name)
+                            lang = normalizedLang.ifBlank { langFallback },
+                            label = buildSubtitleLabel(normalizedLang.ifBlank { langFallback }, sub.label, addon.name)
                         )
                     } ?: emptyList()
                 }
@@ -1874,35 +1878,54 @@ class StreamRepository @Inject constructor(
     }
 
     private fun normalizeLanguageCode(lang: String?): String {
-        val lower = lang?.lowercase()?.trim().orEmpty()
+        val raw = lang?.trim().orEmpty()
+        // Handle hyphenated codes like "pt-BR", "zh-CN", "en-US" → take the base language
+        val lower = raw.lowercase().split("-", "_").first()
         return when (lower) {
-            "eng" -> "en"
-            "spa" -> "es"
-            "fra", "fre" -> "fr"
-            "deu", "ger" -> "de"
-            "ita" -> "it"
-            "por" -> "pt"
-            "nld", "dut" -> "nl"
-            "rus" -> "ru"
-            "zho", "chi" -> "zh"
-            "jpn" -> "ja"
-            "kor" -> "ko"
-            "ara" -> "ar"
-            "hin" -> "hi"
-            "tur" -> "tr"
-            "pol" -> "pl"
-            "swe" -> "sv"
-            "nor" -> "no"
-            "dan" -> "da"
-            "fin" -> "fi"
-            "ell", "gre" -> "el"
-            "ces", "cze" -> "cs"
-            "hun" -> "hu"
-            "ron", "rum" -> "ro"
-            "tha" -> "th"
-            "vie" -> "vi"
-            "ind" -> "id"
-            "heb" -> "he"
+            "eng", "english" -> "en"
+            "spa", "spanish", "español" -> "es"
+            "fra", "fre", "french", "français" -> "fr"
+            "deu", "ger", "german", "deutsch" -> "de"
+            "ita", "italian", "italiano" -> "it"
+            "por", "portuguese", "português" -> "pt"
+            "nld", "dut", "dutch", "nederlands" -> "nl"
+            "rus", "russian", "русский" -> "ru"
+            "zho", "chi", "chinese" -> "zh"
+            "jpn", "japanese" -> "ja"
+            "kor", "korean" -> "ko"
+            "ara", "arabic" -> "ar"
+            "hin", "hindi" -> "hi"
+            "tur", "turkish" -> "tr"
+            "pol", "polish" -> "pl"
+            "swe", "swedish" -> "sv"
+            "nor", "nob", "nno", "norwegian" -> "no"
+            "dan", "danish" -> "da"
+            "fin", "finnish" -> "fi"
+            "ell", "gre", "greek" -> "el"
+            "ces", "cze", "czech" -> "cs"
+            "hun", "hungarian" -> "hu"
+            "ron", "rum", "romanian" -> "ro"
+            "tha", "thai" -> "th"
+            "vie", "vietnamese" -> "vi"
+            "ind", "indonesian" -> "id"
+            "heb", "hebrew" -> "he"
+            "bul", "bulgarian" -> "bg"
+            "hrv", "croatian" -> "hr"
+            "srp", "serbian" -> "sr"
+            "slk", "slo", "slovak" -> "sk"
+            "slv", "slovenian" -> "sl"
+            "ukr", "ukrainian" -> "uk"
+            "cat", "catalan" -> "ca"
+            "glg", "galician" -> "gl"
+            "eus", "baq", "basque" -> "eu"
+            "msa", "may", "malay" -> "ms"
+            "fil", "tgl", "tagalog", "filipino" -> "tl"
+            "per", "fas", "persian", "farsi" -> "fa"
+            "ben", "bengali" -> "bn"
+            "tam", "tamil" -> "ta"
+            "tel", "telugu" -> "te"
+            "urd", "urdu" -> "ur"
+            "pob" -> "pt"  // "Portuguese (BR)" used by OpenSubtitles
             else -> if (lower.length >= 2) lower.take(2) else lower
         }
     }

@@ -171,6 +171,8 @@ fun SettingsScreen(
     var audioLanguagePickerIndex by remember { mutableIntStateOf(0) }
     var showDnsProviderPicker by remember { mutableStateOf(false) }
     var dnsProviderPickerIndex by remember { mutableIntStateOf(0) }
+    var showContentLanguagePicker by remember { mutableStateOf(false) }
+    var contentLanguagePickerIndex by remember { mutableIntStateOf(0) }
 
     val sections = remember { listOf("general", "iptv", "catalogs", "addons", "accounts") }
 
@@ -195,6 +197,10 @@ fun SettingsScreen(
         dnsProviderPickerIndex = options.indexOfFirst { it.equals(uiState.dnsProvider, ignoreCase = true) }
             .coerceAtLeast(0)
         showDnsProviderPicker = true
+    }
+    val openContentLanguagePicker = {
+        contentLanguagePickerIndex = TMDB_LANGUAGES.indexOfFirst { it.first == uiState.contentLanguage }.coerceAtLeast(0)
+        showContentLanguagePicker = true
     }
 
     LaunchedEffect(Unit) {
@@ -242,7 +248,7 @@ fun SettingsScreen(
         if (scrollState.maxValue <= 0) return@LaunchedEffect
 
         val maxIndex = when (sectionIndex) {
-            0 -> 7 // General: 8 items
+            0 -> 9 // General: 10 items
             1 -> 2 // IPTV
             2 -> uiState.catalogs.size // Catalogs
             3 -> uiState.addons.size // Addons
@@ -293,7 +299,7 @@ fun SettingsScreen(
             .onPreviewKeyEvent { event ->
                     if (isTouchDevice) return@onPreviewKeyEvent false
                     // BLOCKER FIX: Ignore main screen navigation if modals are open
-                    if (showCustomAddonInput || showSubtitlePicker || showAudioLanguagePicker || showDnsProviderPicker || showIptvInput || showCatalogInput || uiState.showCloudPairDialog || uiState.showCloudEmailPasswordDialog) return@onPreviewKeyEvent false
+                    if (showCustomAddonInput || showSubtitlePicker || showAudioLanguagePicker || showDnsProviderPicker || showContentLanguagePicker || showIptvInput || showCatalogInput || uiState.showCloudPairDialog || uiState.showCloudEmailPasswordDialog) return@onPreviewKeyEvent false
 
                 if (event.type == KeyEventType.KeyDown) {
                     val currentSection = sections.getOrNull(sectionIndex).orEmpty()
@@ -408,7 +414,7 @@ fun SettingsScreen(
                                 Zone.CONTENT -> {
                                     // Dynamic max based on current section
                                     val maxIndex = when (sectionIndex) {
-                                        0 -> 7 // General: 8 items
+                                        0 -> 9 // General: 10 items (subtitle, audio, content lang, card, frame rate, dns, ui mode, autoplay, single-source, min quality)
                                         1 -> 2 // IPTV: Configure + Refresh + Delete
                                         2 -> uiState.catalogs.size // Catalogs: Add + N catalogs
                                         3 -> uiState.addons.size // Addons: N addons + "Add Custom" button
@@ -450,12 +456,14 @@ fun SettingsScreen(
                                             when (contentFocusIndex) {
                                                 0 -> openSubtitlePicker()
                                                 1 -> openAudioLanguagePicker()
-                                                2 -> viewModel.toggleCardLayoutMode()
-                                                3 -> viewModel.cycleFrameRateMatchingMode()
-                                                4 -> openDnsProviderPicker()
-                                                5 -> viewModel.setAutoPlayNext(!uiState.autoPlayNext)
-                                                6 -> viewModel.setAutoPlaySingleSource(!uiState.autoPlaySingleSource)
-                                                7 -> viewModel.cycleAutoPlayMinQuality()
+                                                2 -> openContentLanguagePicker()
+                                                3 -> viewModel.toggleCardLayoutMode()
+                                                4 -> viewModel.cycleFrameRateMatchingMode()
+                                                5 -> openDnsProviderPicker()
+                                                6 -> { val next = when (uiState.deviceModeOverride) { "auto" -> "tv"; "tv" -> "tablet"; "tablet" -> "phone"; else -> "auto" }; viewModel.setDeviceModeOverride(next) }
+                                                7 -> viewModel.setAutoPlayNext(!uiState.autoPlayNext)
+                                                8 -> viewModel.setAutoPlaySingleSource(!uiState.autoPlaySingleSource)
+                                                9 -> viewModel.cycleAutoPlayMinQuality()
                                             }
                                         }
                                         1 -> { // IPTV
@@ -568,12 +576,14 @@ fun SettingsScreen(
                         "general" -> GeneralSettings(
                             defaultSubtitle = uiState.defaultSubtitle,
                             defaultAudioLanguage = uiState.defaultAudioLanguage,
+                            contentLanguage = uiState.contentLanguage,
+                            dnsProvider = uiState.dnsProvider,
                             cardLayoutMode = uiState.cardLayoutMode,
                             frameRateMatchingMode = uiState.frameRateMatchingMode,
-                            dnsProvider = uiState.dnsProvider,
                             autoPlayNext = uiState.autoPlayNext,
                             autoPlaySingleSource = uiState.autoPlaySingleSource,
                             autoPlayMinQuality = uiState.autoPlayMinQuality,
+                            deviceModeOverride = uiState.deviceModeOverride,
                             focusedIndex = -1,
                             onSubtitleClick = openSubtitlePicker,
                             onAudioLanguageClick = openAudioLanguagePicker,
@@ -582,7 +592,12 @@ fun SettingsScreen(
                             onDnsProviderClick = openDnsProviderPicker,
                             onAutoPlayToggle = { viewModel.setAutoPlayNext(it) },
                             onAutoPlaySingleSourceToggle = { viewModel.setAutoPlaySingleSource(it) },
-                            onAutoPlayMinQualityClick = { viewModel.cycleAutoPlayMinQuality() }
+                            onAutoPlayMinQualityClick = { viewModel.cycleAutoPlayMinQuality() },
+                            onDeviceModeClick = {
+                                val next = when (uiState.deviceModeOverride) { "auto" -> "tv"; "tv" -> "tablet"; "tablet" -> "phone"; else -> "auto" }
+                                viewModel.setDeviceModeOverride(next)
+                            },
+                            onContentLanguageClick = openContentLanguagePicker
                         )
                         "iptv" -> IptvSettings(
                             m3uUrl = uiState.iptvM3uUrl,
@@ -603,7 +618,15 @@ fun SettingsScreen(
                             catalogs = uiState.catalogs,
                             focusedIndex = -1,
                             focusedActionIndex = catalogActionIndex,
-                            onAddCatalog = { showCatalogInput = true }
+                            onAddCatalog = { showCatalogInput = true },
+                            onRenameCatalog = { catalog ->
+                                renameCatalogId = catalog.id
+                                renameCatalogTitle = catalog.title
+                                showCatalogRename = true
+                            },
+                            onMoveCatalogUp = { catalog -> viewModel.moveCatalogUp(catalog.id) },
+                            onMoveCatalogDown = { catalog -> viewModel.moveCatalogDown(catalog.id) },
+                            onDeleteCatalog = { catalog -> viewModel.removeCatalog(catalog.id) }
                         )
                         "addons" -> AddonsSettings(
                             addons = uiState.addons,
@@ -714,12 +737,14 @@ fun SettingsScreen(
                         "general" -> GeneralSettings(
                             defaultSubtitle = uiState.defaultSubtitle,
                             defaultAudioLanguage = uiState.defaultAudioLanguage,
+                            dnsProvider = uiState.dnsProvider,
                             cardLayoutMode = uiState.cardLayoutMode,
                             frameRateMatchingMode = uiState.frameRateMatchingMode,
-                            dnsProvider = uiState.dnsProvider,
                             autoPlayNext = uiState.autoPlayNext,
                             autoPlaySingleSource = uiState.autoPlaySingleSource,
                             autoPlayMinQuality = uiState.autoPlayMinQuality,
+                            contentLanguage = uiState.contentLanguage,
+                            deviceModeOverride = uiState.deviceModeOverride,
                             focusedIndex = if (activeZone == Zone.CONTENT) contentFocusIndex else -1,
                             onSubtitleClick = openSubtitlePicker,
                             onAudioLanguageClick = openAudioLanguagePicker,
@@ -728,7 +753,12 @@ fun SettingsScreen(
                             onDnsProviderClick = openDnsProviderPicker,
                             onAutoPlayToggle = { viewModel.setAutoPlayNext(it) },
                             onAutoPlaySingleSourceToggle = { viewModel.setAutoPlaySingleSource(it) },
-                            onAutoPlayMinQualityClick = { viewModel.cycleAutoPlayMinQuality() }
+                            onAutoPlayMinQualityClick = { viewModel.cycleAutoPlayMinQuality() },
+                            onDeviceModeClick = {
+                                val next = when (uiState.deviceModeOverride) { "auto" -> "tv"; "tv" -> "tablet"; "tablet" -> "phone"; else -> "auto" }
+                                viewModel.setDeviceModeOverride(next)
+                            },
+                            onContentLanguageClick = openContentLanguagePicker
                         )
                         "iptv" -> IptvSettings(
                             m3uUrl = uiState.iptvM3uUrl,
@@ -749,7 +779,15 @@ fun SettingsScreen(
                             catalogs = uiState.catalogs,
                             focusedIndex = if (activeZone == Zone.CONTENT) contentFocusIndex else -1,
                             focusedActionIndex = catalogActionIndex,
-                            onAddCatalog = { showCatalogInput = true }
+                            onAddCatalog = { showCatalogInput = true },
+                            onRenameCatalog = { catalog ->
+                                renameCatalogId = catalog.id
+                                renameCatalogTitle = catalog.title
+                                showCatalogRename = true
+                            },
+                            onMoveCatalogUp = { catalog -> viewModel.moveCatalogUp(catalog.id) },
+                            onMoveCatalogDown = { catalog -> viewModel.moveCatalogDown(catalog.id) },
+                            onDeleteCatalog = { catalog -> viewModel.removeCatalog(catalog.id) }
                         )
                         "addons" -> AddonsSettings(
                             addons = uiState.addons,
@@ -939,6 +977,22 @@ fun SettingsScreen(
                     viewModel.setDnsProvider(it)
                 },
                 onDismiss = { showDnsProviderPicker = false }
+            )
+        }
+
+        if (showContentLanguagePicker) {
+            SubtitlePickerModal(
+                title = "Content Language",
+                options = TMDB_LANGUAGES.map { it.second },
+                selected = TMDB_LANGUAGES.firstOrNull { it.first == uiState.contentLanguage }?.second ?: "English",
+                focusedIndex = contentLanguagePickerIndex,
+                onFocusChange = { contentLanguagePickerIndex = it },
+                onSelect = { displayName ->
+                    val code = TMDB_LANGUAGES.firstOrNull { it.second == displayName }?.first ?: "en-US"
+                    viewModel.setContentLanguage(code)
+                    showContentLanguagePicker = false
+                },
+                onDismiss = { showContentLanguagePicker = false }
             )
         }
 
@@ -1916,12 +1970,14 @@ private fun SettingsSectionItem(
 private fun GeneralSettings(
     defaultSubtitle: String,
     defaultAudioLanguage: String,
+    contentLanguage: String = "en-US",
+    dnsProvider: String,
     cardLayoutMode: String,
     frameRateMatchingMode: String,
-    dnsProvider: String,
     autoPlayNext: Boolean,
     autoPlaySingleSource: Boolean,
     autoPlayMinQuality: String,
+    deviceModeOverride: String = "auto",
     focusedIndex: Int,
     onSubtitleClick: () -> Unit,
     onAudioLanguageClick: () -> Unit,
@@ -1930,7 +1986,9 @@ private fun GeneralSettings(
     onDnsProviderClick: () -> Unit,
     onAutoPlayToggle: (Boolean) -> Unit,
     onAutoPlaySingleSourceToggle: (Boolean) -> Unit,
-    onAutoPlayMinQualityClick: () -> Unit
+    onAutoPlayMinQualityClick: () -> Unit,
+    onDeviceModeClick: () -> Unit = {},
+    onContentLanguageClick: () -> Unit = {}
 ) {
     Column {
         Text(
@@ -1964,13 +2022,25 @@ private fun GeneralSettings(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Content Language
+        SettingsRow(
+            icon = Icons.Default.Subtitles,
+            title = "Content Language",
+            subtitle = "Language for titles, descriptions, and metadata",
+            value = TMDB_LANGUAGES.firstOrNull { it.first == contentLanguage }?.second ?: contentLanguage,
+            isFocused = focusedIndex == 2,
+            onClick = onContentLanguageClick
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // Card Layout
         SettingsRow(
             icon = Icons.Default.Widgets,
             title = "Card Layout",
             subtitle = "Switch between landscape and poster cards",
             value = cardLayoutMode,
-            isFocused = focusedIndex == 2,
+            isFocused = focusedIndex == 3,
             onClick = onCardLayoutToggle
         )
 
@@ -1982,7 +2052,7 @@ private fun GeneralSettings(
             title = "Match Frame Rate",
             subtitle = "Off, Seamless only, or Always (may blank-screen on some TVs)",
             value = frameRateMatchingMode,
-            isFocused = focusedIndex == 3,
+            isFocused = focusedIndex == 4,
             onClick = onFrameRateMatchingClick
         )
 
@@ -1993,18 +2063,35 @@ private fun GeneralSettings(
             title = "DNS Provider",
             subtitle = "Resolver for API/image/stream requests. Changes apply immediately.",
             value = dnsProvider,
-            isFocused = focusedIndex == 4,
+            isFocused = focusedIndex == 5,
             onClick = onDnsProviderClick
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        
+
+        // Device UI Mode
+        SettingsRow(
+            icon = Icons.Default.Settings,
+            title = "UI Mode",
+            subtitle = "Force TV, Tablet, or Phone layout. Restart app after changing.",
+            value = when (deviceModeOverride) {
+                "tv" -> "TV"
+                "tablet" -> "Tablet"
+                "phone" -> "Phone"
+                else -> "Auto"
+            },
+            isFocused = focusedIndex == 6,
+            onClick = onDeviceModeClick
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // Auto-Play Next
         SettingsToggleRow(
             title = "Auto-Play Next",
             subtitle = "Start next episode automatically",
             isEnabled = autoPlayNext,
-            isFocused = focusedIndex == 5,
+            isFocused = focusedIndex == 7,
             onToggle = onAutoPlayToggle
         )
 
@@ -2014,7 +2101,7 @@ private fun GeneralSettings(
             title = "Auto-Play Single Source",
             subtitle = "Skip source picker when only one valid source exists",
             isEnabled = autoPlaySingleSource,
-            isFocused = focusedIndex == 6,
+            isFocused = focusedIndex == 8,
             onToggle = onAutoPlaySingleSourceToggle
         )
 
@@ -2025,7 +2112,7 @@ private fun GeneralSettings(
             title = "Auto-Play Min Quality",
             subtitle = "Minimum quality required for single-source auto-play",
             value = autoPlayMinQuality,
-            isFocused = focusedIndex == 7,
+            isFocused = focusedIndex == 9,
             onClick = onAutoPlayMinQualityClick
         )
     }
@@ -2283,7 +2370,11 @@ private fun CatalogsSettings(
     catalogs: List<CatalogConfig>,
     focusedIndex: Int,
     focusedActionIndex: Int,
-    onAddCatalog: () -> Unit
+    onAddCatalog: () -> Unit,
+    onRenameCatalog: (CatalogConfig) -> Unit,
+    onMoveCatalogUp: (CatalogConfig) -> Unit,
+    onMoveCatalogDown: (CatalogConfig) -> Unit,
+    onDeleteCatalog: (CatalogConfig) -> Unit
 ) {
     Column {
         Text(
@@ -2353,24 +2444,28 @@ private fun CatalogsSettings(
 
                 CatalogActionChip(
                     icon = Icons.Default.Edit,
-                    isFocused = isRowFocused && focusedActionIndex == 0
+                    isFocused = isRowFocused && focusedActionIndex == 0,
+                    onClick = { onRenameCatalog(catalog) }
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 CatalogActionChip(
                     icon = Icons.Default.ArrowUpward,
-                    isFocused = isRowFocused && focusedActionIndex == 1
+                    isFocused = isRowFocused && focusedActionIndex == 1,
+                    onClick = { onMoveCatalogUp(catalog) }
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 CatalogActionChip(
                     icon = Icons.Default.ArrowDownward,
-                    isFocused = isRowFocused && focusedActionIndex == 2
+                    isFocused = isRowFocused && focusedActionIndex == 2,
+                    onClick = { onMoveCatalogDown(catalog) }
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 CatalogActionChip(
                     icon = Icons.Default.Delete,
                     isFocused = isRowFocused && focusedActionIndex == 3,
                     isDestructive = true,
-                    enabled = true
+                    enabled = true,
+                    onClick = { onDeleteCatalog(catalog) }
                 )
             }
             Spacer(modifier = Modifier.height(10.dp))
@@ -2384,27 +2479,32 @@ private fun CatalogActionChip(
     icon: ImageVector,
     isFocused: Boolean,
     isDestructive: Boolean = false,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    onClick: () -> Unit = {}
 ) {
+    // Support both D-pad focus AND touch pressed state
+    var isPressed by remember { mutableStateOf(false) }
+    val visualActive = isFocused || isPressed
     val bgColor = when {
         !enabled -> Color.Black.copy(alpha = 0.4f)
-        isFocused && isDestructive -> Color(0xFFDC2626)
-        isFocused -> Color.White
-        else -> Color.Black
+        visualActive && isDestructive -> Color(0xFFDC2626)
+        visualActive -> Color.White
+        else -> Color.White.copy(alpha = 0.08f)
     }
     val fgColor = when {
         !enabled -> Color.White.copy(alpha = 0.5f)
-        isFocused && isDestructive -> Color.White
-        isFocused -> Color.Black
-        else -> Color.White
+        visualActive && isDestructive -> Color.White
+        visualActive -> Color.Black
+        else -> Color.White.copy(alpha = 0.7f)
     }
     Box(
         modifier = Modifier
             .size(36.dp)
+            .clickable(enabled = enabled, onClick = onClick)
             .background(bgColor, RoundedCornerShape(8.dp))
             .border(
-                width = if (isFocused) 0.dp else 1.dp,
-                color = Color.White.copy(alpha = 0.15f),
+                width = if (visualActive) 1.5.dp else 1.dp,
+                color = if (visualActive) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.15f),
                 shape = RoundedCornerShape(8.dp)
             ),
         contentAlignment = Alignment.Center
@@ -3702,6 +3802,7 @@ private fun SubtitlePickerModal(
     val focusRequester = remember { FocusRequester() }
     val listState = rememberLazyListState()
     val safeIndex = focusedIndex.coerceIn(0, (options.size - 1).coerceAtLeast(0))
+
     LaunchedEffect(safeIndex) {
         if (options.isNotEmpty()) {
             listState.animateScrollToItem(safeIndex)
@@ -3816,3 +3917,57 @@ private fun SubtitlePickerModal(
     }
 }
 
+/** All TMDB-supported languages as (code, displayName) pairs. */
+val TMDB_LANGUAGES = listOf(
+    "en-US" to "English",
+    "nl-NL" to "Dutch (Nederlands)",
+    "fr-FR" to "French (Francais)",
+    "de-DE" to "German (Deutsch)",
+    "es-ES" to "Spanish (Espanol)",
+    "pt-PT" to "Portuguese (Portugues)",
+    "pt-BR" to "Portuguese - Brazil",
+    "it-IT" to "Italian (Italiano)",
+    "ru-RU" to "Russian",
+    "ja-JP" to "Japanese",
+    "ko-KR" to "Korean",
+    "zh-CN" to "Chinese (Simplified)",
+    "zh-TW" to "Chinese (Traditional)",
+    "ar-SA" to "Arabic",
+    "hi-IN" to "Hindi",
+    "tr-TR" to "Turkish (Turkce)",
+    "pl-PL" to "Polish (Polski)",
+    "sv-SE" to "Swedish (Svenska)",
+    "da-DK" to "Danish (Dansk)",
+    "no-NO" to "Norwegian (Norsk)",
+    "fi-FI" to "Finnish (Suomi)",
+    "el-GR" to "Greek",
+    "cs-CZ" to "Czech (Cesky)",
+    "hu-HU" to "Hungarian (Magyar)",
+    "ro-RO" to "Romanian (Romana)",
+    "th-TH" to "Thai",
+    "vi-VN" to "Vietnamese",
+    "id-ID" to "Indonesian",
+    "ms-MY" to "Malay",
+    "tl-PH" to "Filipino/Tagalog",
+    "uk-UA" to "Ukrainian",
+    "bg-BG" to "Bulgarian",
+    "hr-HR" to "Croatian (Hrvatski)",
+    "sr-RS" to "Serbian (Srpski)",
+    "sk-SK" to "Slovak (Slovensky)",
+    "sl-SI" to "Slovenian (Slovenscina)",
+    "he-IL" to "Hebrew",
+    "fa-IR" to "Persian (Farsi)",
+    "bn-BD" to "Bengali",
+    "ta-IN" to "Tamil",
+    "te-IN" to "Telugu",
+    "ur-PK" to "Urdu",
+    "ca-ES" to "Catalan",
+    "eu-ES" to "Basque (Euskara)",
+    "gl-ES" to "Galician (Galego)",
+    "lt-LT" to "Lithuanian",
+    "lv-LV" to "Latvian",
+    "et-EE" to "Estonian",
+    "af-ZA" to "Afrikaans",
+    "sw-KE" to "Swahili",
+    "sq-AL" to "Albanian (Shqip)"
+)

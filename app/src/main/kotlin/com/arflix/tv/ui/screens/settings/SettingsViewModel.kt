@@ -119,6 +119,10 @@ data class SettingsUiState(
     // Addons
     val addons: List<Addon> = emptyList(),
     val torrServerBaseUrl: String = "",
+    // Content language (TMDB metadata)
+    val contentLanguage: String = "en-US",
+    // Device mode override
+    val deviceModeOverride: String = "auto",
     // Toast
     val toastMessage: String? = null,
     val toastType: ToastType = ToastType.INFO
@@ -147,6 +151,8 @@ class SettingsViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    private fun contentLanguageKey() = profileManager.profileStringKey("content_language")
 
     private fun defaultSubtitleKey() = profileManager.profileStringKey("default_subtitle")
     private fun defaultSubtitleKeyFor(profileId: String) = profileManager.profileStringKeyFor(profileId, "default_subtitle")
@@ -229,8 +235,20 @@ class SettingsViewModel @Inject constructor(
             val defaultAudio = prefs[defaultAudioLanguageKey()] ?: "Auto (Original)"
             val cardLayoutMode = normalizeCardLayoutMode(prefs[cardLayoutModeKey()])
             val frameRateMode = normalizeFrameRateMode(prefs[frameRateMatchingModeKey()])
+            val deviceModeOverride = prefs[com.arflix.tv.util.DEVICE_MODE_OVERRIDE_KEY] ?: "auto"
+            val contentLang = prefs[contentLanguageKey()] ?: "en-US"
+            // Apply content language to MediaRepository immediately
+            mediaRepository.contentLanguage = if (contentLang == "en-US") null else contentLang
             var autoPlay = prefs[autoPlayNextKey()] ?: true
-            val autoPlaySingleSource = prefs[autoPlaySingleSourceKey()] ?: true
+            var autoPlaySingleSource = prefs[autoPlaySingleSourceKey()] ?: true
+            // Ensure defaults are persisted on first launch so they're never ambiguous
+            if (prefs[autoPlaySingleSourceKey()] == null) {
+                autoPlaySingleSource = true
+                context.settingsDataStore.edit { it[autoPlaySingleSourceKey()] = true }
+            }
+            if (prefs[autoPlayNextKey()] == null) {
+                context.settingsDataStore.edit { it[autoPlayNextKey()] = true }
+            }
             val autoPlayMinQuality = normalizeAutoPlayMinQuality(prefs[autoPlayMinQualityKey()])
             val dnsProviderValue = normalizeDnsProviderValue(prefs[dnsProviderKey()])
             val includeSpecials = prefs[includeSpecialsKey()] ?: false
@@ -286,7 +304,9 @@ class SettingsViewModel @Inject constructor(
                 showUnknownSourcesDialog = currentState.showUnknownSourcesDialog,
                 appUpdateError = currentState.appUpdateError,
                 catalogs = existingCatalogs,
-                addons = addons
+                addons = addons,
+                contentLanguage = contentLang,
+                deviceModeOverride = deviceModeOverride
             )
         }
     }
@@ -660,6 +680,28 @@ class SettingsViewModel @Inject constructor(
             }
             _uiState.value = _uiState.value.copy(cardLayoutMode = normalized)
             syncLocalStateToCloud(silent = true)
+        }
+    }
+
+    /** Set content/metadata language for TMDB (e.g. "en-US", "fr-FR", "nl-NL"). */
+    fun setContentLanguage(lang: String) {
+        viewModelScope.launch {
+            context.settingsDataStore.edit { prefs ->
+                prefs[contentLanguageKey()] = lang
+            }
+            mediaRepository.contentLanguage = if (lang == "en-US") null else lang
+            _uiState.value = _uiState.value.copy(contentLanguage = lang)
+            syncLocalStateToCloud(silent = true)
+        }
+    }
+
+    /** Set UI mode override: "auto", "tv", "tablet", "phone". Requires app restart. */
+    fun setDeviceModeOverride(mode: String) {
+        viewModelScope.launch {
+            context.settingsDataStore.edit { prefs ->
+                prefs[com.arflix.tv.util.DEVICE_MODE_OVERRIDE_KEY] = mode
+            }
+            _uiState.value = _uiState.value.copy(deviceModeOverride = mode)
         }
     }
 
@@ -1590,6 +1632,13 @@ class SettingsViewModel @Inject constructor(
 
         if (!ApkInstaller.canRequestPackageInstalls(context)) {
             _uiState.value = _uiState.value.copy(showUnknownSourcesDialog = true, showAppUpdateDialog = false)
+            return
+        }
+
+        // Check for signature conflict before installing
+        val conflictMsg = ApkInstaller.checkSignatureConflict(context, apkFile)
+        if (conflictMsg != null) {
+            _uiState.value = _uiState.value.copy(appUpdateError = conflictMsg, showAppUpdateDialog = true)
             return
         }
 

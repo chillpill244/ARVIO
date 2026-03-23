@@ -40,6 +40,9 @@ class CloudSyncRepository @Inject constructor(
 ) {
     private val gson = Gson()
 
+    /** Callback invoked after a successful push so realtime listeners can skip the echo. */
+    var onPushCompleted: (() -> Unit)? = null
+
     enum class RestoreResult { RESTORED, NO_BACKUP, FAILED }
 
     // ── Data class for per-profile settings stored in cloud ──
@@ -47,6 +50,7 @@ class CloudSyncRepository @Inject constructor(
     data class CloudProfileSettings(
         val defaultSubtitle: String = "Off",
         val defaultAudioLanguage: String = "Auto (Original)",
+        val contentLanguage: String = "en-US",
         val cardLayoutMode: String = CARD_LAYOUT_MODE_LANDSCAPE,
         val frameRateMatchingMode: String = "Off",
         val autoPlayNext: Boolean = true,
@@ -57,6 +61,8 @@ class CloudSyncRepository @Inject constructor(
 
     // ── DataStore key helpers ──
 
+    private fun contentLanguageKeyFor(profileId: String) =
+        profileManager.profileStringKeyFor(profileId, "content_language")
     private fun defaultSubtitleKeyFor(profileId: String) =
         profileManager.profileStringKeyFor(profileId, "default_subtitle")
     private fun defaultAudioLanguageKeyFor(profileId: String) =
@@ -126,6 +132,7 @@ class CloudSyncRepository @Inject constructor(
                     CloudProfileSettings(
                         defaultSubtitle = prefs[defaultSubtitleKeyFor(profile.id)] ?: "Off",
                         defaultAudioLanguage = prefs[defaultAudioLanguageKeyFor(profile.id)] ?: "Auto (Original)",
+                        contentLanguage = prefs[contentLanguageKeyFor(profile.id)] ?: "en-US",
                         cardLayoutMode = normalizeCardLayoutMode(
                             prefs[cardLayoutModeKeyFor(profile.id)] ?: CARD_LAYOUT_MODE_LANDSCAPE
                         ),
@@ -264,7 +271,9 @@ class CloudSyncRepository @Inject constructor(
         val payload = runCatching { buildCloudSnapshotJson() }.getOrElse {
             return Result.failure(it)
         }
-        return authRepository.saveAccountSyncPayload(payload)
+        val result = authRepository.saveAccountSyncPayload(payload)
+        if (result.isSuccess) onPushCompleted?.invoke()
+        return result
     }
 
     // ══════════════════════════════════════════════════════════
@@ -336,6 +345,7 @@ class CloudSyncRepository @Inject constructor(
                     settingsByProfile.forEach { (profileId, state) ->
                         prefs[defaultSubtitleKeyFor(profileId)] = state.defaultSubtitle
                         prefs[defaultAudioLanguageKeyFor(profileId)] = state.defaultAudioLanguage
+                        prefs[contentLanguageKeyFor(profileId)] = state.contentLanguage
                         prefs[cardLayoutModeKeyFor(profileId)] = normalizeCardLayoutMode(state.cardLayoutMode)
                         prefs[frameRateMatchingModeKeyFor(profileId)] = normalizeFrameRateMode(state.frameRateMatchingMode)
                         prefs[autoPlayNextKeyFor(profileId)] = state.autoPlayNext

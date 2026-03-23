@@ -55,8 +55,15 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import android.content.pm.ActivityInfo
 import com.arflix.tv.util.DeviceType
+import com.arflix.tv.util.DEVICE_MODE_OVERRIDE_KEY
 import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.util.LocalHasTouchScreen
 import com.arflix.tv.util.detectDeviceType
+import com.arflix.tv.util.deviceHasTouchScreen
+import com.arflix.tv.util.settingsDataStore
+import androidx.datastore.preferences.core.Preferences
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
@@ -130,8 +137,8 @@ class MainActivity : ComponentActivity() {
         pendingLauncherRequest = parseLauncherRequest(intent)
 
         // Set orientation based on device type
-        val deviceType = detectDeviceType(this)
-        requestedOrientation = when (deviceType) {
+        val initialDeviceType = detectDeviceType(this)
+        requestedOrientation = when (initialDeviceType) {
             DeviceType.TV -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             DeviceType.TABLET -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
             DeviceType.PHONE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
@@ -148,7 +155,22 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            CompositionLocalProvider(LocalDeviceType provides deviceType) {
+            // Observe device mode override changes live from DataStore
+            val deviceModeOverride by remember { this@MainActivity.settingsDataStore.data.map { it[DEVICE_MODE_OVERRIDE_KEY] } }.collectAsState(initial = null)
+            val deviceType = when (deviceModeOverride) {
+                "tv" -> DeviceType.TV
+                "tablet" -> DeviceType.TABLET
+                "phone" -> DeviceType.PHONE
+                else -> initialDeviceType
+            }
+            val hasTouchScreen = remember { deviceHasTouchScreen(this@MainActivity) }
+            // If no touchscreen, force TV mode regardless of override setting
+            // (prevents tablet/phone UI on devices with only D-pad input)
+            val effectiveDeviceType = if (!hasTouchScreen && deviceType != DeviceType.TV) DeviceType.TV else deviceType
+            CompositionLocalProvider(
+                LocalDeviceType provides effectiveDeviceType,
+                LocalHasTouchScreen provides hasTouchScreen
+            ) {
                 ArflixTvTheme {
                     val startupState by startupViewModel.state.collectAsState()
                     ArflixApp(
