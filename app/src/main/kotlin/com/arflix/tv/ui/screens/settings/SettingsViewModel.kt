@@ -73,6 +73,8 @@ data class SettingsUiState(
     val autoPlayMinQuality: String = "Any",
     val dnsProvider: String = "System DNS",
     val dnsProviderOptions: List<String> = listOf("System DNS", "Cloudflare", "Google", "AdGuard"),
+    val subtitleSize: String = "Medium",
+    val subtitleColor: String = "White",
     val includeSpecials: Boolean = false,
     val isLoggedIn: Boolean = false,
     val accountEmail: String? = null,
@@ -169,6 +171,8 @@ class SettingsViewModel @Inject constructor(
     private fun autoPlaySingleSourceKeyFor(profileId: String) = profileManager.profileBooleanKeyFor(profileId, "auto_play_single_source")
     private fun autoPlayMinQualityKey() = profileManager.profileStringKey("auto_play_min_quality")
     private fun autoPlayMinQualityKeyFor(profileId: String) = profileManager.profileStringKeyFor(profileId, "auto_play_min_quality")
+    private fun subtitleSizeKey() = profileManager.profileStringKey("subtitle_size")
+    private fun subtitleColorKey() = profileManager.profileStringKey("subtitle_color")
     private fun dnsProviderKey() = profileManager.profileStringKey("dns_provider")
     private fun includeSpecialsKey() = profileManager.profileBooleanKey("include_specials")
     private fun includeSpecialsKeyFor(profileId: String) = profileManager.profileBooleanKeyFor(profileId, "include_specials")
@@ -250,6 +254,8 @@ class SettingsViewModel @Inject constructor(
                 context.settingsDataStore.edit { it[autoPlayNextKey()] = true }
             }
             val autoPlayMinQuality = normalizeAutoPlayMinQuality(prefs[autoPlayMinQualityKey()])
+            val subtitleSize = prefs[subtitleSizeKey()] ?: "Medium"
+            val subtitleColor = prefs[subtitleColorKey()] ?: "White"
             val dnsProviderValue = normalizeDnsProviderValue(prefs[dnsProviderKey()])
             val includeSpecials = prefs[includeSpecialsKey()] ?: false
 
@@ -285,6 +291,8 @@ class SettingsViewModel @Inject constructor(
                 autoPlayNext = autoPlay,
                 autoPlaySingleSource = autoPlaySingleSource,
                 autoPlayMinQuality = autoPlayMinQuality,
+                subtitleSize = subtitleSize,
+                subtitleColor = subtitleColor,
                 dnsProvider = dnsProviderLabel(dnsProviderValue),
                 includeSpecials = includeSpecials,
                 isLoggedIn = isLoggedIn,
@@ -551,7 +559,8 @@ class SettingsViewModel @Inject constructor(
         )
         val base = buildList {
             add("Off")
-            if (current.isNotBlank()) add(current)
+            add("Forced")
+            if (current.isNotBlank() && current != "Off" && current != "Forced") add(current)
             addAll(topUsed)
             addAll(defaults)
         }
@@ -743,6 +752,16 @@ class SettingsViewModel @Inject constructor(
             "4k", "2160p", "uhd" -> "4K"
             else -> "Any"
         }
+    }
+
+    fun cycleSubtitleSize() {
+        val next = when (_uiState.value.subtitleSize) { "Small" -> "Medium"; "Medium" -> "Large"; "Large" -> "Extra Large"; else -> "Small" }
+        viewModelScope.launch { context.settingsDataStore.edit { it[subtitleSizeKey()] = next }; _uiState.value = _uiState.value.copy(subtitleSize = next) }
+    }
+
+    fun cycleSubtitleColor() {
+        val next = when (_uiState.value.subtitleColor) { "White" -> "Yellow"; "Yellow" -> "Green"; "Green" -> "Cyan"; else -> "White" }
+        viewModelScope.launch { context.settingsDataStore.edit { it[subtitleColorKey()] = next }; _uiState.value = _uiState.value.copy(subtitleColor = next) }
     }
 
     private fun normalizeDnsProviderValue(raw: String?): String {
