@@ -1,4 +1,4 @@
-@file:OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
+@file:OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package com.arflix.tv.ui.screens.home
 
@@ -15,6 +15,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -111,6 +112,7 @@ import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.network.OkHttpProvider
 import com.arflix.tv.ui.components.MediaCard as ArvioMediaCard
+import com.arflix.tv.ui.components.CardContent
 import com.arflix.tv.ui.components.TrailerPlayer
 import com.arflix.tv.ui.components.CardLayoutMode
 import com.arflix.tv.ui.components.AppTopBar
@@ -159,6 +161,7 @@ import kotlin.math.abs
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import com.arflix.tv.util.Constants
 
 // Genre ID to name mapping (TMDB standard)
 private val movieGenres = mapOf(
@@ -226,6 +229,8 @@ fun HomeScreen(
     currentProfile: com.arflix.tv.data.model.Profile? = null,
     onNavigateToDetails: (MediaType, Int, Int?, Int?) -> Unit = { _, _, _, _ -> },
     onNavigateToSearch: () -> Unit = {},
+    onNavigateToMovies: () -> Unit = {},
+    onNavigateToSeries: () -> Unit = {},
     onNavigateToWatchlist: () -> Unit = {},
     onNavigateToTv: (channelId: String?, streamUrl: String?) -> Unit = { _, _ -> },
     onNavigateToSettings: () -> Unit = {},
@@ -441,7 +446,7 @@ fun HomeScreen(
             .build()
     }
     val heroDataSourceFactory = remember(heroOkHttp) {
-        OkHttpDataSource.Factory(heroOkHttp).setUserAgent("ARVIO/1.7.0 (Android TV)")
+        OkHttpDataSource.Factory(heroOkHttp).setUserAgent(Constants.CUSTOM_AGENT)
     }
     val heroHlsFactory = remember(heroDataSourceFactory) {
         HlsMediaSource.Factory(heroDataSourceFactory).setAllowChunklessPreparation(true)
@@ -606,6 +611,8 @@ fun HomeScreen(
             currentProfile = currentProfile,
             onNavigateToDetails = onNavigateToDetails,
             onNavigateToSearch = onNavigateToSearch,
+            onNavigateToMovies = onNavigateToMovies,
+            onNavigateToSeries = onNavigateToSeries,
             onNavigateToWatchlist = onNavigateToWatchlist,
             onNavigateToTv = onNavigateToTv,
             getIptvStreamUrl = { itemId -> viewModel.getIptvStreamUrl(itemId) },
@@ -801,7 +808,7 @@ private fun HeroSection(
                                 .width(300.dp)
                         )
                     } else {
-                        // Fallback to title text
+                        // Fallback to title text - single line with marquee for long titles
                         Text(
                             text = currentItem.title.uppercase(),
                             style = ArflixTypography.heroTitle.copy(
@@ -811,7 +818,9 @@ private fun HeroSection(
                                 shadow = textShadow
                             ),
                             color = TextPrimary,
-                            maxLines = 2
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip,
+                            modifier = Modifier.basicMarquee()
                         )
                     }
                 }
@@ -1090,7 +1099,7 @@ private fun HomeHeroLayer(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = AppTopBarContentTopInset)
+                .padding(top = AppTopBarContentTopInset() + 12.dp)
                 .zIndex(3f)
         ) {
             heroItem?.let { item ->
@@ -1607,6 +1616,8 @@ private fun HomeInputLayer(
     currentProfile: com.arflix.tv.data.model.Profile?,
     onNavigateToDetails: (MediaType, Int, Int?, Int?) -> Unit,
     onNavigateToSearch: () -> Unit,
+    onNavigateToMovies: () -> Unit,
+    onNavigateToSeries: () -> Unit,
     onNavigateToWatchlist: () -> Unit,
     onNavigateToTv: (channelId: String?, streamUrl: String?) -> Unit,
     getIptvStreamUrl: (itemId: Int) -> String?,
@@ -1916,7 +1927,8 @@ private fun HomeRowsLayer(
             contentStartPadding = contentStartPadding,
             fastScrollThresholdMs = fastScrollThresholdMs,
             usePosterCards = usePosterCards,
-            onItemClick = onItemClick
+            onItemClick = onItemClick,
+            onItemLongClick = onItemLongClick
         )
     }
 }
@@ -1957,7 +1969,7 @@ private fun MobileHomeRowsLayer(
             val isContinueWatching = category.id == "continue_watching"
             val isRanked = category.title.contains("Top 10", ignoreCase = true)
 
-            Column(modifier = Modifier.padding(bottom = 8.dp)) {
+            Column(modifier = Modifier.padding(bottom = 26.dp)) {
                 // Section title
                 Text(
                     text = category.title,
@@ -2012,7 +2024,7 @@ private fun MobileHomeRowsLayer(
                                 Box(modifier = Modifier.padding(start = 44.dp)) {
                                     val cardLogoUrl = cardLogoUrls["${item.mediaType}_${item.id}"]
                                     ArvioMediaCard(
-                                        item = item,
+                                        content = CardContent.Media(item),
                                         width = 110.dp,
                                         isLandscape = !usePosterCards,
                                         logoImageUrl = cardLogoUrl,
@@ -2021,14 +2033,14 @@ private fun MobileHomeRowsLayer(
                                         enableSystemFocus = false,
                                         onFocused = {},
                                         onClick = { onItemClick(item) },
-                                        onLongClick = onItemLongClick?.let { callback -> { callback(item, isContinueWatching) } },
+                                        onLongPress = { onItemLongClick?.invoke(item, isContinueWatching) },
                                     )
                                 }
                             }
                         } else {
                             val cardLogoUrl = cardLogoUrls["${item.mediaType}_${item.id}"]
                             ArvioMediaCard(
-                                item = item,
+                                content = CardContent.Media(item),
                                 width = mobileItemWidth,
                                 isLandscape = !usePosterCards,
                                 logoImageUrl = cardLogoUrl,
@@ -2037,7 +2049,7 @@ private fun MobileHomeRowsLayer(
                                 enableSystemFocus = false,
                                 onFocused = {},
                                 onClick = { onItemClick(item) },
-                                onLongClick = onItemLongClick?.let { callback -> { callback(item, isContinueWatching) } },
+                                onLongPress = { onItemLongClick?.invoke(item, isContinueWatching) },
                             )
                         }
                     }
@@ -2056,7 +2068,8 @@ private fun TvHomeRowsLayer(
     contentStartPadding: androidx.compose.ui.unit.Dp,
     fastScrollThresholdMs: Long,
     usePosterCards: Boolean,
-    onItemClick: (MediaItem) -> Unit
+    onItemClick: (MediaItem) -> Unit,
+    onItemLongClick: ((MediaItem, Boolean) -> Unit)? = null
 ) {
     val currentRowIndex = focusState.currentRowIndex
     var isFastScrolling by remember { mutableStateOf(false) }
@@ -2139,6 +2152,9 @@ private fun TvHomeRowsLayer(
                                 focusState.currentItemIndex = itemIdx
                                 focusState.isSidebarFocused = false
                                 focusState.lastNavEventTime = SystemClock.elapsedRealtime()
+                            },
+                            onItemLongPress = { item ->
+                                onItemLongClick?.invoke(item, true)
                             }
                         )
                     }
@@ -2293,7 +2309,8 @@ private fun ContentRow(
     focusedItemIndex: Int,
     isFastScrolling: Boolean,
     onItemClick: (MediaItem) -> Unit,
-    onItemFocused: (MediaItem, Int) -> Unit
+    onItemFocused: (MediaItem, Int) -> Unit,
+    onItemLongPress: (MediaItem) -> Unit = {}
 ) {
     val rowState = rememberLazyListState()
     val configuration = LocalConfiguration.current
@@ -2511,7 +2528,7 @@ private fun ContentRow(
                         Box(modifier = Modifier.padding(start = 60.dp)) {
                             val cardLogoUrl = cardLogoUrls["${item.mediaType}_${item.id}"]
                             ArvioMediaCard(
-                                item = item,
+                                content = CardContent.Media(item),
                                 width = 140.dp,  // Smaller cards
                                 isLandscape = !usePosterCards,
                                 logoImageUrl = cardLogoUrl,
@@ -2520,6 +2537,7 @@ private fun ContentRow(
                                 enableSystemFocus = false,
                                 onFocused = { onItemFocused(item, index) },
                                 onClick = { onItemClick(item) },
+                                onLongPress = { onItemLongPress(item) }
                             )
                         }
                     }
@@ -2527,7 +2545,7 @@ private fun ContentRow(
                     // Standard Card - keep width aligned with scroll math
                     val cardLogoUrl = cardLogoUrls["${item.mediaType}_${item.id}"]
                     ArvioMediaCard(
-                        item = item,
+                        content = CardContent.Media(item),
                         width = itemWidth,
                         isLandscape = !usePosterCards,
                         logoImageUrl = cardLogoUrl,
@@ -2536,6 +2554,7 @@ private fun ContentRow(
                         enableSystemFocus = false,
                         onFocused = { onItemFocused(item, index) },
                         onClick = { onItemClick(item) },
+                        onLongPress = { onItemLongPress(item) }
                     )
                 }
             }

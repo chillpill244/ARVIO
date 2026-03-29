@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import com.arflix.tv.BuildConfig
+import com.arflix.tv.util.Constants
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -58,7 +59,7 @@ class AppUpdateRepository @Inject constructor(
                 val request = Request.Builder()
                     .url(url)
                     .header("Accept", "application/vnd.github+json")
-                    .header("User-Agent", "ARVIO/${BuildConfig.VERSION_NAME}")
+                    .header("User-Agent", Constants.CUSTOM_AGENT)
                     .build()
 
                 okHttpClient.newCall(request).execute().use { response ->

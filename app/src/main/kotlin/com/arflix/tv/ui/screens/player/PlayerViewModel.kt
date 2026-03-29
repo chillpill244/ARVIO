@@ -21,6 +21,7 @@ import com.arflix.tv.data.repository.LauncherContinueWatchingRepository
 import com.arflix.tv.data.repository.TraktRepository
 import com.arflix.tv.data.repository.WatchHistoryEntry
 import com.arflix.tv.data.repository.WatchHistoryRepository
+import com.arflix.tv.ui.screens.settings.SubtitleStyle
 import com.arflix.tv.util.Constants
 import com.arflix.tv.util.settingsDataStore
 import com.google.gson.Gson
@@ -56,13 +57,14 @@ data class PlayerUiState(
     val savedPosition: Long = 0,
     val preferredAudioLanguage: String = "en",
     val frameRateMatchingMode: String = "Off",
-    val subtitleSize: String = "Medium",
-    val subtitleColor: String = "White",
+    val subtitleStyle: SubtitleStyle = SubtitleStyle(),
     val error: String? = null,
     val isSetupError: Boolean = false, // true when error is due to missing addons (shows friendly guide instead of red error)
     // Skip intro/recap
     val activeSkipInterval: SkipInterval? = null,
-    val skipIntervalDismissed: Boolean = false
+    val skipIntervalDismissed: Boolean = false,
+    // Next episode during end credits
+    val isInOutro: Boolean = false
 )
 
 @HiltViewModel
@@ -77,7 +79,8 @@ class PlayerViewModel @Inject constructor(
     private val launcherContinueWatchingRepository: LauncherContinueWatchingRepository,
     private val tmdbApi: TmdbApi,
     private val skipIntroRepository: SkipIntroRepository,
-    private val playbackTelemetryRepository: PlaybackTelemetryRepository
+    private val playbackTelemetryRepository: PlaybackTelemetryRepository,
+    private val iptvRepository: com.arflix.tv.data.repository.IptvRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlayerUiState())
@@ -106,6 +109,10 @@ class PlayerViewModel @Inject constructor(
     private var lastIsPlaying: Boolean = false
     private var hasMarkedWatched: Boolean = false
 
+    // TASK_17: IPTV Series context for instant next episode
+    private var currentIptvSeriesId: Int? = null
+    private var currentIptvSeriesName: String? = null
+
     // Skip intro
     private var skipIntervals: List<SkipInterval> = emptyList()
     private var lastActiveSkipType: String? = null
@@ -123,13 +130,14 @@ class PlayerViewModel @Inject constructor(
     private fun defaultAudioLanguageKey() = profileManager.profileStringKey("default_audio_language")
     private fun subtitleUsageKey() = profileManager.profileStringKey("subtitle_usage_v1")
     private fun frameRateMatchingModeKey() = profileManager.profileStringKey("frame_rate_matching_mode")
+    private fun subtitleStyleKey() = profileManager.profileStringKey("subtitle_style")
     private val gson = Gson()
     private val knownLanguageCodes = setOf(
         "en", "es", "fr", "de", "it", "pt", "nl", "ru", "zh", "ja", "ko",
         "ar", "hi", "tr", "pl", "sv", "no", "da", "fi", "el", "cs", "hu",
         "ro", "th", "vi", "id", "he",
         "uk", "fa", "bn", "bg", "hr", "sr", "sk", "sl", "lt", "et",
-        "pt-br", "pob"
+        "pt-br", "pob", "te", "ta", "ml", "kn"
     )
 
     fun loadMedia(
@@ -143,7 +151,9 @@ class PlayerViewModel @Inject constructor(
         preferredSourceName: String?,
         preferredBingeGroup: String?,
         startPositionMs: Long?,
-        airDate: String? = null
+        airDate: String? = null,
+        iptvSeriesId: Int? = null,      // TASK_17: IPTV series ID for instant next episode
+        iptvSeriesName: String? = null  // TASK_17: IPTV series name
     ) {
         currentAirDate = airDate
         currentMediaType = mediaType
@@ -166,6 +176,9 @@ class PlayerViewModel @Inject constructor(
         skipIntervals = emptyList()
         lastActiveSkipType = null
         activeSkipRequestKey = null
+        // TASK_17: Store IPTV series context
+        currentIptvSeriesId = iptvSeriesId
+        currentIptvSeriesName = iptvSeriesName
         _uiState.value = _uiState.value.copy(activeSkipInterval = null, skipIntervalDismissed = false)
         val cachedItem = mediaRepository.getCachedItem(mediaType, mediaId)
         currentOriginalLanguage = cachedItem?.originalLanguage
@@ -173,17 +186,21 @@ class PlayerViewModel @Inject constructor(
         currentItemTitle = cachedItem?.title ?: ""
 
         viewModelScope.launch {
+            // Try to load IPTV series context from storage if not already set
+            // This enables instant next episode for TV shows with cached IPTV series binding
+            if (mediaType == MediaType.TV && currentIptvSeriesId == null) {
+                loadIptvSeriesContextFromStorage()
+            }
+            
             val preferredAudioLanguage = resolvePreferredAudioLanguage()
             val frameRateMatchingMode = resolveFrameRateMatchingMode()
-            val subSize = context.settingsDataStore.data.first()[profileManager.profileStringKey("subtitle_size")] ?: "Medium"
-            val subColor = context.settingsDataStore.data.first()[profileManager.profileStringKey("subtitle_color")] ?: "White"
-            _uiState.value = PlayerUiState(
+            val subtitleStyle = resolveSubtitleStyle()
+            _uiState.value = _uiState.value.copy(
                 isLoading = true,
                 isLoadingStreams = true,
                 preferredAudioLanguage = preferredAudioLanguage,
                 frameRateMatchingMode = frameRateMatchingMode,
-                subtitleSize = subSize,
-                subtitleColor = subColor
+                subtitleStyle = subtitleStyle
             )
 
             // If stream URL provided, use it directly (except magnet links, which require resolution).
@@ -211,10 +228,21 @@ class PlayerViewModel @Inject constructor(
                     return@launch
                 }
 
+                // Create a placeholder StreamSource immediately so it shows in Sources list
+                val placeholderStream = StreamSource(
+                    source = currentPreferredSourceName ?: "Selected Source",
+                    addonName = currentPreferredAddonId ?: "",
+                    addonId = currentPreferredAddonId ?: "",
+                    quality = "",
+                    size = "",
+                    url = resolvedProvidedUrl
+                )
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isLoadingStreams = false,
                     selectedStreamUrl = resolvedProvidedUrl,
+                    selectedStream = placeholderStream,
+                    streams = listOf(placeholderStream),
                     savedPosition = resumeData.positionMs
                 )
                 launch {
@@ -321,36 +349,38 @@ class PlayerViewModel @Inject constructor(
                     currentTvdbId = externalIds.tvdbId
                     imdbId = externalIds.imdbId
                 }
-                if (imdbId.isNullOrBlank()) {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        isLoadingStreams = false,
-                        error = "Unable to resolve IMDB ID. Try again."
-                    )
-                    return@launch
-                }
-                if (cachedImdbId.isNullOrBlank()) {
+                // if (imdbId.isNullOrBlank()) {
+                //     _uiState.value = _uiState.value.copy(
+                //         isLoading = false,
+                //         isLoadingStreams = false,
+                //         error = "Unable to resolve IMDB ID. Try again."
+                //     )
+                //     return@launch
+                // }
+                if (cachedImdbId.isNullOrBlank() && !imdbId.isNullOrBlank()) {
                     mediaRepository.cacheImdbId(mediaType, mediaId, imdbId)
                 }
                 currentImdbId = imdbId
                 // Never block source loading on title hydration from TMDB.
                 // Fetch skip intervals in background. This should never block playback.
                 launch {
-                    if (mediaType == MediaType.TV && seasonNumber != null && episodeNumber != null) {
+                    if (mediaType == MediaType.TV && seasonNumber != null && episodeNumber != null && !imdbId.isNullOrBlank()) {
                         fetchSkipIntervals(imdbId, seasonNumber, episodeNumber)
                     }
                 }
+                val imdbForStreams = imdbId ?: ""
                 // Start VOD append in background - single fast attempt, no retries blocking UI
                 vodAppendJob?.cancel()
                 vodAppendJob = launch {
                     // VOD runs in parallel with addon streams — catalog is disk-cached
-                    // so lookups are usually fast. Give enough time for series info calls.
+                    // so series lookups can take longer on cold catalog. Give 90s for TV series.
+                    val vodTimeoutMs = if (mediaType == MediaType.TV) 90_000L else 30_000L
                     appendVodSourceInBackground(
                         mediaType = mediaType,
-                        imdbId = imdbId,
+                        imdbId = imdbForStreams,
                         seasonNumber = seasonNumber,
                         episodeNumber = episodeNumber,
-                        timeoutMs = 15_000L
+                        timeoutMs = vodTimeoutMs
                     )
                 }
 
@@ -369,13 +399,13 @@ class PlayerViewModel @Inject constructor(
                 val preferredLanguage = _uiState.value.preferredAudioLanguage.ifBlank { resolvePreferredAudioLanguage() }
                 val progressiveFlow = if (mediaType == MediaType.MOVIE) {
                     streamRepository.resolveMovieStreamsProgressive(
-                        imdbId = imdbId,
+                        imdbId = imdbForStreams,
                         title = currentItemTitle,
                         year = null
                     )
                 } else {
                     streamRepository.resolveEpisodeStreamsProgressive(
-                        imdbId = imdbId,
+                        imdbId = imdbForStreams,
                         season = seasonNumber ?: 1,
                         episode = episodeNumber ?: 1,
                         tmdbId = mediaId,
@@ -439,15 +469,25 @@ class PlayerViewModel @Inject constructor(
                         autoplaySelectBest(mergedStreams, preferredLanguage)
                     }
                 }
+                // Keep existing IPTV sources (both VOD and Series)
+                val existingIptv = _uiState.value.streams.filter { 
+                    it.addonId == "iptv_xtream_vod" || it.addonId == "iptv_xtream_series" 
+                }
+                val finalMergedStreams = (lastMergedStreams + existingIptv)
+                    .distinctBy { "${it.url?.trim().orEmpty()}|${it.source}" }
 
-                if (!autoplaySelected && lastMergedStreams.isNotEmpty()) {
+                if (!autoplaySelected && finalMergedStreams.isNotEmpty()) {
                     autoplaySelected = true
-                    autoplaySelectBest(lastMergedStreams, preferredLanguage)
+                    autoplaySelectBest(finalMergedStreams, preferredLanguage)
                 }
 
                 // Apply subtitle preference in background (non-blocking)
                 subtitleRefreshJob?.cancel()
                 subtitleRefreshJob = launch {
+                    if (imdbId.isNullOrBlank()) {
+                        _uiState.value = _uiState.value.copy(isLoadingSubtitles = false)
+                        return@launch
+                    }
                     val fetchedSubs = runCatching {
                         streamRepository.fetchSubtitlesForSelectedStream(
                             mediaType = mediaType,
@@ -484,7 +524,45 @@ class PlayerViewModel @Inject constructor(
      * Fetch media metadata in background (non-blocking)
      */
     private suspend fun fetchMediaMetadata(mediaType: MediaType, mediaId: Int) {
+        // Check if the cached item indicates IPTV-only content (id==0 means no TMDB match).
+        // This happens when an IPTV series without a TMDB match is played – the route mediaId
+        // is the IPTV series id, not a real TMDB id. Calling TMDB with it would return a
+        // random unrelated show's metadata (wrong logo/backdrop).
+        val cachedItem = mediaRepository.getCachedItem(mediaType, mediaId)
+        if (cachedItem != null && cachedItem.id == 0) {
+            // IPTV-only item – use the IPTV metadata we already have; skip TMDB fetch.
+            currentTitle = cachedItem.title
+            currentPoster = cachedItem.image.takeIf { it.isNotBlank() }
+            currentBackdrop = cachedItem.backdrop
+            _uiState.value = _uiState.value.copy(
+                title = cachedItem.title,
+                backdropUrl = cachedItem.backdrop,
+                logoUrl = null,
+                preferredAudioLanguage = resolvePreferredAudioLanguage()
+            )
+            return
+        }
+
         try {
+            // If playback was explicitly requested from an IPTV source for a movie,
+            // skip TMDB lookup to avoid showing random/wrong logos when mediaId is not a TMDB id.
+            if (mediaType == MediaType.MOVIE && !currentPreferredSourceName.isNullOrBlank() &&
+                currentPreferredSourceName.equals("iptv", ignoreCase = true)) {
+                val cached = mediaRepository.getCachedItem(mediaType, mediaId)
+                if (cached != null) {
+                    currentTitle = cached.title
+                    currentPoster = cached.image.takeIf { it.isNotBlank() }
+                    currentBackdrop = cached.backdrop
+                }
+                _uiState.value = _uiState.value.copy(
+                    title = currentTitle,
+                    backdropUrl = currentBackdrop,
+                    logoUrl = null,
+                    preferredAudioLanguage = resolvePreferredAudioLanguage()
+                )
+                return
+            }
+
             val details = if (mediaType == MediaType.TV) {
                 tmdbApi.getTvDetails(mediaId, Constants.TMDB_API_KEY)
             } else {
@@ -547,6 +625,7 @@ class PlayerViewModel @Inject constructor(
             val ids = when (mediaType) {
                 MediaType.MOVIE -> tmdbApi.getMovieExternalIds(mediaId, Constants.TMDB_API_KEY)
                 MediaType.TV -> tmdbApi.getTvExternalIds(mediaId, Constants.TMDB_API_KEY)
+                MediaType.LIVE_TV -> return ExternalIds(null, null)
             }
             ExternalIds(imdbId = ids.imdbId, tvdbId = ids.tvdbId)
         } catch (_: Exception) {
@@ -578,8 +657,12 @@ class PlayerViewModel @Inject constructor(
 
     private fun updateActiveSkipInterval(positionMs: Long) {
         if (skipIntervals.isEmpty()) {
-            if (_uiState.value.activeSkipInterval != null) {
-                _uiState.value = _uiState.value.copy(activeSkipInterval = null, skipIntervalDismissed = false)
+            if (_uiState.value.activeSkipInterval != null || _uiState.value.isInOutro) {
+                _uiState.value = _uiState.value.copy(
+                    activeSkipInterval = null,
+                    skipIntervalDismissed = false,
+                    isInOutro = false
+                )
             }
             return
         }
@@ -591,16 +674,27 @@ class PlayerViewModel @Inject constructor(
             startsSoonOrStarted && positionMs < effectiveEnd
         }
         val currentActive = _uiState.value.activeSkipInterval
+        val isOutro = active?.type == "outro"
 
         if (active != null) {
             val key = "${active.type}:${active.startMs}:${active.endMs}:${active.provider}"
             if (currentActive == null || key != lastActiveSkipType) {
                 lastActiveSkipType = key
-                _uiState.value = _uiState.value.copy(activeSkipInterval = active, skipIntervalDismissed = false)
+                _uiState.value = _uiState.value.copy(
+                    activeSkipInterval = active,
+                    skipIntervalDismissed = false,
+                    isInOutro = isOutro
+                )
+            } else if (_uiState.value.isInOutro != isOutro) {
+                _uiState.value = _uiState.value.copy(isInOutro = isOutro)
             }
-        } else if (currentActive != null) {
+        } else if (currentActive != null || _uiState.value.isInOutro) {
             lastActiveSkipType = null
-            _uiState.value = _uiState.value.copy(activeSkipInterval = null, skipIntervalDismissed = false)
+            _uiState.value = _uiState.value.copy(
+                activeSkipInterval = null,
+                skipIntervalDismissed = false,
+                isInOutro = false
+            )
         }
     }
 
@@ -625,6 +719,20 @@ class PlayerViewModel @Inject constructor(
             }
         } catch (_: Exception) {
             "Off"
+        }
+    }
+
+    private suspend fun resolveSubtitleStyle(): SubtitleStyle {
+        return try {
+            val prefs = context.settingsDataStore.data.first()
+            val json = prefs[subtitleStyleKey()]
+            if (!json.isNullOrBlank()) {
+                gson.fromJson(json, SubtitleStyle::class.java)
+            } else {
+                SubtitleStyle()
+            }
+        } catch (_: Exception) {
+            SubtitleStyle()
         }
     }
 
@@ -1659,6 +1767,33 @@ class PlayerViewModel @Inject constructor(
     private var subtitleRefreshJob: Job? = null
     private var vodAppendJob: Job? = null
 
+    /**
+     * Refresh VOD sources - called when user opens Sources menu to ensure
+     * IPTV VOD sources are loaded even if initial background fetch timed out.
+     */
+    fun refreshVodSources() {
+        val imdbId = currentImdbId ?: return
+        val currentStreams = _uiState.value.streams
+        // If IPTV sources already present (either VOD or Series), no need to refresh
+        if (currentStreams.any { it.addonId == "iptv_xtream_vod" || it.addonId == "iptv_xtream_series" }) return
+        
+        // Show loading indicator while fetching VOD sources
+        _uiState.value = _uiState.value.copy(isLoadingStreams = true)
+        
+        vodAppendJob?.cancel()
+        vodAppendJob = viewModelScope.launch {
+            appendVodSourceInBackground(
+                mediaType = currentMediaType,
+                imdbId = imdbId,
+                seasonNumber = currentSeason,
+                episodeNumber = currentEpisode,
+                timeoutMs = 30_000L  // Give more time when user explicitly requests sources
+            )
+            // Ensure loading is turned off after VOD append completes
+            _uiState.value = _uiState.value.copy(isLoadingStreams = false)
+        }
+    }
+
     private suspend fun appendVodSourceInBackground(
         mediaType: MediaType,
         imdbId: String,
@@ -1667,12 +1802,13 @@ class PlayerViewModel @Inject constructor(
         timeoutMs: Long
     ) {
         val currentStreams = _uiState.value.streams
-        if (currentStreams.any { it.addonId == "iptv_xtream_vod" }) return
+        // Skip if IPTV sources already present (either VOD or Series)
+        // if (currentStreams.any { it.addonId == "iptv_xtream_vod" || it.addonId == "iptv_xtream_series" }) return
         val lookupTitle = currentItemTitle
             .ifBlank { currentTitle }
             .ifBlank { mediaRepository.getCachedItem(mediaType, currentMediaId)?.title.orEmpty() }
 
-        val vod = if (mediaType == MediaType.MOVIE) {
+        val vodList = if (mediaType == MediaType.MOVIE) {
             streamRepository.resolveMovieVodOnly(
                 imdbId = imdbId,
                 title = lookupTitle,
@@ -1689,13 +1825,18 @@ class PlayerViewModel @Inject constructor(
                 tmdbId = currentMediaId,
                 timeoutMs = timeoutMs
             )
-        } ?: return
+        }
 
-        if (vod.url.isNullOrBlank()) return
-        val latest = _uiState.value.streams
-        if (latest.any { it.url == vod.url && it.source == vod.source }) return
+        if (vodList.isEmpty()) return
 
-        val updated = latest + vod
+        val validVodList = vodList.filter { !it.url.isNullOrBlank() }
+        if (validVodList.isEmpty()) return
+
+        val existingUrls = _uiState.value.streams.map { it.url }.toSet()
+        val newVodList = validVodList.filter { it.url !in existingUrls }
+        if (newVodList.isEmpty()) return
+
+        val updated = _uiState.value.streams + newVodList
         _uiState.value = _uiState.value.copy(
             streams = updated,
             isLoadingStreams = false
@@ -1757,8 +1898,11 @@ class PlayerViewModel @Inject constructor(
                     u.isNotBlank() && !u.startsWith("magnet:", ignoreCase = true)
                 }
 
-            val existingVod = _uiState.value.streams.filter { it.addonId == "iptv_xtream_vod" }
-            val mergedStreams = (allStreams + existingVod)
+            // Keep existing IPTV sources (both VOD and Series)
+            val existingIptv = _uiState.value.streams.filter { 
+                it.addonId == "iptv_xtream_vod" || it.addonId == "iptv_xtream_series" 
+            }
+            val mergedStreams = (allStreams + existingIptv)
                 .distinctBy { "${it.url?.trim().orEmpty()}|${it.source}" }
 
             val selectedMatch = mergedStreams.firstOrNull { stream ->
@@ -1770,6 +1914,18 @@ class PlayerViewModel @Inject constructor(
                 selectedStream = selectedMatch ?: _uiState.value.selectedStream,
                 isLoadingStreams = false
             )
+            
+            // Also trigger VOD append to ensure IPTV sources are included
+            if (!mergedStreams.any { it.addonId == "iptv_xtream_vod" || it.addonId == "iptv_xtream_series" }) {
+                val vodTimeoutMs = if (mediaType == MediaType.TV) 90_000L else 30_000L
+                appendVodSourceInBackground(
+                    mediaType = mediaType,
+                    imdbId = imdbId,
+                    seasonNumber = seasonNumber,
+                    episodeNumber = episodeNumber,
+                    timeoutMs = vodTimeoutMs
+                )
+            }
         } catch (_: Exception) {
             _uiState.value = _uiState.value.copy(isLoadingStreams = false)
         }
@@ -1789,6 +1945,54 @@ class PlayerViewModel @Inject constructor(
             .substringBefore('?')
             .trim()
             .lowercase()
+    }
+
+    // ========== TASK_17: IPTV Instant Next Episode ==========
+
+    /**
+     * Build a direct episode URL from cached IPTV series info.
+     * Returns null if series context is not set or episode not cached.
+     */
+    suspend fun buildNextEpisodeUrl(nextSeason: Int, nextEpisode: Int): String? {
+        val seriesId = currentIptvSeriesId ?: return null
+        return runCatching {
+            iptvRepository.buildEpisodeUrlFromCache(seriesId, nextSeason, nextEpisode)
+        }.getOrNull()
+    }
+
+    /**
+     * Check if we have IPTV series context for instant next episode.
+     */
+    fun hasIptvSeriesContext(): Boolean = currentIptvSeriesId != null
+
+    /**
+     * Get current IPTV series context for passing to next episode.
+     */
+    fun getIptvSeriesContext(): Pair<Int?, String?> = Pair(currentIptvSeriesId, currentIptvSeriesName)
+
+    /**
+     * Set IPTV series context when navigating from continue watching with known series.
+     */
+    fun setIptvSeriesContext(seriesId: Int?, seriesName: String?) {
+        currentIptvSeriesId = seriesId
+        currentIptvSeriesName = seriesName
+    }
+
+    /**
+     * Load IPTV series context from stored binding (for continue watching).
+     */
+    suspend fun loadIptvSeriesContextFromStorage() {
+        if (currentMediaType != MediaType.TV) return
+        if (currentIptvSeriesId != null) return // Already set
+
+        val storedContext = runCatching {
+            iptvRepository.getStoredSeriesContext(currentMediaId)
+        }.getOrNull()
+
+        if (storedContext != null) {
+            currentIptvSeriesId = storedContext.seriesId
+            currentIptvSeriesName = storedContext.seriesName
+        }
     }
 
     companion object {

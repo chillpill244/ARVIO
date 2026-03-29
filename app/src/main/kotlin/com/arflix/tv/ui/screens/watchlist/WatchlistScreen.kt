@@ -93,13 +93,13 @@ fun WatchlistScreen(
     val uiState by viewModel.uiState.collectAsState()
     val cardLayoutMode = rememberCardLayoutMode()
     val usePosterCards = cardLayoutMode == CardLayoutMode.POSTER
-    val cardWidth = if (usePosterCards) 140.dp else 200.dp
-    
+    val cardWidth = if (usePosterCards) 110.dp else 230.dp
+
     val isTouchDevice = LocalDeviceType.current.isTouchDevice()
     var isSidebarFocused by remember { mutableStateOf(false) }
     val hasProfile = currentProfile != null
     val maxSidebarIndex = topBarMaxIndex(hasProfile)
-    var sidebarFocusIndex by remember { mutableIntStateOf(if (hasProfile) 5 else 4) } // WATCHLIST
+    var sidebarFocusIndex by remember { mutableIntStateOf(if (hasProfile) 3 else 2) } // WATCHLIST
     val rootFocusRequester = remember { FocusRequester() }
     var focusedSectionIndex by remember { mutableIntStateOf(0) }
     var focusedItemIndex by remember { mutableIntStateOf(0) }
@@ -166,7 +166,7 @@ fun WatchlistScreen(
         if (!uiState.isLoading && totalItems == 0) {
             // Empty screen must always have a deterministic focus target.
             isSidebarFocused = true
-            sidebarFocusIndex = if (hasProfile) 5 else SidebarItem.WATCHLIST.ordinal
+            sidebarFocusIndex = if (hasProfile) 3 else SidebarItem.WATCHLIST.ordinal
         } else if (!uiState.isLoading && totalItems > 0 && !isSidebarFocused) {
             // Ensure first card can receive focus when content becomes available.
             delay(80)
@@ -259,8 +259,8 @@ fun WatchlistScreen(
                                     when (topBarFocusedItem(sidebarFocusIndex, hasProfile)) {
                                         SidebarItem.SEARCH -> onNavigateToSearch()
                                         SidebarItem.HOME -> onNavigateToHome()
-                                        SidebarItem.MOVIES -> onNavigateToMovies()
-                                        SidebarItem.SERIES -> onNavigateToSeries()
+//                                        SidebarItem.MOVIES -> onNavigateToMovies()
+//                                        SidebarItem.SERIES -> onNavigateToSeries()
                                         SidebarItem.WATCHLIST -> { }
                                         SidebarItem.TV -> onNavigateToTv(null, null)
                                         SidebarItem.SETTINGS -> onNavigateToSettings()
@@ -319,30 +319,12 @@ fun WatchlistScreen(
         }
 
         Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (!isTouchDevice) Modifier.padding(top = AppTopBarContentTopInset) else Modifier)
-                .padding(start = 24.dp, top = 24.dp, end = 48.dp)
-        ) {
-                // Header with pink bookmark icon
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Bookmark,
-                        contentDescription = null,
-                        tint = Pink,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "MY WATCHLIST",
-                        style = ArflixTypography.sectionTitle,
-                        color = TextPrimary
-                    )
-                }
-                
+                .then(if (!isTouchDevice) Modifier.padding(top = AppTopBarContentTopInset()) else Modifier)
+                .padding(start = 24.dp, top = 10.dp, end = 48.dp)
+        ) {     
                 when {
                     uiState.isLoading -> {
                         Box(

@@ -1,5 +1,6 @@
 ﻿
 @file:Suppress("UnsafeOptInUsageError")
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package com.arflix.tv.ui.screens.tv
 
@@ -9,6 +10,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -45,11 +47,19 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -66,6 +76,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -116,9 +128,14 @@ import com.arflix.tv.ui.theme.AccentGreen
 import com.arflix.tv.ui.theme.ArflixTypography
 import com.arflix.tv.ui.theme.BackgroundCard
 import com.arflix.tv.ui.theme.BackgroundDark
-
+import com.arflix.tv.ui.theme.Pink
 import com.arflix.tv.ui.theme.TextPrimary
 import com.arflix.tv.ui.theme.TextSecondary
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.input.pointer.pointerInput
+import com.arflix.tv.util.Constants
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -126,9 +143,13 @@ import kotlin.math.abs
 
 private enum class TvFocusZone {
     SIDEBAR,
+    CONTENT_MENU,
+    SEARCH,
     GROUPS,
     GUIDE
 }
+
+private enum class TvContentTab { TV, MOVIES, SERIES }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -139,6 +160,8 @@ fun TvScreen(
     initialStreamUrl: String? = null,
     onNavigateToHome: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
+    onNavigateToMovies: () -> Unit = {},
+    onNavigateToSeries: () -> Unit = {},
     onNavigateToWatchlist: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     onSwitchProfile: () -> Unit = {},
@@ -148,21 +171,26 @@ fun TvScreen(
     val context = LocalContext.current
     val isMobile = LocalDeviceType.current.isTouchDevice()
 
-    var focusZone by rememberSaveable { mutableStateOf(if (uiState.isConfigured) TvFocusZone.GROUPS else TvFocusZone.SIDEBAR) }
+    var focusZone by rememberSaveable { mutableStateOf(if (uiState.isConfigured) TvFocusZone.CONTENT_MENU else TvFocusZone.SIDEBAR) }
+    var searchActive by remember { mutableStateOf(false) }
     val hasProfile = currentProfile != null
     val maxSidebarIndex = topBarMaxIndex(hasProfile)
     var sidebarFocusIndex by rememberSaveable { mutableIntStateOf(if (hasProfile) 4 else 3) }
+    var contentMenuIndex by rememberSaveable { mutableIntStateOf(1) } // 0=Movies, 1=TV, 2=Series
     var groupIndex by rememberSaveable { mutableIntStateOf(0) }
     var channelIndex by rememberSaveable { mutableIntStateOf(0) }
     var selectedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
     var playingChannelId by rememberSaveable { mutableStateOf<String?>(null) }
     var showGroupContextMenu by remember { mutableStateOf(false) }
+    // Track if user has explicitly clicked to play (prevents auto-play)
+    var userHasClickedPlay by remember { mutableStateOf(false) }
     // When launched from Home with a stream URL, start in fullscreen immediately
     // to avoid a flash of the TV page channel list.
     var isFullScreen by rememberSaveable { mutableStateOf(initialStreamUrl != null) }
     var showFullscreenOverlay by remember { mutableStateOf(false) }
     var fullscreenOverlayTrigger by remember { mutableStateOf(0L) } // timestamp to reset auto-hide timer
     var centerDownAtMs by remember { mutableStateOf<Long?>(null) }
+    var showGroupsMobile by rememberSaveable { mutableStateOf(true) }
 
     BackHandler(enabled = isMobile && isFullScreen) {
         // Always return to EPG guide first, regardless of how we got here
@@ -172,7 +200,7 @@ fun TvScreen(
 
     val groupsListState = rememberLazyListState()
     val channelsListState = rememberLazyListState()
-    val contentTopPadding = (AppTopBarContentTopInset - 14.dp).coerceAtLeast(52.dp)
+    val contentTopPadding = (AppTopBarContentTopInset() - 14.dp).coerceAtLeast(52.dp)
 
     val groups by remember(uiState.snapshot.grouped, uiState.snapshot.favoriteGroups, uiState.snapshot.favoriteChannels) {
         derivedStateOf { uiState.groups() }
@@ -181,8 +209,9 @@ fun TvScreen(
     val selectedGroup = groups.getOrNull(safeGroupIndex).orEmpty()
     val channels = uiState.filteredChannels(selectedGroup)
     val safeChannelIndex = channelIndex.coerceIn(0, (channels.size - 1).coerceAtLeast(0))
-    val selectedChannel = selectedChannelId?.let { uiState.channelLookup[it] }
-    val playingChannel = selectedChannel ?: playingChannelId?.let { uiState.channelLookup[it] }
+    // playingChannel should ONLY use playingChannelId, NOT selectedChannelId
+    // selectedChannelId is just for visual focus/highlighting
+    val playingChannel = playingChannelId?.let { uiState.channelLookup[it] }
 
     // Auto-select channel when navigated from Home "Favorite TV" row.
     // If initialStreamUrl was provided, playback already started instantly —
@@ -192,11 +221,14 @@ fun TvScreen(
             val channel = uiState.channelLookup[initialChannelId]
             if (channel != null) {
                 selectedChannelId = channel.id
-                // Only set playingChannelId if not already playing (instant start already did it)
-                if (playingChannelId != channel.id) {
-                    playingChannelId = channel.id
+                // Only auto-play if initialStreamUrl was provided (explicit navigation from Home)
+                if (initialStreamUrl != null) {
+                    userHasClickedPlay = true
+                    if (playingChannelId != channel.id) {
+                        playingChannelId = channel.id
+                    }
+                    isFullScreen = true
                 }
-                isFullScreen = true
             }
         }
     }
@@ -205,8 +237,8 @@ fun TvScreen(
         if (groupIndex >= groups.size) groupIndex = 0
     }
     LaunchedEffect(uiState.isConfigured) {
-        if (uiState.isConfigured && focusZone == TvFocusZone.SIDEBAR && groups.isNotEmpty()) {
-            focusZone = TvFocusZone.GROUPS
+        if (uiState.isConfigured && focusZone == TvFocusZone.SIDEBAR) {
+            focusZone = TvFocusZone.CONTENT_MENU
         }
     }
     LaunchedEffect(channels.size) {
@@ -223,6 +255,19 @@ fun TvScreen(
     LaunchedEffect(safeChannelIndex, focusZone, channels.size) {
         if (focusZone == TvFocusZone.GUIDE && channels.isNotEmpty()) {
             smoothScrollTo(channelsListState, safeChannelIndex)
+        }
+    }
+    // Click-to-play model: Only update selectedChannelId for visual feedback, 
+    // but don't auto-play. User must press Enter/OK to play.
+    LaunchedEffect(safeChannelIndex, focusZone) {
+        if (focusZone == TvFocusZone.GUIDE && channels.isNotEmpty()) {
+            kotlinx.coroutines.delay(150L) // small debounce
+            val focusedChannel = channels.getOrNull(safeChannelIndex)
+            if (focusedChannel != null) {
+                // Only update selectedChannelId for visual feedback, NEVER playingChannelId
+                selectedChannelId = focusedChannel.id
+                // DO NOT set playingChannelId here - only on explicit Enter key press
+            }
         }
     }
     LaunchedEffect(uiState.isConfigured, uiState.isLoading, uiState.snapshot.channels.size, groups.size) {
@@ -250,7 +295,7 @@ fun TvScreen(
     }
     val iptvDataSourceFactory = remember(iptvHttpClient) {
         OkHttpDataSource.Factory(iptvHttpClient)
-            .setUserAgent("ARVIO/1.2.0 (Android TV)")
+            .setUserAgent(Constants.CUSTOM_AGENT)
     }
     // HLS factory with chunkless preparation (used when stream is detected as HLS)
     val iptvHlsFactory = remember(iptvDataSourceFactory) {
@@ -349,6 +394,7 @@ fun TvScreen(
     LaunchedEffect(Unit) {
         if (initialStreamUrl != null && initialChannelId != null) {
             playingChannelId = initialChannelId
+            userHasClickedPlay = true // Coming from Home with explicit selection
             isFullScreen = true
             lastPreparedStreamUrl = initialStreamUrl
             prepareStream(initialStreamUrl)
@@ -371,31 +417,50 @@ fun TvScreen(
         prepareStream(stream)
     }
 
-    LaunchedEffect(isFullScreen, miniPlayerView, fullPlayerView) {
+    // Ensure smooth player surface handoff between mini and fullscreen views
+    LaunchedEffect(isFullScreen) {
         if (isPlayerReleased) return@LaunchedEffect
+        // Small delay to ensure target view is fully created before attaching player
+        kotlinx.coroutines.delay(50L)
+        
         if (isFullScreen) {
+            // Detach from mini first
             miniPlayerView?.player = null
-            val targetView = fullPlayerView ?: return@LaunchedEffect
-            // Use postDelayed to ensure the view has been laid out after composition
-            targetView.postDelayed({
-                if (!isPlayerReleased) {
-                    targetView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    targetView.player = exoPlayer
-                    targetView.requestLayout()
-                    targetView.invalidate()
+            // Wait for fullscreen view to be ready, retry up to 200ms
+            var attempts = 0
+            while (fullPlayerView == null && attempts < 4) {
+                kotlinx.coroutines.delay(50L)
+                attempts++
+            }
+            fullPlayerView?.let { view ->
+                view.post {
+                    if (!isPlayerReleased) {
+                        view.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        view.player = exoPlayer
+                        view.requestLayout()
+                        view.invalidate()
+                    }
                 }
-            }, 50)
+            }
         } else {
+            // Detach from fullscreen first
             fullPlayerView?.player = null
-            val targetView = miniPlayerView ?: return@LaunchedEffect
-            targetView.postDelayed({
-                if (!isPlayerReleased) {
-                    targetView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    targetView.player = exoPlayer
-                    targetView.requestLayout()
-                    targetView.invalidate()
+            // Wait for mini view to be ready
+            var attempts = 0
+            while (miniPlayerView == null && attempts < 4) {
+                kotlinx.coroutines.delay(50L)
+                attempts++
+            }
+            miniPlayerView?.let { view ->
+                view.post {
+                    if (!isPlayerReleased) {
+                        view.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        view.player = exoPlayer
+                        view.requestLayout()
+                        view.invalidate()
+                    }
                 }
-            }, 50)
+            }
         }
     }
 
@@ -460,10 +525,18 @@ fun TvScreen(
                                 return@onPreviewKeyEvent true
                             }
                             Key.Enter, Key.DirectionCenter -> {
-                                // Toggle EPG info overlay
-                                showFullscreenOverlay = !showFullscreenOverlay
-                                if (showFullscreenOverlay) {
+                                // If focused channel != playing channel, play it
+                                // Otherwise, toggle EPG overlay
+                                if (selectedChannelId != null && selectedChannelId != playingChannelId) {
+                                    playingChannelId = selectedChannelId
+                                    showFullscreenOverlay = true
                                     fullscreenOverlayTrigger = System.currentTimeMillis()
+                                } else {
+                                    // Toggle EPG info overlay
+                                    showFullscreenOverlay = !showFullscreenOverlay
+                                    if (showFullscreenOverlay) {
+                                        fullscreenOverlayTrigger = System.currentTimeMillis()
+                                    }
                                 }
                                 return@onPreviewKeyEvent true
                             }
@@ -475,8 +548,9 @@ fun TvScreen(
                                     val nextChannel = channels[nextIdx]
                                     channelIndex = nextIdx
                                     selectedChannelId = nextChannel.id
-                                    playingChannelId = nextChannel.id
-                                    // Show overlay briefly on channel switch
+                                    // Don't auto-play - let user explicitly select with Enter
+                                    // playingChannelId = nextChannel.id
+                                    // Show overlay briefly on channel focus
                                     showFullscreenOverlay = true
                                     fullscreenOverlayTrigger = System.currentTimeMillis()
                                 }
@@ -490,8 +564,9 @@ fun TvScreen(
                                     val prevChannel = channels[prevIdx]
                                     channelIndex = prevIdx
                                     selectedChannelId = prevChannel.id
-                                    playingChannelId = prevChannel.id
-                                    // Show overlay briefly on channel switch
+                                    // Don't auto-play - let user explicitly select with Enter
+                                    // playingChannelId = prevChannel.id
+                                    // Show overlay briefly on channel focus
                                     showFullscreenOverlay = true
                                     fullscreenOverlayTrigger = System.currentTimeMillis()
                                 }
@@ -523,7 +598,7 @@ fun TvScreen(
                                 return@onPreviewKeyEvent true
                             }
 
-                            TvFocusZone.SIDEBAR -> Unit
+                            TvFocusZone.SIDEBAR, TvFocusZone.CONTENT_MENU, TvFocusZone.SEARCH -> Unit
                         }
                     }
 
@@ -538,12 +613,26 @@ fun TvScreen(
                                     SidebarItem.WATCHLIST -> onNavigateToWatchlist()
                                     SidebarItem.TV -> Unit
                                     SidebarItem.SETTINGS -> onNavigateToSettings()
-                                    null -> Unit
+                                    else -> Unit
                                 }
                             }
                             true
                         }
 
+                        TvFocusZone.CONTENT_MENU -> {
+                            when (contentMenuIndex) {
+                                0 -> onNavigateToMovies()
+                                1 -> focusZone = TvFocusZone.SEARCH // TV tab — enter EPG
+                                2 -> onNavigateToSeries()
+                            }
+                            true
+                        }
+
+                        TvFocusZone.SEARCH -> {
+                            searchActive = true
+                            false
+                        }
+                        
                         TvFocusZone.GROUPS -> {
                             channelIndex = 0
                             focusZone = TvFocusZone.GUIDE
@@ -552,11 +641,13 @@ fun TvScreen(
 
                         TvFocusZone.GUIDE -> {
                             channels.getOrNull(safeChannelIndex)?.let { channel ->
+                                selectedChannelId = channel.id
+                                userHasClickedPlay = true // User explicitly clicked
                                 if (playingChannelId == channel.id) {
-                                    selectedChannelId = channel.id
+                                    // Already playing this channel - go fullscreen
                                     isFullScreen = true
                                 } else {
-                                    selectedChannelId = channel.id
+                                    // First click - start playing in mini player
                                     playingChannelId = channel.id
                                 }
                             }
@@ -568,7 +659,15 @@ fun TvScreen(
                         Key.Back, Key.Escape -> {
                             when (focusZone) {
                                 TvFocusZone.SIDEBAR -> onBack()
-                                TvFocusZone.GROUPS -> focusZone = TvFocusZone.SIDEBAR
+                                TvFocusZone.CONTENT_MENU -> onBack()
+                                TvFocusZone.SEARCH -> {
+                                    if (searchActive) {
+                                        searchActive = false
+                                    } else {
+                                        focusZone = TvFocusZone.CONTENT_MENU
+                                    }
+                                }
+                                TvFocusZone.GROUPS -> focusZone = TvFocusZone.SEARCH
                                 TvFocusZone.GUIDE -> focusZone = TvFocusZone.GROUPS
                             }
                             true
@@ -579,7 +678,9 @@ fun TvScreen(
                                 TvFocusZone.SIDEBAR -> if (sidebarFocusIndex > 0) {
                                     sidebarFocusIndex = (sidebarFocusIndex - 1).coerceIn(0, maxSidebarIndex)
                                 }
-                                TvFocusZone.GROUPS -> Unit
+                                TvFocusZone.CONTENT_MENU -> Unit // nothing to the left
+                                TvFocusZone.SEARCH -> { searchActive = false; focusZone = TvFocusZone.CONTENT_MENU }
+                                TvFocusZone.GROUPS -> focusZone = TvFocusZone.SEARCH
                                 TvFocusZone.GUIDE -> focusZone = TvFocusZone.GROUPS
                             }
                             true
@@ -590,6 +691,8 @@ fun TvScreen(
                                 TvFocusZone.SIDEBAR -> if (sidebarFocusIndex < maxSidebarIndex) {
                                     sidebarFocusIndex = (sidebarFocusIndex + 1).coerceIn(0, maxSidebarIndex)
                                 }
+                                TvFocusZone.CONTENT_MENU -> focusZone = TvFocusZone.SEARCH
+                                TvFocusZone.SEARCH -> if (!searchActive && groups.isNotEmpty()) focusZone = TvFocusZone.GROUPS
                                 TvFocusZone.GROUPS -> if (channels.isNotEmpty()) focusZone = TvFocusZone.GUIDE
                                 TvFocusZone.GUIDE -> Unit
                             }
@@ -599,8 +702,12 @@ fun TvScreen(
                         Key.DirectionUp -> {
                             when (focusZone) {
                                 TvFocusZone.SIDEBAR -> Unit
-
-                                TvFocusZone.GROUPS -> if (groupIndex > 0) groupIndex-- else focusZone = TvFocusZone.SIDEBAR
+                                TvFocusZone.CONTENT_MENU -> {
+                                    if (contentMenuIndex > 0) contentMenuIndex--
+                                    else focusZone = TvFocusZone.SIDEBAR
+                                }
+                                TvFocusZone.SEARCH -> if (!searchActive) focusZone = TvFocusZone.SIDEBAR
+                                TvFocusZone.GROUPS -> if (groupIndex > 0) groupIndex-- else focusZone = TvFocusZone.SEARCH
                                 TvFocusZone.GUIDE -> if (channelIndex > 0) channelIndex--
                             }
                             true
@@ -608,8 +715,15 @@ fun TvScreen(
 
                         Key.DirectionDown -> {
                             when (focusZone) {
-                                TvFocusZone.SIDEBAR -> if (groups.isNotEmpty()) focusZone = TvFocusZone.GROUPS
-
+                                TvFocusZone.SIDEBAR -> focusZone = TvFocusZone.CONTENT_MENU
+                                TvFocusZone.CONTENT_MENU -> {
+                                    if (contentMenuIndex < 2) contentMenuIndex++
+                                }
+                                TvFocusZone.SEARCH -> if (groups.isNotEmpty()) {
+                                    searchActive = false
+                                    focusZone = TvFocusZone.GROUPS
+                                    groupIndex = 0
+                                }
                                 TvFocusZone.GROUPS -> if (groupIndex < groups.size - 1) groupIndex++
                                 TvFocusZone.GUIDE -> if (channelIndex < channels.size - 1) channelIndex++
                             }
@@ -628,7 +742,7 @@ fun TvScreen(
                                     true
                                 } ?: false
 
-                                TvFocusZone.SIDEBAR -> false
+                                TvFocusZone.SIDEBAR, TvFocusZone.CONTENT_MENU, TvFocusZone.SEARCH -> false
                             }
                         }
 
@@ -653,258 +767,472 @@ fun TvScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = AppTopBarContentTopInset)
+                    .padding(top = AppTopBarContentTopInset())
                     .padding(horizontal = 24.dp, vertical = 24.dp)
             ) {
                 NotConfiguredPanel()
             }
         } else {
             // Immersive layout: seamless dark surface, no compartment borders
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Mobile tab chips: Movies / TV / Series
+                if (isMobile) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("Movies", "TV", "Series").forEachIndexed { index, label ->
+                            val isSelected = index == 1
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(if (isSelected) Pink else Color.White.copy(alpha = 0.08f))
+                                    .clickable {
+                                        when (index) {
+                                            0 -> onNavigateToMovies()
+                                            2 -> onNavigateToSeries()
+                                        }
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = ArflixTypography.button,
+                                    color = if (isSelected) Color.Black else TextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+
             Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = contentTopPadding)
+                    .weight(1f)
+                    .padding(top = if (isMobile) 0.dp else contentTopPadding)
             ) {
-                // Categories rail with smooth collapse when navigating to guide
-                val showCategoryRail = focusZone != TvFocusZone.GUIDE || isFullScreen
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = showCategoryRail,
-                    enter = androidx.compose.animation.expandHorizontally(
-                        expandFrom = Alignment.Start,
-                        animationSpec = androidx.compose.animation.core.tween(200)
-                    ),
-                    exit = androidx.compose.animation.shrinkHorizontally(
-                        shrinkTowards = Alignment.Start,
-                        animationSpec = androidx.compose.animation.core.tween(200)
+                // Left content-type menu: Movies / TV / Series (TV only)
+                if (!isMobile && !isFullScreen) {
+                    ContentMenuPanel(
+                        focusedIndex = contentMenuIndex,
+                        isFocused = focusZone == TvFocusZone.CONTENT_MENU,
+                        activeIndex = 1, // TV is at index 1 now (after Movies)
+                        modifier = Modifier.fillMaxHeight()
                     )
-                ) {
-                    CategoryRail(
-                        groups = groups,
-                        favoriteGroups = uiState.snapshot.favoriteGroups.toSet(),
-                        focusedGroupIndex = safeGroupIndex,
-                        isFocused = focusZone == TvFocusZone.GROUPS,
-                        listState = groupsListState,
-                        onGroupClick = { index ->
-                            groupIndex = index
-                            focusZone = TvFocusZone.GROUPS
-                            channelIndex = 0
-                        },
-                        onGroupLongPress = { index ->
-                            groupIndex = index
-                            showGroupContextMenu = true
-                        },
-                        showMenuForIndex = if (showGroupContextMenu) safeGroupIndex else -1,
-                        onDismissMenu = { showGroupContextMenu = false },
-                        onToggleFavorite = { viewModel.toggleFavoriteGroup(it) },
-                        onToggleHidden = { viewModel.toggleHiddenGroup(it) },
-                        onMoveUp = { viewModel.moveGroupUp(it) },
-                        onMoveDown = { viewModel.moveGroupDown(it) },
-
-                        modifier = Modifier
-                            .width(if (isMobile) 140.dp else 170.dp)
-                            .fillMaxHeight()
-                            .padding(start = 6.dp, top = 4.dp, bottom = 4.dp, end = 6.dp)
-                    )
-
-
-
-
                 }
+
+                // Mobile: full-screen groups list or channel view with swipe
+                // TV: animated CategoryRail
+                if (isMobile && showGroupsMobile) {
+                    // Full-screen tappable groups list with search + favorites
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        OutlinedTextField(
+                            value = uiState.query,
+                            onValueChange = { viewModel.setQuery(it) },
+                            placeholder = { Text("Search groups…", style = ArflixTypography.body, color = TextSecondary) },
+                            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = TextSecondary) },
+                            trailingIcon = {
+                                if (uiState.query.isNotEmpty()) {
+                                    IconButton(onClick = { viewModel.setQuery("") }) {
+                                        Icon(Icons.Filled.Clear, contentDescription = "Clear", tint = TextSecondary)
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Pink,
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.3f),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                cursorColor = Pink
+                            )
+                        )
+                        LazyColumn(modifier = Modifier.weight(1f)) {
+                            itemsIndexed(groups) { index, group ->
+                                val isFavorite = uiState.snapshot.favoriteGroups.contains(group)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .combinedClickable(
+                                            onClick = {
+                                                groupIndex = index
+                                                showGroupsMobile = false
+                                            },
+                                            onLongClick = { viewModel.toggleFavoriteGroup(group) }
+                                        )
+                                        .padding(start = 20.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = group,
+                                        style = ArflixTypography.body,
+                                        color = if (isFavorite) Pink else TextPrimary,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    IconButton(onClick = { viewModel.toggleFavoriteGroup(group) }) {
+                                        Icon(
+                                            imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                                            contentDescription = if (isFavorite) "Remove favorite" else "Add favorite",
+                                            tint = if (isFavorite) Pink else TextSecondary
+                                        )
+                                    }
+                                }
+                                androidx.compose.material3.Divider(color = Color.White.copy(alpha = 0.06f))
+                            }
+                        }
+                    }
+                } else {
+                    // TV: AnimatedVisibility CategoryRail
+                    if (!isMobile) {
+                        val showCategoryRail = focusZone != TvFocusZone.GUIDE || isFullScreen
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = showCategoryRail,
+                            enter = androidx.compose.animation.expandHorizontally(
+                                expandFrom = Alignment.Start,
+                                animationSpec = androidx.compose.animation.core.tween(200)
+                            ),
+                            exit = androidx.compose.animation.shrinkHorizontally(
+                                shrinkTowards = Alignment.Start,
+                                animationSpec = androidx.compose.animation.core.tween(200)
+                            )
+                        ) {
+                            Row {
+                            CategoryRail(
+                                groups = groups,
+                                favoriteGroups = uiState.snapshot.favoriteGroups.toSet(),
+                                focusedGroupIndex = safeGroupIndex,
+                                isGroupsFocused = focusZone == TvFocusZone.GROUPS,
+                                isSearchFocused = focusZone == TvFocusZone.SEARCH,
+                                isSearchActive = searchActive,
+                                listState = groupsListState,
+                                searchQuery = uiState.query,
+                                onSearchQueryChange = { viewModel.setQuery(it) },
+                                onGroupLongPress = { index ->
+                                    groupIndex = index
+                                    showGroupContextMenu = true
+                                },
+                                showMenuForIndex = if (showGroupContextMenu) safeGroupIndex else -1,
+                                onDismissMenu = { showGroupContextMenu = false },
+                                onToggleFavorite = { viewModel.toggleFavoriteGroup(it) },
+                                onToggleHidden = { viewModel.toggleHiddenGroup(it) },
+                                onMoveUp = { viewModel.moveGroupUp(it) },
+                                onMoveDown = { viewModel.moveGroupDown(it) },
+                                modifier = Modifier
+                                    .width(214.dp)
+                                    .fillMaxHeight()
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            }
+                        }
+                    }
 
                 // Main content: EPG info + player top, guide bottom
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
+                        .then(
+                            if (isMobile) Modifier.pointerInput(Unit) {
+                                detectHorizontalDragGestures { _, dragAmount ->
+                                    if (dragAmount > 40f) showGroupsMobile = true
+                                }
+                            } else Modifier
+                        )
                 ) {
-                    // Top section: EPG info left + mini player right
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(0.36f)
-                            .background(BackgroundDark)
-                    ) {
-                        // Left: channel EPG info (current / next / after)
-                        val epgSlice = playingChannel?.id?.let { uiState.snapshot.nowNext[it] }
+                    // Top section: EPG info/header above mini player on mobile, side-by-side on TV
+                    val epgSlice = playingChannel?.id?.let { uiState.snapshot.nowNext[it] }
+                    if (isMobile) {
                         Column(
                             modifier = Modifier
-                                .weight(0.45f)
-                                .fillMaxHeight()
-                                .padding(start = if (isMobile) 10.dp else 14.dp, top = if (isMobile) 6.dp else 10.dp, bottom = if (isMobile) 6.dp else 8.dp, end = if (isMobile) 6.dp else 10.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
+                                .fillMaxWidth()
+                                .weight(0.36f)
+                                .background(BackgroundDark)
                         ) {
-                            if (playingChannel != null) {
-                                // Channel name + logo
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (!playingChannel.logo.isNullOrBlank()) {
-                                        AsyncImage(
-                                            model = playingChannel.logo,
-                                            contentDescription = playingChannel.name,
-                                            contentScale = ContentScale.Fit,
-                                            modifier = Modifier
-                                                .size(if (isMobile) 26.dp else 32.dp)
-                                                .clip(RoundedCornerShape(5.dp))
-                                                .background(Color.White.copy(alpha = 0.04f))
-                                        )
-                                        Spacer(modifier = Modifier.width(if (isMobile) 6.dp else 8.dp))
+                            // Header: hamburger (mobile) + channel title or placeholder
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 14.dp, top = 10.dp, bottom = 8.dp, end = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                               
+                                    IconButton(
+                                        onClick = { showGroupsMobile = true },
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Menu, contentDescription = "Categories", tint = Color.White)
                                     }
-                                    Column {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                
+                                if (playingChannel != null && !playingChannel.logo.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = playingChannel.logo,
+                                        contentDescription = playingChannel.name,
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(RoundedCornerShape(5.dp))
+                                            .background(Color.White.copy(alpha = 0.04f))
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                if (playingChannel != null) {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = playingChannel.name,
-                                            style = ArflixTypography.cardTitle.copy(fontSize = if (isMobile) 14.sp else 16.sp),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            style = ArflixTypography.cardTitle.copy(fontSize = 16.sp),
                                             color = Color.White,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
                                             text = playingChannel.group,
-                                            style = ArflixTypography.caption.copy(fontSize = if (isMobile) 9.sp else 10.sp),
+                                            style = ArflixTypography.caption.copy(fontSize = 10.sp),
                                             color = Color.White.copy(alpha = 0.35f),
                                             maxLines = 1
                                         )
                                     }
-                                }
-
-                                Spacer(modifier = Modifier.height(if (isMobile) 6.dp else 10.dp))
-
-                                // NOW
-                                val nowProg = epgSlice?.now
-                                if (nowProg != null) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = "NOW",
-                                            style = ArflixTypography.caption.copy(fontSize = if (isMobile) 8.sp else 9.sp, fontWeight = FontWeight.Bold),
-                                            color = Color.Black,
-                                            modifier = Modifier
-                                                .background(AccentGreen, RoundedCornerShape(3.dp))
-                                                .padding(horizontal = 5.dp, vertical = 1.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "${formatProgramTime(nowProg.startUtcMillis)} - ${formatProgramTime(nowProg.endUtcMillis)}",
-                                            style = ArflixTypography.caption.copy(fontSize = if (isMobile) 9.sp else 10.sp),
-                                            color = Color.White.copy(alpha = 0.5f)
-                                        )
-                                    }
-                                    Text(
-                                        text = nowProg.title,
-                                        style = ArflixTypography.body.copy(fontSize = if (isMobile) 12.sp else 14.sp, fontWeight = FontWeight.Medium),
-                                        color = Color.White.copy(alpha = 0.9f),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-
-                                // NEXT
-                                val nextProg = epgSlice?.next
-                                if (nextProg != null) {
-                                    Spacer(modifier = Modifier.height(if (isMobile) 4.dp else 6.dp))
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = "NEXT",
-                                            style = ArflixTypography.caption.copy(fontSize = if (isMobile) 8.sp else 9.sp, fontWeight = FontWeight.Bold),
-                                            color = Color.White.copy(alpha = 0.7f),
-                                            modifier = Modifier
-                                                .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(3.dp))
-                                                .padding(horizontal = 5.dp, vertical = 1.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = formatProgramTime(nextProg.startUtcMillis),
-                                            style = ArflixTypography.caption.copy(fontSize = if (isMobile) 9.sp else 10.sp),
-                                            color = Color.White.copy(alpha = 0.4f)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = nextProg.title,
-                                            style = ArflixTypography.caption.copy(fontSize = if (isMobile) 10.sp else 11.sp),
-                                            color = Color.White.copy(alpha = 0.55f),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-
-                                // LATER
-                                val laterProg = epgSlice?.later
-                                if (laterProg != null) {
-                                    Spacer(modifier = Modifier.height(if (isMobile) 3.dp else 4.dp))
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = "LATER",
-                                            style = ArflixTypography.caption.copy(fontSize = if (isMobile) 8.sp else 9.sp),
-                                            color = Color.White.copy(alpha = 0.4f),
-                                            modifier = Modifier
-                                                .background(Color.White.copy(alpha = 0.04f), RoundedCornerShape(3.dp))
-                                                .padding(horizontal = 5.dp, vertical = 1.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = formatProgramTime(laterProg.startUtcMillis),
-                                            style = ArflixTypography.caption.copy(fontSize = if (isMobile) 9.sp else 10.sp),
-                                            color = Color.White.copy(alpha = 0.3f)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = laterProg.title,
-                                            style = ArflixTypography.caption.copy(fontSize = if (isMobile) 10.sp else 11.sp),
-                                            color = Color.White.copy(alpha = 0.35f),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                            } else {
-                                // No channel placeholder
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.CenterStart
-                                ) {
+                                } else {
                                     Text(
                                         "Select a channel",
-                                        style = ArflixTypography.body.copy(fontSize = if (isMobile) 12.sp else 14.sp),
+                                        style = ArflixTypography.body.copy(fontSize = 14.sp),
                                         color = Color.White.copy(alpha = 0.2f)
                                     )
                                 }
                             }
-                        }
 
-                        // Right: mini player
-                        Box(
+                            // Mini player below header (full width on mobile)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .padding(top = 4.dp, bottom = 4.dp, end = 4.dp, start = 4.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF0A0A0A))
+                                    .clickable {
+                                        if (playingChannel != null) {
+                                            selectedChannelId = playingChannel.id
+                                            isFullScreen = true
+                                        }
+                                    }
+                            ) {
+                                if (playingChannel != null && !isFullScreen) {
+                                    AndroidView(
+                                        factory = { ctx ->
+                                            PlayerView(ctx).apply {
+                                                miniPlayerView = this
+                                                player = null
+                                                useController = false
+                                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                                setKeepContentOnPlayerReset(true)
+                                                setShutterBackgroundColor(0xFF0A0A0A.toInt())
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxSize(),
+                                        update = { playerView ->
+                                            miniPlayerView = playerView
+                                            if (!isFullScreen) {
+                                                playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                                if (playerView.player !== exoPlayer) playerView.player = exoPlayer
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Row(
                             modifier = Modifier
-                                .weight(0.55f)
-                                .fillMaxHeight()
-                                .padding(top = 4.dp, bottom = 4.dp, end = 4.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF0A0A0A))
-                                .clickable {
+                                .fillMaxWidth()
+                                .weight(0.36f)
+                                .background(BackgroundDark)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(0.45f)
+                                    .fillMaxHeight()
+                                    .padding(start = 14.dp, top = 10.dp, bottom = 8.dp, end = 10.dp),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                // Header: hamburger + channel title or placeholder
+                                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    if (playingChannel != null && !playingChannel.logo.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model = playingChannel.logo,
+                                            contentDescription = playingChannel.name,
+                                            contentScale = ContentScale.Fit,
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .clip(RoundedCornerShape(5.dp))
+                                                .background(Color.White.copy(alpha = 0.04f))
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
                                     if (playingChannel != null) {
-                                        selectedChannelId = playingChannel.id
-                                        isFullScreen = true
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = playingChannel.name,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                style = ArflixTypography.cardTitle.copy(fontSize = 16.sp),
+                                                color = Color.White,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = playingChannel.group,
+                                                style = ArflixTypography.caption.copy(fontSize = 10.sp),
+                                                color = Color.White.copy(alpha = 0.35f),
+                                                maxLines = 1
+                                            )
+                                        }
+                                    } else {
+                                        Text(
+                                            "Select a channel",
+                                            style = ArflixTypography.body.copy(fontSize = 14.sp),
+                                            color = Color.White.copy(alpha = 0.2f)
+                                        )
                                     }
                                 }
-                        ) {
-                            if (playingChannel != null && !isFullScreen) {
-                                AndroidView(
-                                    factory = { ctx ->
-                                        PlayerView(ctx).apply {
-                                            miniPlayerView = this
-                                            player = null
-                                            useController = false
-                                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                                            setKeepContentOnPlayerReset(true)
-                                            setShutterBackgroundColor(0xFF0A0A0A.toInt())
+                                if (!isMobile) {
+                                    // If a channel is playing, show NOW/NEXT/LATER info
+                                    if (playingChannel != null) {
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        // NOW
+                                        val nowProg = epgSlice?.now
+                                        if (nowProg != null) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = "NOW",
+                                                    style = ArflixTypography.caption.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                                    color = Color.Black,
+                                                    modifier = Modifier
+                                                        .background(AccentGreen, RoundedCornerShape(3.dp))
+                                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "${formatProgramTime(nowProg.startUtcMillis)} - ${formatProgramTime(nowProg.endUtcMillis)}",
+                                                    style = ArflixTypography.caption.copy(fontSize = 10.sp),
+                                                    color = Color.White.copy(alpha = 0.5f)
+                                                )
+                                            }
+                                            Text(
+                                                text = nowProg.title,
+                                                style = ArflixTypography.body.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium),
+                                                color = Color.White.copy(alpha = 0.9f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
-                                    },
-                                    modifier = Modifier.fillMaxSize(),
-                                    update = { playerView ->
-                                        miniPlayerView = playerView
-                                        if (!isFullScreen) {
-                                            playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                                            if (playerView.player !== exoPlayer) playerView.player = exoPlayer
+
+                                        // NEXT
+                                        val nextProg = epgSlice?.next
+                                        if (nextProg != null) {
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = "NEXT",
+                                                    style = ArflixTypography.caption.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                                    color = Color.White.copy(alpha = 0.7f),
+                                                    modifier = Modifier
+                                                        .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(3.dp))
+                                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = formatProgramTime(nextProg.startUtcMillis),
+                                                    style = ArflixTypography.caption.copy(fontSize = 10.sp),
+                                                    color = Color.White.copy(alpha = 0.4f)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = nextProg.title,
+                                                    style = ArflixTypography.caption.copy(fontSize = 11.sp),
+                                                    color = Color.White.copy(alpha = 0.55f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+
+                                        // LATER
+                                        val laterProg = epgSlice?.later
+                                        if (laterProg != null) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = "LATER",
+                                                    style = ArflixTypography.caption.copy(fontSize = 9.sp),
+                                                    color = Color.White.copy(alpha = 0.4f),
+                                                    modifier = Modifier
+                                                        .background(Color.White.copy(alpha = 0.04f), RoundedCornerShape(3.dp))
+                                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = formatProgramTime(laterProg.startUtcMillis),
+                                                    style = ArflixTypography.caption.copy(fontSize = 10.sp),
+                                                    color = Color.White.copy(alpha = 0.3f)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = laterProg.title,
+                                                    style = ArflixTypography.caption.copy(fontSize = 11.sp),
+                                                    color = Color.White.copy(alpha = 0.35f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
                                         }
                                     }
-                                )
+                                }
+                            }
+
+                            // Right: mini player (55% on TV)
+                            Box(
+                                modifier = Modifier
+                                    .weight(0.55f)
+                                    .fillMaxHeight()
+                                    .padding(top = 4.dp, bottom = 4.dp, end = 4.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF0A0A0A))
+                                    .clickable {
+                                        if (playingChannel != null) {
+                                            selectedChannelId = playingChannel.id
+                                            isFullScreen = true
+                                        }
+                                    }
+                            ) {
+                                if (playingChannel != null && !isFullScreen) {
+                                    AndroidView(
+                                        factory = { ctx ->
+                                            PlayerView(ctx).apply {
+                                                miniPlayerView = this
+                                                player = null
+                                                useController = false
+                                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                                setKeepContentOnPlayerReset(true)
+                                                setShutterBackgroundColor(0xFF0A0A0A.toInt())
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxSize(),
+                                        update = { playerView ->
+                                            miniPlayerView = playerView
+                                            if (!isFullScreen) {
+                                                playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                                if (playerView.player !== exoPlayer) playerView.player = exoPlayer
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -934,7 +1262,9 @@ fun TvScreen(
                         modifier = Modifier.weight(0.64f)
                     )
                 }
-            }
+                } // end else (not showGroupsMobile on mobile / CategoryRail+content on TV)
+            } // end Row
+            } // end Column (mobile wrapper)
         }
 
         if (isFullScreen) {
@@ -979,9 +1309,12 @@ fun TvScreen(
                         modifier = Modifier.fillMaxSize(),
                         update = { playerView ->
                             fullPlayerView = playerView
-                            // Do NOT assign player here; let the LaunchedEffect handle it via postDelayed
-                            // to ensure the view has been laid out first (avoids black screen).
+                            // Always ensure player is attached when this view is active
                             playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                            if (playerView.player !== exoPlayer) {
+                                // Attach player directly in update to ensure immediate rendering
+                                playerView.player = exoPlayer
+                            }
                         }
                     )
 
@@ -1032,13 +1365,97 @@ private suspend fun smoothScrollTo(state: LazyListState, targetIndex: Int) {
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
+internal fun ContentMenuPanel(
+    focusedIndex: Int,
+    isFocused: Boolean,
+    activeIndex: Int = 1, // 0=Movies, 1=TV, 2=Series (default TV)
+    modifier: Modifier = Modifier
+) {
+    val items = listOf(
+        Pair(Icons.Outlined.Movie, "Movies"),
+        Pair(Icons.Filled.LiveTv, "TV"),
+        Pair(Icons.Outlined.PlayCircle, "Series")
+    )
+    Box(
+        modifier = modifier
+            .width(72.dp)
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        Color.Black.copy(alpha = 0.35f),
+                        Color.Black.copy(alpha = 0.15f),
+                        Color.Transparent
+                    )
+                )
+            )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            items.forEachIndexed { index, (icon, label) ->
+                val isItemFocused = isFocused && index == focusedIndex
+                val isActive = index == activeIndex
+                val bgAlpha = when {
+                    isItemFocused -> 0.22f
+                    isActive -> 0.10f
+                    else -> 0f
+                }
+                val iconAlpha = when {
+                    isItemFocused -> 1f
+                    isActive -> 0.92f
+                    else -> 0.45f
+                }
+                val textAlpha = when {
+                    isItemFocused -> 1f
+                    isActive -> 0.85f
+                    else -> 0.40f
+                }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.White.copy(alpha = bgAlpha))
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = label,
+                        tint = Color.White.copy(alpha = iconAlpha),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = label,
+                        fontSize = 10.sp,
+                        color = Color.White.copy(alpha = textAlpha),
+                        fontWeight = if (isItemFocused || isActive) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1
+                    )
+                }
+                if (index < items.size - 1) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
 private fun CategoryRail(
     groups: List<String>,
     favoriteGroups: Set<String>,
     focusedGroupIndex: Int,
-    isFocused: Boolean,
+    isGroupsFocused: Boolean,
+    isSearchFocused: Boolean,
+    isSearchActive: Boolean = false,
     listState: LazyListState,
-    onGroupClick: (Int) -> Unit = {},
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     onGroupLongPress: (Int) -> Unit = {},
     showMenuForIndex: Int = -1,
     onDismissMenu: () -> Unit = {},
@@ -1048,25 +1465,84 @@ private fun CategoryRail(
     onMoveDown: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    LazyColumn(
-        state = listState,
-        verticalArrangement = Arrangement.spacedBy(1.dp),
+    Column(
         modifier = modifier
+            .background(Color.White.copy(alpha = 0.045f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 8.dp, vertical = 10.dp)
     ) {
-        itemsIndexed(groups, key = { _, group -> group }, contentType = { _, _ -> "category_group" }) { index, group ->
-            GroupRailItem(
-                name = group,
-                isFocused = isFocused && index == focusedGroupIndex,
-                isFavorite = favoriteGroups.contains(group),
-                onClick = { onGroupClick(index) },
-                onLongPress = { onGroupLongPress(index) },
-                showMenu = index == showMenuForIndex,
-                onDismissMenu = onDismissMenu,
-                onToggleFavorite = { onToggleFavorite(group) },
-                onToggleHidden = { onToggleHidden(group) },
-                onMoveUp = { onMoveUp(group) },
-                onMoveDown = { onMoveDown(group) }
-            )
+        val searchFocusRequester = remember { FocusRequester() }
+
+        LaunchedEffect(isSearchFocused) {
+            if (isSearchFocused) {
+                searchFocusRequester.requestFocus()
+            }
+        }
+
+        Text(
+            text = "Categories",
+            style = ArflixTypography.caption.copy(fontSize = 11.sp, letterSpacing = 0.7.sp),
+            color = TextSecondary.copy(alpha = 0.7f),
+            modifier = Modifier.padding(start = 6.dp, bottom = 4.dp, top = 2.dp)
+        )
+
+        // Search bar for filtering categories (matches Movies/Series styling)
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            placeholder = { androidx.compose.material3.Text("Search", color = TextSecondary.copy(alpha = 0.5f)) },
+            textStyle = ArflixTypography.body.copy(color = Color.White.copy(alpha = 1f), fontSize = 12.sp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .padding(top = 0.dp, bottom = 3.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .focusRequester(searchFocusRequester)
+                .background(
+                    if (isSearchFocused) Color.White.copy(alpha = 0.12f) else Color.Transparent
+                )
+                .then(
+                    if (isSearchFocused) Modifier.border(
+                        width = 1.5.dp,
+                        color = Color.White.copy(alpha = 0.7f),
+                        shape = RoundedCornerShape(2.dp)
+                    ) else Modifier
+                ),
+            singleLine = true,
+            readOnly = !isSearchActive,
+            enabled = true,
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { onSearchQueryChange("") }) {
+                        Icon(
+                            imageVector = Icons.Filled.Clear,
+                            contentDescription = "Clear search",
+                            tint = TextSecondary
+                        )
+                    }
+                }
+            }
+        )
+
+        LazyColumn(
+            state = listState,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            itemsIndexed(groups, key = { _, group -> group }, contentType = { _, _ -> "category_group" }) { index, group ->
+                GroupRailItem(
+                    name = group,
+                    isFocused = isGroupsFocused && index == focusedGroupIndex,
+                    isFavorite = favoriteGroups.contains(group),
+                    showMenu = showMenuForIndex == index,
+                    onClick = {},
+                    onLongPress = { onGroupLongPress(index) },
+                    onDismissMenu = onDismissMenu,
+                    onToggleFavorite = { onToggleFavorite(group) },
+                    onToggleHidden = { onToggleHidden(group) },
+                    onMoveUp = { onMoveUp(group) },
+                    onMoveDown = { onMoveDown(group) }
+                )
+            }
         }
     }
 }
@@ -1179,7 +1655,8 @@ private fun FullscreenEpgOverlay(
                         style = ArflixTypography.sectionTitle.copy(fontSize = if (isMobile) 14.sp else 22.sp),
                         color = Color.White,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.basicMarquee()
                     )
                     Text(
                         text = channel.group,
@@ -1285,7 +1762,9 @@ private fun FullscreenEpgOverlay(
                         Text(
                             text = channel.name,
                             style = ArflixTypography.sectionTitle.copy(fontSize = if (isMobile) 14.sp else 20.sp),
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 1,
+                            modifier = Modifier.basicMarquee()
                         )
                     }
                 }
@@ -1483,6 +1962,8 @@ private fun GuideChannelRow(
         isPlaying -> AccentGreen.copy(alpha = 0.2f)
         else -> Color.Transparent
     }
+    val primaryText = Color.White.copy(alpha = if (isFocused) 1f else 0.88f)
+    val secondaryText = Color(0xFFA0A0A0)
 
     Row(
         modifier = Modifier
@@ -1553,24 +2034,34 @@ private fun GuideChannelRow(
             Spacer(modifier = Modifier.width(6.dp))
 
             Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = channel.name,
+                        style = ArflixTypography.cardTitle.copy(fontSize = if (isMobile) 10.sp else 11.sp),
+                        color = primaryText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (isPlaying) {
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "LIVE",
+                            style = ArflixTypography.caption.copy(fontSize = 7.sp, fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                            modifier = Modifier
+                                .background(AccentGreen.copy(alpha = 0.8f), RoundedCornerShape(3.dp))
+                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                        )
+                    }
+                }
                 Text(
-                    text = channel.name,
-                    style = ArflixTypography.caption.copy(
-                        fontSize = if (isMobile) 10.sp else 12.sp,
-                        fontWeight = if (isFocused) FontWeight.Medium else FontWeight.Normal
-                    ),
-                    color = if (isFocused) Color.White else Color.White.copy(alpha = 0.75f),
+                    text = channel.group,
+                    style = ArflixTypography.caption.copy(fontSize = if (isMobile) 8.sp else 8.sp),
+                    color = secondaryText.copy(alpha = 0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (isPlaying) {
-                    Text(
-                        text = "LIVE",
-                        style = ArflixTypography.caption.copy(fontSize = if (isMobile) 7.sp else 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
-                        color = AccentGreen,
-                        maxLines = 1
-                    )
-                }
             }
         }
 

@@ -1630,7 +1630,7 @@ class HomeViewModel @Inject constructor(
                 val showKey = continueWatchingKey(item.mediaType, item.id)
                 dismissedContinueWatchingKeys.contains(showKey) || persistedDismissedKeys.contains(showKey)
             }
-            .filter { it.progress in 1..99 }
+            // .filter { it.progress in 1..99 }
             .take(Constants.MAX_CONTINUE_WATCHING)
     }
 

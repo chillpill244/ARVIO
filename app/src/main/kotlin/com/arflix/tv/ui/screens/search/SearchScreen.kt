@@ -74,6 +74,7 @@ import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.model.Category
 import com.arflix.tv.ui.components.LoadingIndicator
 import com.arflix.tv.ui.components.CardLayoutMode
+import com.arflix.tv.ui.components.CardContent
 import com.arflix.tv.ui.components.AppTopBar
 import com.arflix.tv.ui.components.AppTopBarContentTopInset
 import com.arflix.tv.ui.components.MediaCard
@@ -99,6 +100,7 @@ fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel(),
     currentProfile: com.arflix.tv.data.model.Profile? = null,
     onNavigateToDetails: (MediaType, Int) -> Unit = { _, _ -> },
+    onNavigateToPlayer: (MediaType, Int, Int?, Int?, String?, String?, String?, String?, Long?) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onNavigateToHome: () -> Unit = {},
     onNavigateToWatchlist: () -> Unit = {},
     onNavigateToTv: () -> Unit = {},
@@ -117,12 +119,27 @@ fun SearchScreen(
     val hasSearchResults = uiState.movieResults.isNotEmpty() || uiState.tvResults.isNotEmpty()
     val hasAiResults = uiState.isAiSearch && uiState.aiResults.isNotEmpty()
 
+    // Map to store streamUrl for live TV items (keyed by item.id which is channel.id.hashCode())
+    val liveChannelStreamUrls: Map<Int, String> = if (uiState.liveTvResults.isNotEmpty()) {
+        uiState.liveTvResults.associate { channel -> channel.id.hashCode() to channel.streamUrl }
+    } else emptyMap()
+
     // Determine which categories to show in rows
     val activeCategories: List<Category> = when {
         hasSearchResults -> {
             val list = mutableListOf<Category>()
-            if (uiState.movieResults.isNotEmpty()) list.add(Category("s_m", "Movies (${uiState.movieResults.size})", uiState.movieResults))
-            if (uiState.tvResults.isNotEmpty()) list.add(Category("s_t", "TV Shows (${uiState.tvResults.size})", uiState.tvResults))
+            if (uiState.movieResults.isNotEmpty()) {
+                val moviesWithSubtitles = uiState.movieResults.map { it.copy(subtitle = "Movie") }
+                list.add(Category("s_m", "Movies (${moviesWithSubtitles.size})", moviesWithSubtitles))
+            }
+            if (uiState.tvResults.isNotEmpty()) {
+                val tvWithSubtitles = uiState.tvResults.map { it.copy(subtitle = "TV Series") }
+                list.add(Category("s_t", "TV Shows (${tvWithSubtitles.size})", tvWithSubtitles))
+            }
+            if (uiState.liveTvResults.isNotEmpty()) {
+                val liveMediaItems = uiState.liveTvResults.map { channel -> MediaItem(id = channel.id.hashCode(), title = channel.name, subtitle = "Live Channel", year = "", mediaType = MediaType.LIVE_TV, image = channel.logo ?: "", backdrop = null, genreIds = emptyList(), overview = "") }
+                list.add(Category("s_l", "Live TV (${liveMediaItems.size})", liveMediaItems))
+            }
             list
         }
         uiState.query.isEmpty() -> uiState.discoverCategories
@@ -219,7 +236,14 @@ fun SearchScreen(
                         FocusZone.FILTERS -> false
                         FocusZone.RESULTS -> {
                             if (hasAiResults) false // AI grid: let native focus handle Enter/OK on cards
-                            else { val item = activeCategories.getOrNull(currentRowIndex)?.items?.getOrNull(currentItemIndex); if (item != null) onNavigateToDetails(item.mediaType, item.id); true }
+                            else { val item = activeCategories.getOrNull(currentRowIndex)?.items?.getOrNull(currentItemIndex); if (item != null) {
+                                if (item.mediaType == MediaType.LIVE_TV) {
+                                    val streamUrl = liveChannelStreamUrls[item.id]
+                                    onNavigateToPlayer(item.mediaType, item.id, null, null, null, streamUrl, null, null, null)
+                                } else {
+                                    onNavigateToDetails(item.mediaType, item.id)
+                                }
+                            }; true }
                         }
                     }
                 }
@@ -231,7 +255,7 @@ fun SearchScreen(
     Box(modifier = Modifier.fillMaxSize().background(BackgroundDark).then(dpadModifier)) {
         if (!isTouchDevice) AppTopBar(selectedItem = SidebarItem.SEARCH, isFocused = focusZone == FocusZone.SIDEBAR, focusedIndex = sidebarFocusIndex, profile = currentProfile)
 
-        Column(modifier = Modifier.fillMaxSize().padding(top = AppTopBarContentTopInset).padding(horizontal = if (isCompactHeight) 20.dp else 28.dp)) {
+        Column(modifier = Modifier.fillMaxSize().padding(top = AppTopBarContentTopInset()).padding(horizontal = if (isCompactHeight) 20.dp else 28.dp)) {
             // ── Search Bar ──
             Box(modifier = Modifier.fillMaxWidth().padding(bottom = if (isCompactHeight) 3.dp else 5.dp), contentAlignment = Alignment.Center) {
                 if (isTouchDevice) {
@@ -258,6 +282,7 @@ fun SearchScreen(
             // ── Filter Chips (discover mode) - focusable with D-pad ──
             if (showFilters) {
                 Column(modifier = Modifier
+                    .padding(vertical = 12.dp, horizontal = 12.dp)
                     .focusRequester(filtersFocusRequester)
                     .onFocusChanged { state ->
                         if (state.hasFocus) focusZone = FocusZone.FILTERS
@@ -280,8 +305,8 @@ fun SearchScreen(
                         items(genres.size, key = { "g_${genres[it].id}" }) { i -> GlowChip(genres[i].name, uiState.selectedGenre == genres[i]) { viewModel.selectGenre(genres[i]) } }
                     }
                     LazyRow(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(horizontal = 2.dp)) {
-                        item(key = "any_l") { GlowChip("Any Language", uiState.selectedCountry == null) { viewModel.selectCountry(null) } }
-                        items(COUNTRIES.size, key = { "c_${COUNTRIES[it].code}" }) { i -> GlowChip(COUNTRIES[i].name, uiState.selectedCountry == COUNTRIES[i]) { viewModel.selectCountry(COUNTRIES[i]) } }
+                        item(key = "any_l") { GlowChip("Any Language", uiState.selectedLanguage == null) { viewModel.selectLanguage(null) } }
+                        items(LANGUAGES.size, key = { "l_${LANGUAGES[it].code}" }) { i -> GlowChip(LANGUAGES[i].name, uiState.selectedLanguage == LANGUAGES[i]) { viewModel.selectLanguage(LANGUAGES[i]) } }
                     }
                 }
             }
@@ -295,7 +320,14 @@ fun SearchScreen(
                         Icon(Icons.Default.AutoAwesome, null, tint = AccentGreen, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
                         Text(uiState.aiInterpretation ?: "", style = ArflixTypography.body.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium), color = Color.White.copy(alpha = 0.85f))
                     }
-                    ContentGrid(items = uiState.aiResults, usePosterCards = usePosterCards, isLoading = false, isTouchDevice = isTouchDevice, onItemClick = { onNavigateToDetails(it.mediaType, it.id) }, onLoadMore = {})
+                    ContentGrid(items = uiState.aiResults, usePosterCards = usePosterCards, isLoading = false, isTouchDevice = isTouchDevice, liveChannelStreamUrls = liveChannelStreamUrls, onItemClick = { item ->
+                        if (item.mediaType == MediaType.LIVE_TV) {
+                            val streamUrl = liveChannelStreamUrls[item.id]
+                            onNavigateToPlayer(item.mediaType, item.id, null, null, null, streamUrl, null, null, null)
+                        } else {
+                            onNavigateToDetails(item.mediaType, item.id)
+                        }
+                    }, onLoadMore = {})
                 }
 
                 uiState.query.isNotEmpty() && !uiState.isAiSearch && !hasSearchResults -> {
@@ -314,7 +346,15 @@ fun SearchScreen(
                         isFocused = focusZone == FocusZone.RESULTS,
                         usePosterCards = usePosterCards,
                         isTouchDevice = isTouchDevice,
-                        onItemClick = { onNavigateToDetails(it.mediaType, it.id) }
+                        liveChannelStreamUrls = liveChannelStreamUrls,
+                        onItemClick = { item ->
+                            if (item.mediaType == MediaType.LIVE_TV) {
+                                val streamUrl = liveChannelStreamUrls[item.id]
+                                onNavigateToPlayer(item.mediaType, item.id, null, null, null, streamUrl, null, null, null)
+                            } else {
+                                onNavigateToDetails(item.mediaType, item.id)
+                            }
+                        }
                     )
                 }
             }
@@ -354,12 +394,13 @@ private fun RowsLayer(
     categories: List<Category>, cardLogoUrls: Map<String, String>,
     currentRowIndex: Int, currentItemIndex: Int, isFocused: Boolean,
     usePosterCards: Boolean, isTouchDevice: Boolean,
+    liveChannelStreamUrls: Map<Int, String> = emptyMap(),
     onItemClick: (MediaItem) -> Unit
 ) {
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp
 
-    val itemWidth = if (usePosterCards) 130.dp else 260.dp
+    val itemWidth = if (usePosterCards) 110.dp else 230.dp
     val rowHeight = if (usePosterCards) {
         if (screenHeight <= 640) 260.dp else 340.dp
     } else {
@@ -393,7 +434,7 @@ private fun RowsLayer(
                     animationSpec = tween(250), label = "rowAlpha"
                 )
 
-                Box(modifier = Modifier.fillMaxWidth().height(rowHeight).clipToBounds().graphicsLayer { alpha = rowAlpha }) {
+                Box(modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = rowAlpha }) {
                     Column {
                         Text(
                             category.title,
@@ -421,7 +462,7 @@ private fun RowsLayer(
                             itemsIndexed(category.items, key = { _, item -> "${item.mediaType}_${item.id}" }) { itemIdx, item ->
                                 val itemIsFocused = isCurrentRow && itemIdx == currentItemIndex
                                 MediaCard(
-                                    item = item.copy(title = buildCardTitle(item), subtitle = buildCardSubtitle(item)),
+                                    content = CardContent.Media(item.copy(title = buildCardTitle(item))),
                                     width = itemWidth,
                                     isLandscape = !usePosterCards,
                                     logoImageUrl = cardLogoUrls["${item.mediaType}_${item.id}"],
@@ -447,9 +488,9 @@ private fun RowsLayer(
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun ContentGrid(items: List<MediaItem>, usePosterCards: Boolean, isLoading: Boolean, isTouchDevice: Boolean, onItemClick: (MediaItem) -> Unit, onLoadMore: () -> Unit) {
+private fun ContentGrid(items: List<MediaItem>, usePosterCards: Boolean, isLoading: Boolean, isTouchDevice: Boolean, liveChannelStreamUrls: Map<Int, String> = emptyMap(), onItemClick: (MediaItem) -> Unit, onLoadMore: () -> Unit) {
     val screenHeight = LocalConfiguration.current.screenHeightDp
-    val itemWidth = if (usePosterCards) 130.dp else 260.dp
+    val itemWidth = if (usePosterCards) 110.dp else 230.dp
     val gridState = rememberLazyGridState()
     LaunchedEffect(gridState.firstVisibleItemIndex, items.size) { val lv = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0; if (items.isNotEmpty() && lv >= items.size - 8) onLoadMore() }
 
@@ -457,7 +498,7 @@ private fun ContentGrid(items: List<MediaItem>, usePosterCards: Boolean, isLoadi
         horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize()) {
         items(items.size, key = { "${items[it].mediaType}_${items[it].id}" }) { idx ->
             val item = items[idx]
-            MediaCard(item = item.copy(title = buildCardTitle(item), subtitle = buildCardSubtitle(item)),
+            MediaCard(content = CardContent.Media(item.copy(title = buildCardTitle(item))),
                 width = itemWidth, isLandscape = !usePosterCards, showProgress = false, titleMaxLines = 2, subtitleMaxLines = 1,
                 isFocusedOverride = false, enableSystemFocus = true, onFocused = {}, onClick = { onItemClick(item) },
                 modifier = if (isTouchDevice) Modifier.clickable { onItemClick(item) } else Modifier)
@@ -472,7 +513,11 @@ private fun buildCardTitle(item: MediaItem): String {
 }
 
 private fun buildCardSubtitle(item: MediaItem): String {
-    return when (item.mediaType) { MediaType.TV -> "Series"; MediaType.MOVIE -> "Movie" }
+    return when (item.mediaType) {
+        MediaType.TV -> "TV Series"
+        MediaType.MOVIE -> "Movie"
+        MediaType.LIVE_TV -> "Live Channel"
+    }
 }
 
 private enum class FocusZone { SIDEBAR, SEARCH_INPUT, FILTERS, RESULTS }

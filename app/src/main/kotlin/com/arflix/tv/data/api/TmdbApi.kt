@@ -14,7 +14,8 @@ interface TmdbApi {
     suspend fun getTrendingMovies(
         @Query("api_key") apiKey: String,
         @Query("language") language: String? = null,
-        @Query("page") page: Int = 1
+        @Query("page") page: Int = 1,
+        @Query("release_type") releaseType: Int? = null
     ): TmdbListResponse
 
     @GET("trending/tv/day")

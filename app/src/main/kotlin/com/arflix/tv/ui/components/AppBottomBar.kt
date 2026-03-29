@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -58,7 +59,7 @@ val bottomBarItems = listOf(
     BottomBarItem("Home", Icons.Default.Home, "home"),
     BottomBarItem("Search", Icons.Default.Search, "search"),
     BottomBarItem("Watchlist", Icons.Default.Bookmark, "watchlist"),
-    BottomBarItem("TV", Icons.Default.LiveTv, "tv"),
+    BottomBarItem("Content", Icons.Default.LiveTv, "movies"),
     BottomBarItem("Settings", Icons.Default.Settings, "settings")
 )
 
@@ -69,7 +70,7 @@ fun AppBottomBar(
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth().navigationBarsPadding()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()

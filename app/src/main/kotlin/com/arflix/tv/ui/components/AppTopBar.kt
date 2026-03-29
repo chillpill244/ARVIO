@@ -38,6 +38,8 @@ import com.arflix.tv.data.model.Profile
 import com.arflix.tv.ui.skin.ArvioSkin
 import com.arflix.tv.ui.theme.AnimationConstants
 import com.arflix.tv.ui.theme.ArflixTypography
+import com.arflix.tv.util.LocalDeviceType
+import androidx.compose.ui.unit.Dp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -45,9 +47,14 @@ import kotlinx.coroutines.delay
 
 val AppTopBarHeight = 82.dp
 val AppTopBarTopPadding = 0.dp
-val AppTopBarContentTopInset = 98.dp
 /** On mobile/tablet where the topbar is hidden, use a small status-bar-like inset instead. */
 val MobileContentTopInset = 16.dp
+
+@Composable
+fun AppTopBarContentTopInset(): Dp {
+    val deviceType = LocalDeviceType.current
+    return if (deviceType.isTouchDevice()) MobileContentTopInset else 98.dp
+}
 val AppTopBarHorizontalPadding = 28.dp
 
 fun topBarMaxIndex(hasProfile: Boolean): Int = if (hasProfile) SidebarItem.entries.size else SidebarItem.entries.size - 1
@@ -79,7 +86,7 @@ fun AppTopBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(AppTopBarContentTopInset)
+            .height(AppTopBarContentTopInset())
             .background(
                 Brush.verticalGradient(
                     colors = listOf(

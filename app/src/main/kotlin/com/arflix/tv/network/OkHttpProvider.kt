@@ -12,7 +12,6 @@ import okhttp3.ConnectionPool
 import okhttp3.Dns
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.dnsoverhttps.DnsOverHttps
 import okhttp3.logging.HttpLoggingInterceptor
@@ -150,6 +149,21 @@ object OkHttpProvider {
             appClient ?: buildAppClient().also { appClient = it }
         }
 
+    private val domainRewriteInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        val newHost = when (request.url.host) {
+            "webhop.live" -> "ott1.co"
+            "starshare.org" -> "ott1.co"
+            else -> null
+        }
+        if (newHost != null) {
+            val newUrl = request.url.newBuilder().host(newHost).build()
+            chain.proceed(request.newBuilder().url(newUrl).build())
+        } else {
+            chain.proceed(request)
+        }
+    }
+
     private fun buildAppClient(): OkHttpClient {
         val customAgentInterceptor = Interceptor { chain ->
             val originalRequest = chain.request()
@@ -170,6 +184,8 @@ object OkHttpProvider {
         val builder = OkHttpClient.Builder()
             // Custom User-Agent header for all requests (API, streams, images, etc.)
             .addInterceptor(customAgentInterceptor)
+            // Rewrite domain names: webhop.live, starshare.org -> ott1.co
+            .addInterceptor(domainRewriteInterceptor)
             // Direct API calls — no Supabase edge function proxy.
             // TMDB/Trakt keys are passed as query params / headers by Retrofit.
             .addInterceptor(loggingInterceptor)

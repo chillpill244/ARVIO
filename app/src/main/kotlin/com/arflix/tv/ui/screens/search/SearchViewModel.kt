@@ -2,9 +2,11 @@ package com.arflix.tv.ui.screens.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.arflix.tv.data.model.IptvChannel
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.model.Category
+import com.arflix.tv.data.repository.IptvRepository
 import com.arflix.tv.data.repository.MediaRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -51,13 +53,11 @@ val ANIME_GENRES = listOf(
     Genre(10749, "Romance"), Genre(878, "Sci-Fi"), Genre(9648, "Mystery")
 )
 
-data class Country(val code: String, val name: String)
-val COUNTRIES = listOf(
-    Country("en", "English"), Country("ja", "Japanese"), Country("ko", "Korean"),
-    Country("es", "Spanish"), Country("fr", "French"), Country("de", "German"),
-    Country("it", "Italian"), Country("pt", "Portuguese"), Country("hi", "Hindi"),
-    Country("zh", "Chinese"), Country("tr", "Turkish"), Country("ar", "Arabic"),
-    Country("th", "Thai"), Country("nl", "Dutch"), Country("ru", "Russian")
+data class Language(val code: String, val name: String)
+val LANGUAGES = listOf(
+    Language("en", "English"), Language("te", "Telugu"), Language("hi", "Hindi"), 
+    Language("ta", "Tamil"), Language("ml", "Malayalam"),
+    Language("ja", "Japanese"), Language("ko", "Korean"),
 )
 
 enum class DiscoverType(val label: String) { ALL("All"), MOVIES("Movies"), TV_SHOWS("TV Shows"), ANIME("Anime") }
@@ -69,6 +69,7 @@ data class SearchUiState(
     val results: List<MediaItem> = emptyList(),
     val movieResults: List<MediaItem> = emptyList(),
     val tvResults: List<MediaItem> = emptyList(),
+    val liveTvResults: List<IptvChannel> = emptyList(),
     val cardLogoUrls: Map<String, String> = emptyMap(),
     val error: String? = null,
     // Discover rows - always 5 rows, dynamically built from active filters
@@ -78,7 +79,7 @@ data class SearchUiState(
     // Filters
     val selectedType: DiscoverType = DiscoverType.ALL,
     val selectedGenre: Genre? = null,
-    val selectedCountry: Country? = null,
+    val selectedLanguage: Language? = null,
     // AI
     val aiInterpretation: String? = null,
     val aiResults: List<MediaItem> = emptyList(),
@@ -87,7 +88,8 @@ data class SearchUiState(
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val mediaRepository: MediaRepository
+    private val mediaRepository: MediaRepository,
+    private val iptvRepository: IptvRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
@@ -111,7 +113,7 @@ class SearchViewModel @Inject constructor(
             try {
                 val type = state.selectedType
                 val genre = state.selectedGenre?.id?.toString()
-                val lang = state.selectedCountry?.code
+                val lang = state.selectedLanguage?.code
                 val isAnime = type == DiscoverType.ANIME
 
                 val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
@@ -193,8 +195,8 @@ class SearchViewModel @Inject constructor(
         loadDiscoverRows()
     }
 
-    fun selectCountry(country: Country?) {
-        _uiState.value = _uiState.value.copy(selectedCountry = country)
+    fun selectLanguage(language: Language?) {
+        _uiState.value = _uiState.value.copy(selectedLanguage = language)
         loadDiscoverRows()
     }
 
@@ -207,7 +209,7 @@ class SearchViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(query = newQuery, isAiSearch = false, aiInterpretation = null, aiResults = emptyList())
         if (newQuery.trim().isEmpty()) {
             cachedSuggestionQuery = ""; cachedSuggestionResults = emptyList()
-            _uiState.value = _uiState.value.copy(query = "", isLoading = false, results = emptyList(), movieResults = emptyList(), tvResults = emptyList(), cardLogoUrls = emptyMap(), error = null, isAiSearch = false, aiInterpretation = null, aiResults = emptyList())
+            _uiState.value = _uiState.value.copy(query = "", isLoading = false, results = emptyList(), movieResults = emptyList(), tvResults = emptyList(), liveTvResults = emptyList(), cardLogoUrls = emptyMap(), error = null, isAiSearch = false, aiInterpretation = null, aiResults = emptyList())
             searchJob?.cancel(); return
         }
         debounceSearch()
@@ -223,9 +225,11 @@ class SearchViewModel @Inject constructor(
                 val sorted = if (cachedSuggestionQuery.equals(query, true) && cachedSuggestionResults.isNotEmpty()) cachedSuggestionResults
                 else { val f = mediaRepository.search(query); val s = sortResults(query, f); cachedSuggestionQuery = query; cachedSuggestionResults = s; s }
                 val movies = sorted.filter { it.mediaType == MediaType.MOVIE }; val tv = sorted.filter { it.mediaType == MediaType.TV }
+                // Search live TV channels
+                val liveTvChannels = try { val snapshot = iptvRepository.getCachedSnapshotOrNull(); val q = query.lowercase(); (snapshot?.channels ?: emptyList()).filter { it.name.lowercase().contains(q) }.take(20) } catch (_: Exception) { emptyList() }
                 val top = (movies.take(16) + tv.take(16)).distinctBy { "${it.mediaType}_${it.id}" }
                 val logos = withContext(Dispatchers.IO) { top.map { item -> async { val k = "${item.mediaType}_${item.id}"; val l = runCatching { mediaRepository.getLogoUrl(item.mediaType, item.id) }.getOrNull(); if (l.isNullOrBlank()) null else k to l } }.awaitAll().filterNotNull().toMap() }
-                _uiState.value = _uiState.value.copy(isLoading = false, results = sorted, movieResults = movies, tvResults = tv, cardLogoUrls = logos)
+                _uiState.value = _uiState.value.copy(isLoading = false, results = sorted, movieResults = movies, tvResults = tv, liveTvResults = liveTvChannels, cardLogoUrls = logos)
             } catch (e: Exception) { _uiState.value = _uiState.value.copy(isLoading = false, error = e.message) }
         }
     }
@@ -299,7 +303,8 @@ class SearchViewModel @Inject constructor(
         )
     }
 
-    fun clearSearch() { searchJob?.cancel(); cachedSuggestionQuery = ""; cachedSuggestionResults = emptyList(); _uiState.value = _uiState.value.copy(query = "", isLoading = false, results = emptyList(), movieResults = emptyList(), tvResults = emptyList(), cardLogoUrls = emptyMap(), error = null, isAiSearch = false, aiInterpretation = null, aiResults = emptyList()) }
+    fun clearSearch() { searchJob?.cancel(); cachedSuggestionQuery = ""; cachedSuggestionResults = emptyList(); _uiState.value = _uiState.value.copy(query = "", isLoading = false, results = emptyList(), movieResults = emptyList(), tvResults = emptyList(), liveTvResults = emptyList(), cardLogoUrls = emptyMap(), error = null, isAiSearch = false, aiInterpretation = null, aiResults = emptyList()) }
     fun getGenresForType(): List<Genre> = when (_uiState.value.selectedType) { DiscoverType.MOVIES -> MOVIE_GENRES; DiscoverType.TV_SHOWS -> TV_GENRES; DiscoverType.ALL -> ALL_GENRES; DiscoverType.ANIME -> ANIME_GENRES }
     private fun interleave(a: List<MediaItem>, b: List<MediaItem>): List<MediaItem> { val r = mutableListOf<MediaItem>(); for (i in 0 until maxOf(a.size, b.size)) { if (i < a.size) r.add(a[i]); if (i < b.size) r.add(b[i]) }; return r }
+    private fun iptvChannelToMediaItem(channel: IptvChannel): MediaItem = MediaItem(id = channel.id.hashCode(), title = channel.name, year = "", mediaType = MediaType.LIVE_TV, image = channel.logo ?: "", backdrop = null, genreIds = emptyList(), overview = "")
 }

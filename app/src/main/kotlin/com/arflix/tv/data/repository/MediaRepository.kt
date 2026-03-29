@@ -150,6 +150,12 @@ class MediaRepository @Inject constructor(
         detailsCache[cacheKey] = CacheEntry(item, System.currentTimeMillis())
     }
 
+    /** Cache an item under a specific lookup ID (e.g. IPTV series id for items with no TMDB match). */
+    fun cacheItemWithId(item: MediaItem, lookupId: Int) {
+        val cacheKey = if (item.mediaType == MediaType.MOVIE) "movie_$lookupId" else "tv_$lookupId"
+        detailsCache[cacheKey] = CacheEntry(item, System.currentTimeMillis())
+    }
+
     private fun cacheItems(items: List<MediaItem>) {
         items.forEach { cacheItem(it) }
     }
@@ -230,6 +236,7 @@ class MediaRepository @Inject constructor(
                     sortBy = "popularity.desc",
                     minVoteCount = 5, // Lower threshold for regional cinema
                     releaseDateGte = sixMonthsAgo,
+                    releaseType = 4, // Digital releases
                     page = page
                 )
             }
@@ -472,7 +479,7 @@ class MediaRepository @Inject constructor(
 
         val response = runCatching {
             when (categoryId) {
-                "trending_movies" -> tmdbApi.getTrendingMovies(apiKey, language = contentLanguage, page = page)
+                "trending_movies" -> tmdbApi.getTrendingMovies(apiKey, language = contentLanguage, page = page, releaseType = 4)
                 "trending_tv" -> tmdbApi.getTrendingTv(apiKey, language = contentLanguage, page = page)
                 "trending_anime" -> tmdbApi.discoverTv(
                     apiKey, language = contentLanguage,
@@ -494,7 +501,8 @@ class MediaRepository @Inject constructor(
                         sortBy = "popularity.desc",
                         minVoteCount = 5,
                         releaseDateGte = sixMonthsAgo,
-                        page = page
+                        page = page,
+                        releaseType = 4
                     )
                 }
                 "trending_netflix" -> tmdbApi.discoverTv(
@@ -1326,7 +1334,7 @@ class MediaRepository @Inject constructor(
             val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
             val items = when (categoryId) {
                 "trending_movies" -> {
-                    val r1 = tmdbApi.getTrendingMovies(apiKey, language = contentLanguage, page = 1)
+                    val r1 = tmdbApi.getTrendingMovies(apiKey, language = contentLanguage, page = 1, releaseType = 4)
                     r1.results.map { it.toMediaItem(MediaType.MOVIE) }
                 }
                 "popular_movies" -> {

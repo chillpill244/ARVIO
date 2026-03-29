@@ -65,6 +65,7 @@ import androidx.datastore.preferences.core.Preferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.metrics.performance.JankStats
@@ -82,6 +83,7 @@ import com.arflix.tv.data.repository.AuthRepository
 import com.arflix.tv.data.repository.AuthState
 import com.arflix.tv.data.repository.LauncherContinueWatchingRepository
 import com.arflix.tv.data.repository.LauncherContinueWatchingRequest
+import com.arflix.tv.data.repository.MediaRepository
 import com.arflix.tv.data.repository.ProfileRepository
 import com.arflix.tv.data.repository.TraktRepository
 import com.arflix.tv.data.repository.toLauncherContinueWatchingRequest
@@ -121,8 +123,12 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var launcherContinueWatchingRepository: Lazy<LauncherContinueWatchingRepository>
 
+    @Inject
+    lateinit var mediaRepository: Lazy<MediaRepository>
+
     private var jankStats: JankStats? = null
     private var pendingLauncherRequest by mutableStateOf<LauncherContinueWatchingRequest?>(null)
+    private var isTvDevice: Boolean = false
 
     // StartupViewModel for parallel loading during splash
     private val startupViewModel: StartupViewModel by viewModels()
@@ -147,11 +153,26 @@ class MainActivity : ComponentActivity() {
         // Keep screen on during playback
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        // Immersive fullscreen mode
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        WindowInsetsControllerCompat(window, window.decorView).apply {
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            hide(WindowInsetsCompat.Type.systemBars())
+        // System UI mode: immersive on TV, show status bar on mobile
+        isTvDevice = initialDeviceType == DeviceType.TV
+        if (isTvDevice) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            WindowInsetsControllerCompat(window, window.decorView).apply {
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                hide(WindowInsetsCompat.Type.systemBars())
+            }
+        } else {
+            // Let our app draw behind system bars but keep them visible
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            // Make status/navigation bars transparent so our background shows through
+            try {
+                window.statusBarColor = android.graphics.Color.TRANSPARENT
+                window.navigationBarColor = android.graphics.Color.TRANSPARENT
+            } catch (_: Exception) {
+            }
+            WindowInsetsControllerCompat(window, window.decorView).apply {
+                show(WindowInsetsCompat.Type.systemBars())
+            }
         }
 
         setContent {
@@ -178,6 +199,7 @@ class MainActivity : ComponentActivity() {
                         profileRepository = profileRepository.get(),
                         traktRepository = traktRepository.get(),
                         launcherContinueWatchingRepository = launcherContinueWatchingRepository.get(),
+                        mediaRepository = mediaRepository.get(),
                         pendingLauncherRequest = pendingLauncherRequest,
                         onConsumeLauncherRequest = { pendingLauncherRequest = null },
                         preloadedCategories = startupState.categories,
@@ -217,9 +239,11 @@ class MainActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
-            // Re-apply immersive mode when window regains focus
-            WindowInsetsControllerCompat(window, window.decorView).apply {
-                hide(WindowInsetsCompat.Type.systemBars())
+            // Re-apply immersive mode when window regains focus (TV only)
+            if (isTvDevice) {
+                WindowInsetsControllerCompat(window, window.decorView).apply {
+                    hide(WindowInsetsCompat.Type.systemBars())
+                }
             }
         }
     }
@@ -348,6 +372,7 @@ fun ArflixApp(
     profileRepository: ProfileRepository,
     traktRepository: TraktRepository,
     launcherContinueWatchingRepository: LauncherContinueWatchingRepository,
+    mediaRepository: MediaRepository,
     pendingLauncherRequest: LauncherContinueWatchingRequest? = null,
     onConsumeLauncherRequest: () -> Unit = {},
     preloadedCategories: List<com.arflix.tv.data.model.Category> = emptyList(),
@@ -381,6 +406,30 @@ fun ArflixApp(
     val isMobile = deviceType.isTouchDevice()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
+    val activity = context as? ComponentActivity
+
+    // Toggle system UI for mobile devices when entering/exiting the player route
+    LaunchedEffect(currentRoute, isMobile) {
+        activity ?: return@LaunchedEffect
+        if (isMobile && currentRoute != null && currentRoute.contains("player")) {
+            WindowCompat.setDecorFitsSystemWindows(activity.window, false)
+            WindowInsetsControllerCompat(activity.window, activity.window.decorView).apply {
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                hide(WindowInsetsCompat.Type.systemBars())
+            }
+        } else {
+            // Keep decorFits=false so background extends under bars; just show the bars
+            WindowCompat.setDecorFitsSystemWindows(activity.window, false)
+            try {
+                activity.window.statusBarColor = android.graphics.Color.TRANSPARENT
+                activity.window.navigationBarColor = android.graphics.Color.TRANSPARENT
+            } catch (_: Exception) {
+            }
+            WindowInsetsControllerCompat(activity.window, activity.window.decorView).apply {
+                show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
     // Hide bottom bar on player, profile selection, login, and TV screens
     // TV route is hidden because Live TV fullscreen player stays on "tv" route
     val showBottomBar = isMobile && activeProfile != null &&
@@ -402,6 +451,7 @@ fun ArflixApp(
                     )
                 )
             )
+            .systemBarsPadding()
     ) {
         Box(modifier = Modifier.weight(1f)) {
             AppNavigation(
@@ -418,7 +468,8 @@ fun ArflixApp(
                         profileRepository.clearActiveProfile()
                     }
                 },
-                onExitApp = onExitApp
+                onExitApp = onExitApp,
+                mediaRepository = mediaRepository
             )
         }
         if (showBottomBar) {

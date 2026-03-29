@@ -63,6 +63,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
@@ -151,9 +152,16 @@ fun StreamSelector(
         listOf("All sources") + addonTabs.map { it.label }
     }
 
-    // Sort streams: quality (4K > 1080p > 720p), then largest size first
+    // Sort streams: matchScore (higher = better match), then quality (4K > 1080p > 720p), then largest size first
     val sortedStreams = remember(streams, streams.size) {
         streams.sortedWith { a, b ->
+            // 0. Higher matchScore first (better similarity match)
+            val matchScoreA = a.matchScore
+            val matchScoreB = b.matchScore
+            if (matchScoreA != matchScoreB) {
+                return@sortedWith matchScoreB.compareTo(matchScoreA) // Descending: higher score first
+            }
+
             // 1. Higher quality first (4K > 1080p > 720p > 480p)
             val qualityA = qualityScore(a.quality)
             val qualityB = qualityScore(b.quality)
@@ -161,14 +169,14 @@ fun StreamSelector(
                 return@sortedWith qualityB - qualityA // Descending: higher quality first
             }
 
-            // 3. Larger size first (parse from display string for consistency)
+            // 2. Larger size first (parse from display string for consistency)
             val sizeA = getSizeBytes(a)
             val sizeB = getSizeBytes(b)
             if (sizeA != sizeB) {
                 return@sortedWith sizeB.compareTo(sizeA) // Descending: larger size first
             }
 
-            // 4. Tie-breaker: sort by source name alphabetically for stable ordering
+            // 3. Tie-breaker: sort by source name alphabetically for stable ordering
             a.source.compareTo(b.source)
         }
     }
@@ -218,15 +226,16 @@ fun StreamSelector(
 
     AnimatedVisibility(
         visible = isVisible,
-        enter = fadeIn(tween(200)) + slideInVertically(tween(300)) { it / 4 },
-        exit = fadeOut(tween(150)) + slideOutVertically(tween(200)) { it / 4 }
+        // enter = fadeIn(tween(200)) + slideInVertically(tween(300)) { it / 4 },
+        // exit = fadeOut(tween(150)) + slideOutVertically(tween(200)) { it / 4 }
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                // .fillMaxSize()
                 .focusRequester(focusRequester)
                 .focusable()
                 .background(Color.Black.copy(alpha = 0.95f))
+                // .padding(top = AppTopBarContentTopInset() + 12.dp)
                 .onKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown) {
                         when (event.key) {

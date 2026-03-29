@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.arflix.tv">
 
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
@@ -17,7 +18,7 @@
         android:required="false" />
 
     <application
-        android:name=".ArflixApplication"
+        android:name="com.arflix.tv.ArflixApplication"
         android:allowBackup="false"
         android:banner="@drawable/app_banner"
         android:extractNativeLibs="false"
@@ -39,6 +40,8 @@
             android:exported="true"
             android:hardwareAccelerated="true"
             android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
             android:theme="@style/Theme.ArflixTV.Splash">
 
             <!-- TV Launcher -->

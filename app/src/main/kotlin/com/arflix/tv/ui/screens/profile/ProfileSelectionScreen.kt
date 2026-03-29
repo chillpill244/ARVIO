@@ -277,14 +277,14 @@ fun ProfileSelectionScreen(
                 onClick = { if (isTouchDevice || isReadyForInput) viewModel.toggleManageMode() }
             )
 
-            if (!isCloudConnected) {
-                Spacer(modifier = Modifier.height(24.dp))
+            // if (!isCloudConnected) {
+            //     Spacer(modifier = Modifier.height(24.dp))
 
-                // Cloud connect button — focusable on TV, tappable on mobile
-                CloudConnectButton(
-                    onClick = { if (isTouchDevice || isReadyForInput) onConnectCloud() }
-                )
-            }
+            //     // Cloud connect button — focusable on TV, tappable on mobile
+            //     CloudConnectButton(
+            //         onClick = { if (isTouchDevice || isReadyForInput) onConnectCloud() }
+            //     )
+            // }
         }
 
         // Add Profile Dialog
@@ -584,12 +584,12 @@ private fun CloudConnectButton(
                 tint = Color.White.copy(alpha = 0.85f),
                 modifier = Modifier.size(18.dp)
             )
-            Text(
-                text = "Connect to ARVIO Cloud",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.85f)
-            )
+            // Text(
+            //     text = "Connect to ARVIO Cloud",
+            //     fontSize = 14.sp,
+            //     fontWeight = FontWeight.Medium,
+            //     color = Color.White.copy(alpha = 0.85f)
+            // )
         }
     } else {
         Surface(
@@ -622,12 +622,12 @@ private fun CloudConnectButton(
                     tint = if (isFocused > 0) Color.White else Color.White.copy(alpha = 0.7f),
                     modifier = Modifier.size(18.dp)
                 )
-                Text(
-                    text = "Connect to ARVIO Cloud",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = if (isFocused > 0) Color.White else Color.White.copy(alpha = 0.7f)
-                )
+                // Text(
+                //     text = "Connect to ARVIO Cloud",
+                //     fontSize = 14.sp,
+                //     fontWeight = FontWeight.Medium,
+                //     color = if (isFocused > 0) Color.White else Color.White.copy(alpha = 0.7f)
+                // )
             }
         }
     }
