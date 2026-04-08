@@ -113,6 +113,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.C
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
@@ -120,6 +121,7 @@ import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
+import androidx.media3.datasource.FileDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -157,6 +159,19 @@ import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import androidx.mediarouter.media.MediaRouter
+import androidx.mediarouter.media.MediaRouteSelector
+import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.CastConnected
+import com.google.android.gms.cast.CastMediaControlIntent
+import com.google.android.gms.cast.MediaInfo
+import com.google.android.gms.cast.MediaLoadRequestData
+import com.google.android.gms.cast.MediaMetadata as CastMediaMetadata
+import com.google.android.gms.cast.MediaTrack
+import com.google.android.gms.cast.framework.CastContext
+import com.google.android.gms.cast.framework.CastSession
+import com.google.android.gms.cast.framework.CastState
+import com.google.android.gms.cast.framework.SessionManagerListener
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.source.MediaSource
@@ -289,6 +304,23 @@ fun PlayerScreen(
     // Compared against arriving subtitle URLs to detect when a MediaSource rebuild is needed.
     var bakedSubtitleUrls by remember { mutableStateOf(emptySet<String>()) }
 
+    // Cast state for Chromecast support (touch devices only)
+    // castInitialized = SDK loaded successfully; always show icon when true.
+    // castAvailable = at least one device discovered (used only for icon tint).
+    var castInitialized by remember { mutableStateOf(false) }
+    var castAvailable by remember { mutableStateOf(false) }
+    var isCasting by remember { mutableStateOf(false) }
+    // Selector used for both discovery registration and route filtering
+    val castMediaRouteSelector = remember {
+        MediaRouteSelector.Builder()
+            .addControlCategory(
+                CastMediaControlIntent.categoryForCast(
+                    CastMediaControlIntent.DEFAULT_MEDIA_RECEIVER_APPLICATION_ID
+                )
+            )
+            .build()
+    }
+
     // Load media
     LaunchedEffect(mediaType, mediaId, seasonNumber, episodeNumber, imdbId, preferredAddonId, preferredSourceName, preferredBingeGroup, startPositionMs) {
         playbackIssueReported = false
@@ -398,6 +430,34 @@ fun PlayerScreen(
     val directProgressiveFactory = remember(httpDataSourceFactory) {
         ProgressiveMediaSource.Factory(httpDataSourceFactory)
     }
+    // Data source factory that routes file:// URIs to FileDataSource and everything
+    // else (http/https) to the OkHttp-backed cache factory. ExoPlayer uses this for
+    // subtitle sidecar loading, which means file:// subtitle URIs work correctly.
+    val hybridDataSourceFactory = remember(httpDataSourceFactory, cacheDataSourceFactory) {
+        androidx.media3.datasource.DataSource.Factory {
+            object : androidx.media3.datasource.DataSource {
+                private var delegate: androidx.media3.datasource.DataSource? = null
+                override fun addTransferListener(transferListener: androidx.media3.datasource.TransferListener) {}
+                override fun open(dataSpec: androidx.media3.datasource.DataSpec): Long {
+                    val ds: androidx.media3.datasource.DataSource = if (dataSpec.uri.scheme == "file") {
+                        FileDataSource()
+                    } else {
+                        cacheDataSourceFactory.createDataSource()
+                    }
+                    delegate = ds
+                    return ds.open(dataSpec)
+                }
+                override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+                    delegate?.read(buffer, offset, length) ?: throw IllegalStateException("DataSource not opened")
+                override fun getUri(): android.net.Uri? = delegate?.uri
+                override fun close() { delegate?.close() }
+            }
+        }
+    }
+    // Local file factory for offline downloads (file:// URIs — OkHttp cannot read these)
+    val fileMediaSourceFactory = remember(hybridDataSourceFactory) {
+        ProgressiveMediaSource.Factory(hybridDataSourceFactory)
+    }
 
     // Protocol-specific media source factories for faster startup
     val hlsFactory = remember(httpDataSourceFactory) {
@@ -412,7 +472,7 @@ fun PlayerScreen(
     }
     val mediaSourceFactory = remember(httpDataSourceFactory) {
         DefaultMediaSourceFactory(context)
-            .setDataSourceFactory(cacheDataSourceFactory)
+            .setDataSourceFactory(hybridDataSourceFactory)
     }
 
     // ExoPlayer - tuned for both small and very large (70GB+) files.
@@ -891,21 +951,15 @@ fun PlayerScreen(
             // since subtitles haven't loaded yet; rebuild effect will fire when they arrive).
             bakedSubtitleUrls = subtitleConfigs.map { it.uri.toString() }.toSet()
 
-            // Use protocol-specific media source for faster startup:
-            // - HLS: chunkless preparation enabled (saves 1-3s)
-            // - DASH/Progressive: dedicated factories for optimal handling
-            val urlLower = url.lowercase()
-            val isHeavy = isLikelyHeavyStream(latestUiState.selectedStream)
-            val mediaSource: MediaSource = when {
-                urlLower.contains(".m3u8") || urlLower.contains("/hls") || urlLower.contains("format=hls") ->
-                    hlsFactory.createMediaSource(mediaItem)
-                urlLower.contains(".mpd") || urlLower.contains("/dash") || urlLower.contains("format=dash") ->
-                    dashFactory.createMediaSource(mediaItem)
-                isHeavy ->
-                    // Bypass disk cache for large/debrid progressive streams to avoid I/O bottleneck
-                    directProgressiveFactory.createMediaSource(mediaItem)
-                else -> mediaSourceFactory.createMediaSource(mediaItem)
-            }
+            // Use DefaultMediaSourceFactory for ALL streams.
+            // Only DefaultMediaSourceFactory processes SubtitleConfigurations —
+            // it creates SingleSampleMediaSource for each subtitle and merges
+            // them with the content source via MergingMediaSource.
+            // Protocol-specific factories (HLS, DASH, Progressive) silently
+            // ignore subtitle configs, which is why subs were never rendered.
+            // DefaultMediaSourceFactory auto-detects HLS/DASH/Progressive from
+            // the URI and uses hybridDataSourceFactory for file:// + http://.
+            val mediaSource: MediaSource = mediaSourceFactory.createMediaSource(mediaItem)
 
             // Source-switch hardening: stop+clear before loading next source.
             runCatching {
@@ -978,16 +1032,9 @@ fun PlayerScreen(
             .setSubtitleConfigurations(subtitleConfigs)
             .build()
 
-        val urlLower = url.lowercase()
-        val rebuildSource: MediaSource = when {
-            urlLower.contains(".m3u8") || urlLower.contains("/hls") || urlLower.contains("format=hls") ->
-                hlsFactory.createMediaSource(rebuildItem)
-            urlLower.contains(".mpd") || urlLower.contains("/dash") || urlLower.contains("format=dash") ->
-                dashFactory.createMediaSource(rebuildItem)
-            isLikelyHeavyStream(latestUiState.selectedStream) ->
-                directProgressiveFactory.createMediaSource(rebuildItem)
-            else -> mediaSourceFactory.createMediaSource(rebuildItem)
-        }
+        // Use DefaultMediaSourceFactory so SubtitleConfigurations are
+        // processed into MergingMediaSource (same reasoning as initial load).
+        val rebuildSource: MediaSource = mediaSourceFactory.createMediaSource(rebuildItem)
 
         runCatching {
             exoPlayer.playWhenReady = false
@@ -1438,6 +1485,16 @@ fun PlayerScreen(
 
     // Pre-compute device type once (composition-local) so callbacks don't call composable APIs
     val isTouchDevice = LocalDeviceType.current.isTouchDevice()
+
+    // Keep screen on while the player is active on all device types.
+    DisposableEffect(Unit) {
+        val window = (context as? android.app.Activity)?.window
+        window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     // Back should simply navigate back; PiP has its own button now.
     BackHandler(enabled = (!showSubtitleMenu && !showSourceMenu && uiState.error == null)) {
         onBack()
@@ -1466,6 +1523,143 @@ fun PlayerScreen(
             } catch (_: Exception) {}
         }
     }
+    // Register Chromecast state listeners on touch devices
+    DisposableEffect(Unit) {
+        if (!isTouchDevice) return@DisposableEffect onDispose {}
+        val castContext = try {
+            CastContext.getSharedInstance(context)
+        } catch (_: Exception) {
+            return@DisposableEffect onDispose {}
+        }
+        castInitialized = true
+        isCasting = castContext.sessionManager.currentCastSession?.isConnected == true
+
+        // Actively discover devices so routes are ready before the user taps the button
+        val mediaRouter = MediaRouter.getInstance(context)
+        castAvailable = mediaRouter.routes.any { !it.isDefault && it.matchesSelector(castMediaRouteSelector) }
+        val discoveryCallback = object : MediaRouter.Callback() {
+            override fun onRouteAdded(router: MediaRouter, route: MediaRouter.RouteInfo) {
+                if (route.matchesSelector(castMediaRouteSelector)) castAvailable = true
+            }
+            override fun onRouteRemoved(router: MediaRouter, route: MediaRouter.RouteInfo) {
+                castAvailable = router.routes.any {
+                    !it.isDefault && it.matchesSelector(castMediaRouteSelector)
+                }
+            }
+        }
+        mediaRouter.addCallback(
+            castMediaRouteSelector,
+            discoveryCallback,
+            MediaRouter.CALLBACK_FLAG_REQUEST_DISCOVERY
+        )
+
+        val castStateListener = com.google.android.gms.cast.framework.CastStateListener { state ->
+            castAvailable = state != CastState.NO_DEVICES_AVAILABLE
+            // Once we've ever seen a non-NO_DEVICES state, ensure icon stays visible
+            if (state != CastState.NO_DEVICES_AVAILABLE) castInitialized = true
+        }
+        val sessionManagerListener = object : SessionManagerListener<CastSession> {
+            override fun onSessionStarting(session: CastSession) {}
+            override fun onSessionStartFailed(session: CastSession, error: Int) {}
+            override fun onSessionEnding(session: CastSession) {}
+            override fun onSessionSuspended(session: CastSession, reason: Int) {}
+            override fun onSessionResuming(session: CastSession, sessionId: String) {}
+            override fun onSessionResumeFailed(session: CastSession, error: Int) {}
+            override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
+                isCasting = true
+            }
+            override fun onSessionEnded(session: CastSession, error: Int) {
+                isCasting = false
+            }
+            override fun onSessionStarted(session: CastSession, sessionId: String) {
+                isCasting = true
+                val url = latestUiState.selectedStreamUrl ?: return
+                val position = exoPlayer.currentPosition
+                val contentType = when {
+                    url.contains(".m3u8", ignoreCase = true) -> "application/x-mpegURL"
+                    url.contains(".mpd", ignoreCase = true) -> "application/dash+xml"
+                    else -> "video/mp4"
+                }
+                val meta = CastMediaMetadata(CastMediaMetadata.MEDIA_TYPE_MOVIE).apply {
+                    putString(CastMediaMetadata.KEY_TITLE, latestUiState.title)
+                }
+                // Build MediaTrack list from external (sidecar) subtitles
+                val externalSubs = latestUiState.subtitles.filter {
+                    !it.isEmbedded && it.url.isNotBlank()
+                }
+                val mediaTracks: List<MediaTrack> = externalSubs.mapIndexed { idx, sub ->
+                    val subMime = when {
+                        sub.url.contains(".srt", ignoreCase = true) -> "text/srt"
+                        else -> "text/vtt"
+                    }
+                    MediaTrack.Builder((idx + 1).toLong(), MediaTrack.TYPE_TEXT)
+                        .setSubtype(MediaTrack.SUBTYPE_SUBTITLES)
+                        .setName(sub.label.ifBlank { sub.lang })
+                        .setLanguage(sub.lang)
+                        .setContentId(sub.url)
+                        .setContentType(subMime)
+                        .build()
+                }
+                // Determine which track (if any) is currently active in ExoPlayer
+                val selectedSub = latestUiState.selectedSubtitle
+                val activeTrackIds: LongArray = if (selectedSub != null) {
+                    val idx = externalSubs.indexOfFirst { it.id == selectedSub.id }
+                    if (idx >= 0) longArrayOf((idx + 1).toLong()) else longArrayOf()
+                } else {
+                    longArrayOf()
+                }
+                val mediaInfoBuilder = MediaInfo.Builder(url)
+                    .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
+                    .setContentType(contentType)
+                    .setMetadata(meta)
+                if (mediaTracks.isNotEmpty()) {
+                    mediaInfoBuilder.setMediaTracks(mediaTracks)
+                }
+                session.remoteMediaClient?.load(
+                    MediaLoadRequestData.Builder()
+                        .setMediaInfo(mediaInfoBuilder.build())
+                        .setCurrentTime(position)
+                        .setAutoplay(true)
+                        .setActiveTrackIds(activeTrackIds)
+                        .build()
+                )
+                exoPlayer.pause()
+            }
+        }
+        castContext.addCastStateListener(castStateListener)
+        castContext.sessionManager.addSessionManagerListener(
+            sessionManagerListener, CastSession::class.java
+        )
+        onDispose {
+            runCatching {
+                mediaRouter.removeCallback(discoveryCallback)
+                castContext.removeCastStateListener(castStateListener)
+                castContext.sessionManager.removeSessionManagerListener(
+                    sessionManagerListener, CastSession::class.java
+                )
+            }
+        }
+    }
+
+    // Keep cast subtitle track in sync when user switches subtitle while casting
+    LaunchedEffect(uiState.selectedSubtitle, isCasting) {
+        if (!isCasting) return@LaunchedEffect
+        val castCtx = try {
+            CastContext.getSharedInstance(context)
+        } catch (_: Exception) { return@LaunchedEffect }
+        val client = castCtx.sessionManager.currentCastSession
+            ?.remoteMediaClient ?: return@LaunchedEffect
+        val externalSubs = uiState.subtitles.filter { !it.isEmbedded && it.url.isNotBlank() }
+        val selected = uiState.selectedSubtitle
+        val activeIds: LongArray = if (selected != null) {
+            val idx = externalSubs.indexOfFirst { it.id == selected.id }
+            if (idx >= 0) longArrayOf((idx + 1).toLong()) else longArrayOf()
+        } else {
+            longArrayOf()
+        }
+        runCatching { client.setActiveMediaTracks(activeIds) }
+    }
+
     val aspectModeLabel = when (playerResizeMode) {
         AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "Zoom"
         AspectRatioFrameLayout.RESIZE_MODE_FILL -> "Fill"
@@ -1607,24 +1801,10 @@ fun PlayerScreen(
                                 } else {
                                     // Audio selection
                                     audioTracks.getOrNull(subtitleMenuIndex)?.let { track ->
-                                        // Switch audio track via ExoPlayer
-                                        val params = exoPlayer.trackSelectionParameters.buildUpon()
-                                        params.setPreferredAudioLanguage(track.language)
-                                        val trackGroups = exoPlayer.currentTracks.groups
-                                        if (track.groupIndex < trackGroups.size &&
-                                            trackGroups[track.groupIndex].type == C.TRACK_TYPE_AUDIO
-                                        ) {
-                                            params.setOverrideForType(
-                                                androidx.media3.common.TrackSelectionOverride(
-                                                    trackGroups[track.groupIndex].mediaTrackGroup,
-                                                    track.trackIndex
-                                                )
-                                            )
+                                        // Defensive track-selection — see applyAudioTrackSelection.
+                                        applyAudioTrackSelection(exoPlayer, track, audioTracks)?.let {
+                                            selectedAudioIndex = it
                                         }
-                                        exoPlayer.trackSelectionParameters = params.build()
-                                        selectedAudioIndex = audioTracks.indexOfFirst {
-                                            it.groupIndex == track.groupIndex && it.trackIndex == track.trackIndex
-                                        }.takeIf { it >= 0 } ?: track.index
                                     }
                                 }
                                 showSubtitleMenu = false
@@ -1841,54 +2021,6 @@ fun PlayerScreen(
             }
         }
 
-        // Skip intro/recap overlay (independent of controls)
-        val activeSkip = uiState.activeSkipInterval
-        SkipIntroButton(
-            interval = activeSkip,
-            dismissed = uiState.skipIntervalDismissed,
-            controlsVisible = showControls,
-            onSkip = {
-                val end = activeSkip?.endMs ?: return@SkipIntroButton
-                exoPlayer.seekTo((end + 500L).coerceAtLeast(0L))
-                viewModel.dismissSkipInterval()
-            },
-            focusRequester = skipIntroFocusRequester,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .zIndex(5f) // Ensure it's above the controls overlay scrim.
-                .padding(end = if (isTouchDevice) 24.dp else 48.dp, bottom = if (showControls) 90.dp else 32.dp)
-        )
-        
-        // Next Episode overlay (appears in last minute or during end credits for TV shows)
-        if (mediaType == MediaType.TV && seasonNumber != null && episodeNumber != null) {
-            NextEpisodeButton(
-                hasNextEpisode = true,
-                isInLastMinute = isInLastMinute || uiState.isInOutro,
-                controlsVisible = showControls,
-                seasonNumber = seasonNumber,
-                nextEpisodeNumber = episodeNumber + 1,
-                onPlayNext = {
-                    coroutineScope.launch {
-                        val selected = uiState.selectedStream
-                        val nextEpisode = episodeNumber + 1
-                        val iptvNextUrl = viewModel.buildNextEpisodeUrl(seasonNumber, nextEpisode)
-                        onPlayNext(
-                            seasonNumber,
-                            nextEpisode,
-                            selected?.addonId?.takeIf { it.isNotBlank() },
-                            selected?.source?.takeIf { it.isNotBlank() },
-                            iptvNextUrl
-                        )
-                    }
-                },
-                focusRequester = nextEpisodeOverlayFocusRequester,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .zIndex(5f)
-                    .padding(end = 32.dp, bottom = if (showControls) 120.dp else 32.dp)
-            )
-        }
-
         // Netflix-style Controls Overlay
         AnimatedVisibility(
             visible = showControls && !showSubtitleMenu && !showSourceMenu,
@@ -1978,25 +2110,82 @@ fun PlayerScreen(
                         }
                     }
 
-                    // Right side - Ends At + Clock
-                    Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 8.dp)) {
-                        val currentTime = remember { mutableStateOf("") }
-                        val endsAtTime = remember { mutableStateOf("") }
-                        LaunchedEffect(duration, currentPosition) {
-                            while (true) {
-                                val now = System.currentTimeMillis()
-                                val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-                                currentTime.value = sdf.format(java.util.Date(now))
-                                if (duration > 0 && currentPosition >= 0) {
-                                    val remainingMs = (duration - currentPosition).coerceAtLeast(0L)
-                                    endsAtTime.value = sdf.format(java.util.Date(now + remainingMs))
-                                } else { endsAtTime.value = "" }
-                                kotlinx.coroutines.delay(1000)
+                    // Right side - Cast (touch only) + Ends At + Clock
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        if (isTouchDevice && castInitialized) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clickable {
+                                        try {
+                                            val castCtx = CastContext.getSharedInstance(context)
+                                            if (isCasting) {
+                                                castCtx.sessionManager.endCurrentSession(true)
+                                            } else {
+                                                val mediaRouter = MediaRouter.getInstance(context)
+                                                val castRoutes = mediaRouter.routes.filter { route ->
+                                                    !route.isDefault &&
+                                                        route.matchesSelector(castMediaRouteSelector)
+                                                }
+                                                if (castRoutes.isEmpty()) {
+                                                    android.widget.Toast.makeText(
+                                                        context,
+                                                        "No Cast devices found on this network",
+                                                        android.widget.Toast.LENGTH_SHORT
+                                                    ).show()
+                                                } else {
+                                                    val names = castRoutes
+                                                        .map { it.name }.toTypedArray()
+                                                    android.app.AlertDialog.Builder(context)
+                                                        .setTitle("Cast to")
+                                                        .setItems(names) { _, i ->
+                                                            mediaRouter.selectRoute(castRoutes[i])
+                                                        }
+                                                        .setNegativeButton("Cancel", null)
+                                                        .show()
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            android.util.Log.e("Cast", "Cast button error", e)
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isCasting) Icons.Filled.CastConnected else Icons.Filled.Cast,
+                                    contentDescription = if (isCasting) "Stop casting" else "Cast to TV",
+                                    tint = when {
+                                        isCasting -> Pink
+                                        castAvailable -> Color.White
+                                        else -> Color.White.copy(alpha = 0.45f)
+                                    },
+                                    modifier = Modifier.size(22.dp)
+                                )
                             }
                         }
-                        Text(currentTime.value, style = ArflixTypography.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Medium), color = TextSecondary, maxLines = 1)
-                        if (endsAtTime.value.isNotBlank()) {
-                            Text("Ends at ${endsAtTime.value}", style = ArflixTypography.caption.copy(fontSize = 12.sp), color = TextSecondary.copy(alpha = 0.7f), maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+                        Column(horizontalAlignment = Alignment.End) {
+                            val currentTime = remember { mutableStateOf("") }
+                            val endsAtTime = remember { mutableStateOf("") }
+                            LaunchedEffect(duration, currentPosition) {
+                                while (true) {
+                                    val now = System.currentTimeMillis()
+                                    val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                                    currentTime.value = sdf.format(java.util.Date(now))
+                                    if (duration > 0 && currentPosition >= 0) {
+                                        val remainingMs = (duration - currentPosition).coerceAtLeast(0L)
+                                        endsAtTime.value = sdf.format(java.util.Date(now + remainingMs))
+                                    } else { endsAtTime.value = "" }
+                                    kotlinx.coroutines.delay(1000)
+                                }
+                            }
+                            Text(currentTime.value, style = ArflixTypography.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Medium), color = TextSecondary, maxLines = 1)
+                            if (endsAtTime.value.isNotBlank()) {
+                                Text("Ends at ${endsAtTime.value}", style = ArflixTypography.caption.copy(fontSize = 12.sp), color = TextSecondary.copy(alpha = 0.7f), maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+                            }
                         }
                     }
                 }
@@ -2407,6 +2596,54 @@ fun PlayerScreen(
             }
         }
 
+        // Skip intro/recap overlay — rendered AFTER the controls overlay so it sits on top
+        // in Compose's hit-test order (later children are tested first), making it tappable
+        // on touch devices even when the controls overlay is also visible.
+        val activeSkip = uiState.activeSkipInterval
+        SkipIntroButton(
+            interval = activeSkip,
+            dismissed = uiState.skipIntervalDismissed,
+            controlsVisible = showControls,
+            onSkip = {
+                val end = activeSkip?.endMs ?: return@SkipIntroButton
+                exoPlayer.seekTo((end + 500L).coerceAtLeast(0L))
+                viewModel.dismissSkipInterval()
+            },
+            focusRequester = skipIntroFocusRequester,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = if (isTouchDevice) 24.dp else 48.dp, bottom = if (showControls) 90.dp else 32.dp)
+        )
+
+        // Next Episode overlay (appears in last minute or during end credits for TV shows)
+        if (mediaType == MediaType.TV && seasonNumber != null && episodeNumber != null) {
+            NextEpisodeButton(
+                hasNextEpisode = true,
+                isInLastMinute = isInLastMinute || uiState.isInOutro,
+                controlsVisible = showControls,
+                seasonNumber = seasonNumber,
+                nextEpisodeNumber = episodeNumber + 1,
+                onPlayNext = {
+                    coroutineScope.launch {
+                        val selected = uiState.selectedStream
+                        val nextEpisode = episodeNumber + 1
+                        val iptvNextUrl = viewModel.buildNextEpisodeUrl(seasonNumber, nextEpisode)
+                        onPlayNext(
+                            seasonNumber,
+                            nextEpisode,
+                            selected?.addonId?.takeIf { it.isNotBlank() },
+                            selected?.source?.takeIf { it.isNotBlank() },
+                            iptvNextUrl
+                        )
+                    }
+                },
+                focusRequester = nextEpisodeOverlayFocusRequester,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 32.dp, bottom = if (showControls) 120.dp else 32.dp)
+            )
+        }
+
         // Subtitle/Audio menu
         AnimatedVisibility(
             visible = showSubtitleMenu,
@@ -2439,24 +2676,12 @@ fun PlayerScreen(
                     }
                 },
                 onSelectAudio = { track ->
-                    // Switch audio track via ExoPlayer
-                    val params = exoPlayer.trackSelectionParameters.buildUpon()
-                    params.setPreferredAudioLanguage(track.language)
-                    val trackGroups = exoPlayer.currentTracks.groups
-                    if (track.groupIndex < trackGroups.size &&
-                        trackGroups[track.groupIndex].type == C.TRACK_TYPE_AUDIO
-                    ) {
-                        params.setOverrideForType(
-                            androidx.media3.common.TrackSelectionOverride(
-                                trackGroups[track.groupIndex].mediaTrackGroup,
-                                track.trackIndex
-                            )
-                        )
+                    // Defensive track-selection — validates group + track bounds and
+                    // swallows IllegalArgumentException from stale indices after a
+                    // player re-prepare. Fixes crash reported in issue #89.
+                    applyAudioTrackSelection(exoPlayer, track, audioTracks)?.let {
+                        selectedAudioIndex = it
                     }
-                    exoPlayer.trackSelectionParameters = params.build()
-                    selectedAudioIndex = audioTracks.indexOfFirst {
-                        it.groupIndex == track.groupIndex && it.trackIndex == track.trackIndex
-                    }.takeIf { it >= 0 } ?: track.index
                     showSubtitleMenu = false
                     showControls = true
                     // Restore focus to subtitle button after closing menu
@@ -2916,6 +3141,73 @@ data class AudioTrackInfo(
     val sampleRate: Int,
     val codec: String?
 )
+
+/**
+ * Apply an audio-track selection to the player defensively.
+ *
+ * The stored [AudioTrackInfo] captures `groupIndex` / `trackIndex` at the moment the
+ * `onTracksChanged` listener fires. Between that moment and the user actually picking
+ * a track from the menu, the player may have re-prepared (e.g. adaptive stream switch,
+ * source reselection, MediaItem rebuild for a new external subtitle), and the current
+ * `exoPlayer.currentTracks.groups` layout may no longer match those indices. Calling
+ * `TrackSelectionOverride(group, trackIndex)` with a stale `trackIndex >= group.length`
+ * throws `IllegalArgumentException` inside Media3 and crashes the player.
+ *
+ * This helper wraps the selection in try/catch, validates every index before use, and
+ * clears any existing audio override before applying the new one so stale overrides
+ * from prior selections don't pin the player to a no-longer-present track. Fixes #89.
+ *
+ * @return the index in [audioTracks] that was actually applied, or `null` if the
+ *         selection could not be applied (caller should leave the previous index).
+ */
+private fun applyAudioTrackSelection(
+    exoPlayer: ExoPlayer,
+    track: AudioTrackInfo,
+    audioTracks: List<AudioTrackInfo>
+): Int? {
+    return try {
+        val params = exoPlayer.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            .setPreferredAudioLanguage(track.language)
+
+        val trackGroups = exoPlayer.currentTracks.groups
+        val groupInRange = track.groupIndex in trackGroups.indices
+        if (groupInRange) {
+            val group = trackGroups[track.groupIndex]
+            val isAudioGroup = group.type == C.TRACK_TYPE_AUDIO
+            val trackInRange = track.trackIndex in 0 until group.length
+            if (isAudioGroup && trackInRange) {
+                params.setOverrideForType(
+                    TrackSelectionOverride(
+                        group.mediaTrackGroup,
+                        track.trackIndex
+                    )
+                )
+            }
+            // If the group is stale we still fall through and apply the
+            // preferredAudioLanguage hint above — Media3 will pick the closest
+            // matching track on its own rather than crashing.
+        }
+
+        exoPlayer.trackSelectionParameters = params.build()
+
+        audioTracks.indexOfFirst {
+            it.groupIndex == track.groupIndex && it.trackIndex == track.trackIndex
+        }.takeIf { it >= 0 } ?: track.index
+    } catch (e: IllegalArgumentException) {
+        // Stale track/group index after a player re-prepare. Leave the current
+        // selection alone instead of crashing; user can retry the menu.
+        android.util.Log.w("PlayerScreen", "applyAudioTrackSelection rejected stale index: ${e.message}")
+        null
+    } catch (e: IllegalStateException) {
+        // Player released or in an invalid state.
+        android.util.Log.w("PlayerScreen", "applyAudioTrackSelection on invalid player: ${e.message}")
+        null
+    } catch (e: Exception) {
+        android.util.Log.e("PlayerScreen", "applyAudioTrackSelection unexpected error", e)
+        null
+    }
+}
 
 /**
  * Language code to full name mapping

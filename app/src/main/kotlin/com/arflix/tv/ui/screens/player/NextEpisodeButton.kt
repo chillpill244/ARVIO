@@ -85,6 +85,15 @@ fun NextEpisodeButton(
 
     val isVisible = shouldShow && (!autoHidden || controlsVisible)
 
+    // When visible while controls are hidden, take focus so Enter triggers next episode immediately.
+    // Also re-run when controlsVisible changes so focus is (re-)requested after controls auto-hide.
+    LaunchedEffect(isVisible, controlsVisible) {
+        if (isVisible && !controlsVisible) {
+            delay(160)
+            runCatching { focusRequester.requestFocus() }
+        }
+    }
+
     val shape = RoundedCornerShape(20.dp)
     val scale by animateFloatAsState(if (isFocused) 1.08f else 1f, label = "next_episode_scale")
 

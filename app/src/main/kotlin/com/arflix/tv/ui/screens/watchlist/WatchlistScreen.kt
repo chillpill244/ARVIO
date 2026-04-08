@@ -3,6 +3,7 @@ package com.arflix.tv.ui.screens.watchlist
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +39,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -67,6 +70,7 @@ import com.arflix.tv.ui.theme.BackgroundDark
 import com.arflix.tv.ui.theme.Pink
 import com.arflix.tv.ui.theme.TextPrimary
 import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.ui.screens.downloads.DownloadsTab
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -81,6 +85,8 @@ fun WatchlistScreen(
     viewModel: WatchlistViewModel = hiltViewModel(),
     currentProfile: com.arflix.tv.data.model.Profile? = null,
     onNavigateToDetails: (MediaType, Int) -> Unit = { _, _ -> },
+    onNavigateToPlayer: (MediaType, Int, Int?, Int?, String?, String?, Long?) -> Unit = { _, _, _, _, _, _, _ -> },
+    onNavigateToDownloadedEpisodes: (Int, String) -> Unit = { _, _ -> },
     onNavigateToHome: () -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     onNavigateToMovies: () -> Unit = {},
@@ -106,6 +112,7 @@ fun WatchlistScreen(
     var enterKeyDownTimeMs by remember { mutableLongStateOf(0L) }
     val longPressThresholdMs = 500L
     val lazyColumnState = rememberLazyListState()
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) } // 0 = Watchlist, 1 = Downloads
     
     // Helper to detect IPTV items
     val isIptvItem: (com.arflix.tv.data.model.MediaItem) -> Boolean = { item: com.arflix.tv.data.model.MediaItem ->
@@ -180,6 +187,18 @@ fun WatchlistScreen(
             .background(BackgroundDark)
             .focusRequester(rootFocusRequester)
             .focusable()
+            .pointerInput(Unit) {
+                var totalDrag = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { totalDrag = 0f },
+                    onDragEnd = {
+                        if (totalDrag < -80f) selectedTab = 1      // swipe left → Downloads
+                        else if (totalDrag > 80f) selectedTab = 0  // swipe right → Watchlist
+                        totalDrag = 0f
+                    },
+                    onDragCancel = { totalDrag = 0f }
+                ) { _, dragAmount -> totalDrag += dragAmount }
+            }
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
                     when (event.key) {
@@ -324,7 +343,46 @@ fun WatchlistScreen(
                 .fillMaxSize()
                 .then(if (!isTouchDevice) Modifier.padding(top = AppTopBarContentTopInset()) else Modifier)
                 .padding(start = 24.dp, top = 10.dp, end = 48.dp)
-        ) {     
+        ) {
+                // Tab selector row
+                if (isTouchDevice) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        listOf("Watchlist", "Downloads").forEachIndexed { index, label ->
+                            Text(
+                                text = label,
+                                style = ArflixTypography.sectionTitle,
+                                color = if (selectedTab == index) Color.White else Color.White.copy(alpha = 0.4f),
+                                modifier = Modifier
+                                    .clickable { selectedTab = index }
+                                    .padding(vertical = 4.dp, horizontal = 8.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (selectedTab == 1 && isTouchDevice) {
+                    // Downloads tab
+                    DownloadsTab(
+                        onMoviePlay = { download ->
+                            val mt = if (download.mediaType == MediaType.MOVIE.name) MediaType.MOVIE else MediaType.TV
+                            val rawUri = download.localUri
+                            val fileUri = if (rawUri != null && rawUri.startsWith("/")) "file://$rawUri" else rawUri
+                            onNavigateToPlayer(
+                                mt, download.tmdbId, download.season, download.episode,
+                                null, fileUri, null
+                            )
+                        },
+                        onSeriesClick = { tmdbId, title ->
+                            onNavigateToDownloadedEpisodes(tmdbId, title)
+                        }
+                    )
+                } else {
+                // Watchlist tab (original content)
                 when {
                     uiState.isLoading -> {
                         Box(
@@ -415,6 +473,7 @@ fun WatchlistScreen(
                         }
                     }
                 }
+                } // end else (watchlist tab)
             }
 
         // Toast notification
@@ -456,6 +515,18 @@ private fun WatchlistItemsSection(
         )
         
         val lazyListState = rememberLazyListState()
+        // Scroll to focused item when navigating horizontally
+        LaunchedEffect(focusedItemIndex) {
+            if (focusedItemIndex < 0) return@LaunchedEffect
+            val safeIndex = focusedItemIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))
+            val first = lazyListState.firstVisibleItemIndex
+            val last = lazyListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: first
+            if (safeIndex < first || safeIndex > last) {
+                lazyListState.scrollToItem(safeIndex)
+            } else if (safeIndex != first) {
+                lazyListState.animateScrollToItem(safeIndex)
+            }
+        }
         LazyRow(
             state = lazyListState,
             horizontalArrangement = Arrangement.spacedBy(16.dp),

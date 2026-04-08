@@ -108,6 +108,7 @@ import com.arflix.tv.ui.theme.SuccessGreen
 import com.arflix.tv.ui.theme.TextPrimary
 import com.arflix.tv.ui.theme.TextSecondary
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Settings screen
@@ -2137,9 +2138,9 @@ private fun GeneralSettings(
         // Subtitle Styling Section
         Text(
             text = "Subtitle Appearance",
-            style = ArflixTypography.sectionTitle,
-            color = TextPrimary,
-            modifier = Modifier.padding(bottom = 24.dp)
+            style = ArflixTypography.caption.copy(fontSize = 11.sp, letterSpacing = 0.8.sp),
+            color = TextSecondary.copy(alpha = 0.5f),
+            modifier = Modifier.padding(start = 4.dp, bottom = 12.dp)
         )
 
         SettingsRow(
@@ -4171,6 +4172,20 @@ private fun SubtitleStyleModal(
 ) {
     var focusedIndex by remember { mutableIntStateOf(0) }
     val focusRequester = remember { FocusRequester() }
+    val isTouchDevice = LocalDeviceType.current.isTouchDevice()
+
+    // Opacity represented as integer step 1..10 (10% to 100%)
+    val opacityStep = (style.backgroundOpacity * 10).roundToInt().coerceIn(1, 10)
+
+    val decrementFontSize = { onStyleChange(style.copy(fontSize = (style.fontSize - 2).coerceAtLeast(12))) }
+    val incrementFontSize = { onStyleChange(style.copy(fontSize = (style.fontSize + 2).coerceAtMost(32))) }
+    val cycleFontFamily = {
+        val fonts = com.arflix.tv.ui.screens.settings.SubtitleFont.entries
+        val next = (fonts.indexOf(style.fontFamily) + 1) % fonts.size
+        onStyleChange(style.copy(fontFamily = fonts[next]))
+    }
+    val decrementOpacity = { onStyleChange(style.copy(backgroundOpacity = (opacityStep - 1).coerceAtLeast(1) / 10f)) }
+    val incrementOpacity = { onStyleChange(style.copy(backgroundOpacity = (opacityStep + 1).coerceAtMost(10) / 10f)) }
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -4185,52 +4200,28 @@ private fun SubtitleStyleModal(
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
                     when (event.key) {
-                        Key.Back, Key.Escape -> {
-                            onDismiss()
-                            true
-                        }
-                        Key.DirectionUp -> {
-                            focusedIndex = (focusedIndex - 1).coerceAtLeast(0)
-                            true
-                        }
-                        Key.DirectionDown -> {
-                            focusedIndex = (focusedIndex + 1).coerceAtMost(2)
-                            true
-                        }
+                        Key.Back, Key.Escape -> { onDismiss(); true }
+                        Key.DirectionUp -> { focusedIndex = (focusedIndex - 1).coerceAtLeast(0); true }
+                        Key.DirectionDown -> { focusedIndex = (focusedIndex + 1).coerceAtMost(2); true }
                         Key.DirectionLeft -> {
                             when (focusedIndex) {
-                                0 -> { // Font Size
-                                    val newSize = (style.fontSize - 2).coerceAtLeast(12)
-                                    onStyleChange(style.copy(fontSize = newSize))
-                                }
-                                2 -> { // Opacity
-                                    val newOpacity = (style.backgroundOpacity - 0.1f).coerceAtLeast(0f)
-                                    onStyleChange(style.copy(backgroundOpacity = newOpacity))
-                                }
+                                0 -> decrementFontSize()
+                                2 -> decrementOpacity()
                             }
                             true
                         }
                         Key.DirectionRight -> {
                             when (focusedIndex) {
-                                0 -> { // Font Size
-                                    val newSize = (style.fontSize + 2).coerceAtMost(32)
-                                    onStyleChange(style.copy(fontSize = newSize))
-                                }
-                                2 -> { // Opacity
-                                    val newOpacity = (style.backgroundOpacity + 0.1f).coerceAtMost(1f)
-                                    onStyleChange(style.copy(backgroundOpacity = newOpacity))
-                                }
+                                0 -> incrementFontSize()
+                                2 -> incrementOpacity()
                             }
                             true
                         }
                         Key.Enter, Key.DirectionCenter -> {
                             when (focusedIndex) {
-                                1 -> { // Font Family - cycle through options
-                                    val fonts = com.arflix.tv.ui.screens.settings.SubtitleFont.entries
-                                    val currentIndex = fonts.indexOf(style.fontFamily)
-                                    val nextIndex = (currentIndex + 1) % fonts.size
-                                    onStyleChange(style.copy(fontFamily = fonts[nextIndex]))
-                                }
+                                0 -> incrementFontSize()
+                                1 -> cycleFontFamily()
+                                2 -> incrementOpacity()
                             }
                             true
                         }
@@ -4242,18 +4233,37 @@ private fun SubtitleStyleModal(
     ) {
         Column(
             modifier = Modifier
-                .width(650.dp)
+                .then(
+                    if (isTouchDevice) Modifier.fillMaxWidth(0.92f).widthIn(max = 600.dp)
+                    else Modifier.width(650.dp)
+                )
                 .background(BackgroundElevated, RoundedCornerShape(16.dp))
                 .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
-                .padding(36.dp),
+                .padding(if (isTouchDevice) 24.dp else 36.dp),
             horizontalAlignment = Alignment.Start
         ) {
-            Text(
-                text = "Subtitle Style",
-                style = ArflixTypography.sectionTitle,
-                color = TextPrimary,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Subtitle Style",
+                    style = ArflixTypography.sectionTitle,
+                    color = TextPrimary
+                )
+                if (isTouchDevice) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                            .clickable { onDismiss() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("✕", color = TextSecondary, fontSize = 16.sp)
+                    }
+                }
+            }
 
             // Preview
             Box(
@@ -4291,7 +4301,9 @@ private fun SubtitleStyleModal(
                 title = "Font Size",
                 value = "${style.fontSize}sp",
                 hint = "◄ ►",
-                isFocused = focusedIndex == 0
+                isFocused = focusedIndex == 0,
+                onDecrement = decrementFontSize,
+                onIncrement = incrementFontSize
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -4301,27 +4313,32 @@ private fun SubtitleStyleModal(
                 title = "Font Family",
                 value = style.fontFamily.displayName,
                 hint = "Enter to cycle",
-                isFocused = focusedIndex == 1
+                isFocused = focusedIndex == 1,
+                onRowClick = cycleFontFamily
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Opacity
+            // Background Opacity
             SubtitleStyleRow(
                 title = "Background Opacity",
-                value = "${(style.backgroundOpacity * 100).toInt()}%",
+                value = "${opacityStep * 10}%",
                 hint = "◄ ►",
-                isFocused = focusedIndex == 2
+                isFocused = focusedIndex == 2,
+                onDecrement = decrementOpacity,
+                onIncrement = incrementOpacity
             )
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            Text(
-                text = "Press Back/Escape to close",
-                style = ArflixTypography.caption,
-                color = TextSecondary.copy(alpha = 0.6f),
-                modifier = Modifier.fillMaxWidth()
-            )
+            if (!isTouchDevice) {
+                Text(
+                    text = "Press Back/Escape to close",
+                    style = ArflixTypography.caption,
+                    color = TextSecondary.copy(alpha = 0.6f),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
@@ -4331,8 +4348,15 @@ private fun SubtitleStyleRow(
     title: String,
     value: String,
     hint: String,
-    isFocused: Boolean
+    isFocused: Boolean,
+    onDecrement: (() -> Unit)? = null,
+    onIncrement: (() -> Unit)? = null,
+    onRowClick: (() -> Unit)? = null
 ) {
+    val isTouchDevice = LocalDeviceType.current.isTouchDevice()
+    val showStepper = isTouchDevice && (onDecrement != null || onIncrement != null)
+    val isClickableRow = isTouchDevice && onRowClick != null
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -4345,6 +4369,7 @@ private fun SubtitleStyleRow(
                 color = if (isFocused) Pink else Color.Transparent,
                 shape = RoundedCornerShape(10.dp)
             )
+            .then(if (isClickableRow) Modifier.clickable { onRowClick?.invoke() } else Modifier)
             .padding(16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -4355,18 +4380,53 @@ private fun SubtitleStyleRow(
                 style = ArflixTypography.body,
                 color = TextPrimary
             )
-            if (isFocused) {
-                Text(
+            when {
+                isClickableRow -> Text(
+                    text = "Tap to cycle",
+                    style = ArflixTypography.caption,
+                    color = TextSecondary.copy(alpha = 0.7f)
+                )
+                isFocused -> Text(
                     text = hint,
                     style = ArflixTypography.caption,
                     color = TextSecondary.copy(alpha = 0.7f)
                 )
             }
         }
-        Text(
-            text = value,
-            style = ArflixTypography.body,
-            color = if (isFocused) Pink else TextSecondary
-        )
+        if (showStepper) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                        .clickable { onDecrement?.invoke() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("−", color = TextPrimary, fontSize = 20.sp)
+                }
+                Text(
+                    text = value,
+                    style = ArflixTypography.body,
+                    color = if (isFocused) Pink else TextSecondary,
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    textAlign = TextAlign.Center
+                )
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                        .clickable { onIncrement?.invoke() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("+", color = TextPrimary, fontSize = 20.sp)
+                }
+            }
+        } else {
+            Text(
+                text = value,
+                style = ArflixTypography.body,
+                color = if (isFocused) Pink else TextSecondary
+            )
+        }
     }
 }

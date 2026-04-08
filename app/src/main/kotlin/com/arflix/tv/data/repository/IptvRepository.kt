@@ -165,6 +165,8 @@ class IptvRepository @Inject constructor(
     private var xtreamSeriesEpisodeInFlight: Map<Int, Deferred<List<XtreamSeriesEpisode>>> = emptyMap()
     @Volatile
     private var cachedVodIndex: VodCatalogIndex? = null
+    @Volatile
+    private var cachedSeriesMatchResults: Map<String, CachedSeriesMatchResult> = emptyMap()
     private val seriesResolver by lazy { IptvSeriesResolverService() }
     private val bracketContentRegex = Regex("""\[[^\]]*]""")
     private val parenContentRegex = Regex("""\([^\)]*\)""")
@@ -215,6 +217,12 @@ class IptvRepository @Inject constructor(
 
     private data class CachedSeriesEpisode(
         val episodes: List<XtreamSeriesEpisode>,
+        val cachedAtMs: Long
+    )
+
+    private data class CachedSeriesMatchResult(
+        val matches: List<Pair<Int, Int>>,  // (seriesId, rawScore)
+        val maxScore: Int,
         val cachedAtMs: Long
     )
 
@@ -1265,6 +1273,7 @@ class IptvRepository @Inject constructor(
         cachedXtreamSeries = emptyList()
         cachedXtreamSeriesEpisodes = emptyMap()
         xtreamSeriesEpisodeInFlight = emptyMap()
+        cachedSeriesMatchResults = emptyMap()
         cachedVodCategories = emptyList()
         cachedSeriesCategories = emptyList()
         cachedSeriesCategoriesAtMs = 0L
@@ -1297,6 +1306,7 @@ class IptvRepository @Inject constructor(
         cachedXtreamSeriesEpisodes = emptyMap()
         xtreamVodLoadedAtMs = 0L
         xtreamSeriesLoadedAtMs = 0L
+        cachedSeriesMatchResults = emptyMap()
         
         // Delete VOD and series disk cache files to force re-download
         runCatching {
@@ -1307,6 +1317,9 @@ class IptvRepository @Inject constructor(
                 System.err.println("[IPTV-Cache] Deleted disk cache: ${it.name}")
             }
         }
+        // Also clear resolver SharedPrefs bindings so stale series-ID mappings
+        // (e.g. wrong language variants) are evicted and re-resolved against the new playlist.
+        seriesResolver.clearAllResolverCache()
         System.err.println("[IPTV-Cache] VOD and Series disk caches cleared")
     }
 
@@ -1677,6 +1690,24 @@ class IptvRepository @Inject constructor(
             loadCatalog(providerKey, creds, allowNetwork = true, forceRefresh = true)
         }
 
+        /**
+         * Clear all resolver caches — both in-memory and on-disk (SharedPreferences).
+         * Called during a manual playlist refresh so stale series-ID bindings (e.g. a wrong
+         * language variant like "Rick and Morty (Turkish)") are evicted and re-resolved
+         * against the fresh provider catalog.
+         */
+        fun clearAllResolverCache() {
+            // Clear in-memory maps
+            catalogMemory.clear()
+            synchronized(resolvedLock) { resolvedMemory.clear() }
+            synchronized(seriesBindingLock) { seriesBindingMemory.clear() }
+            synchronized(seriesInfoLock) { seriesInfoMemory.clear() }
+            // Clear ALL SharedPreferences — wipes catalog_, series_info_, resolved_episode_map,
+            // series_binding_map, and tmdb_binding_v2:* entries in one shot.
+            runCatching { prefs.edit().clear().apply() }
+            System.err.println("[VOD-Resolver] All resolver caches cleared (in-memory + SharedPrefs)")
+        }
+
         suspend fun prefetchSeriesInfo(
             providerKey: String,
             creds: XtreamCredentials,
@@ -1908,6 +1939,7 @@ class IptvRepository @Inject constructor(
                         val seriesId = item.seriesId ?: return@mapNotNull null
                         val name = item.name?.trim().orEmpty()
                         if (name.isBlank()) return@mapNotNull null
+                        if (isLanguageVariantTitle(name)) return@mapNotNull null
                         val normalizedName = normalizeLookupText(name)
                         val tokens = extractTitleTokensFromNormalized(normalizedName)
                         ResolverSeriesEntry(
@@ -2022,11 +2054,18 @@ class IptvRepository @Inject constructor(
                             else -> kotlin.math.abs(inputYear - entry.year)
                         }
                         if (yearDelta > 1) return@forEach
+                        // Prefer entries with fewer extra words than the query.
+                        // "Rick and Morty" beats "Rick and Morty (Turkish)" — both normalize
+                        // to the same canonical key after parentheses are stripped, so we use
+                        // word-count proximity as a tiebreaker.
+                        val queryWordCount = normalizedShow.trim().split(Regex("\\s+")).size
+                        val entryWordCount = entry.name.trim().split(Regex("\\s+")).size
+                        val extraWordPenalty = (entryWordCount - queryWordCount).coerceAtLeast(0) * 100
                         val total = when (yearDelta) {
                             0 -> 18_000
                             1 -> 17_500
                             else -> 17_200
-                        }
+                        } - extraWordPenalty
                         val confidence = when (yearDelta) {
                             0 -> 0.93f
                             1 -> 0.90f
@@ -2361,24 +2400,31 @@ class IptvRepository @Inject constructor(
                 val canonicalShow = toCanonicalTitleKey(normalizedShow)
                 if (canonicalShow.isNotBlank()) {
                     catalogIndex.canonicalTitleMap[canonicalShow]?.forEach { entry ->
-                        if (out.containsKey(entry.seriesId)) return@forEach
                         val yearDelta = when {
                             year == null || entry.year == null -> 0
                             else -> kotlin.math.abs(year - entry.year)
                         }
                         if (yearDelta > 1) return@forEach
+                        // Penalize entries with extra words vs the query so "Rick and Morty"
+                        // beats "Rick and Morty (Turkish)" when both share the same canonical key.
+                        val queryWordCount = normalizedShow.trim().split(Regex("\\s+")).size
+                        val entryWordCount = entry.name.trim().split(Regex("\\s+")).size
+                        val extraWordPenalty = (entryWordCount - queryWordCount).coerceAtLeast(0) * 0.01f
                         val confidence = when (yearDelta) {
                             0 -> 0.93f
                             1 -> 0.90f
                             else -> 0.88f
+                        } - extraWordPenalty
+                        val existing = out[entry.seriesId]
+                        if (existing == null || confidence > existing.confidence) {
+                            out[entry.seriesId] = MatchResult(
+                                seriesId = entry.seriesId,
+                                name = entry.name,
+                                confidence = confidence,
+                                method = "title_canonical",
+                                cover = null
+                            )
                         }
-                        out[entry.seriesId] = MatchResult(
-                            seriesId = entry.seriesId,
-                            name = entry.name,
-                            confidence = confidence,
-                            method = "title_canonical",
-                            cover = null
-                        )
                     }
                 }
 
@@ -2479,18 +2525,26 @@ class IptvRepository @Inject constructor(
                         else -> kotlin.math.abs(year - entry.year)
                     }
                     if (yearDelta <= 2) {
+                        // Penalize entries with extra words vs the query so "Rick and Morty"
+                        // beats "Rick and Morty (Turkish)" when both share the same canonical key.
+                        val queryWordCount = normalizedShow.trim().split(Regex("\\s+")).size
+                        val entryWordCount = entry.name.trim().split(Regex("\\s+")).size
+                        val extraWordPenalty = (entryWordCount - queryWordCount).coerceAtLeast(0) * 0.01f
                         val confidence = when (yearDelta) {
                             0 -> 0.95f
                             1 -> 0.92f
                             else -> 0.88f
+                        } - extraWordPenalty
+                        val existing = out[entry.seriesId]
+                        if (existing == null || confidence > existing.confidence) {
+                            out[entry.seriesId] = MatchResult(
+                                seriesId = entry.seriesId,
+                                name = entry.name,
+                                confidence = confidence,
+                                method = "title_canonical",
+                                cover = null
+                            )
                         }
-                        out[entry.seriesId] = MatchResult(
-                            seriesId = entry.seriesId,
-                            name = entry.name,
-                            confidence = confidence,
-                            method = "title_canonical",
-                            cover = null
-                        )
                     }
                 }
             }
@@ -2868,7 +2922,9 @@ class IptvRepository @Inject constructor(
             seriesId: Int,
             seriesName: String
         ) {
-            val key = "tmdb_binding:$profileId:$tmdbId"
+            // v2: bumped together with series_binding_map_v2 to evict stale bindings
+            // created before the extra-word-penalty fix (e.g. Turkish-variant wrong matches).
+            val key = "tmdb_binding_v2:$profileId:$tmdbId"
             val value = "$seriesId|$seriesName|${System.currentTimeMillis()}"
             runCatching {
                 prefs.edit().putString(key, value).apply()
@@ -2879,7 +2935,7 @@ class IptvRepository @Inject constructor(
          * Get stored SeriesID binding for a TMDB show.
          */
         fun getSeriesBinding(profileId: String, tmdbId: Int): Triple<Int, String, Long>? {
-            val key = "tmdb_binding:$profileId:$tmdbId"
+            val key = "tmdb_binding_v2:$profileId:$tmdbId"
             val value = prefs.getString(key, null) ?: return null
             val parts = value.split("|", limit = 3)
             if (parts.size < 3) return null
@@ -3181,6 +3237,7 @@ class IptvRepository @Inject constructor(
                 episode = episode,
                 normalizedImdb = normalizedImdb,
                 normalizedTmdb = normalizedTmdb,
+                tmdbId = tmdbId,
                 allowNetwork = allowNetwork
             )
 
@@ -3195,37 +3252,83 @@ class IptvRepository @Inject constructor(
         episode: Int,
         normalizedImdb: String?,
         normalizedTmdb: String?,
+        tmdbId: Int? = null,
         allowNetwork: Boolean
     ): List<StreamSource> {
         val normalizedTitle = normalizeLookupText(title)
-        val seriesList = getXtreamSeriesList(creds, allowNetwork = allowNetwork, fast = true)
-        if (seriesList.isEmpty()) return emptyList()
+        val activeProfileId = runCatching { profileManager.activeProfileId.first() }.getOrDefault("default")
+        val providerKey = "$activeProfileId|${xtreamCacheKey(creds)}"
 
-        val matchingSeries = seriesList.asSequence()
-            .mapNotNull { item ->
-                val seriesId = item.seriesId ?: return@mapNotNull null
-                val name = item.name?.trim().orEmpty()
-                if (name.isBlank()) return@mapNotNull null
+        // Build cache key from the most stable identifier available
+        val cacheKey = when {
+            tmdbId != null -> "$providerKey:tmdb:$tmdbId"
+            !normalizedImdb.isNullOrBlank() -> "$providerKey:imdb:$normalizedImdb"
+            normalizedTitle.isNotBlank() -> "$providerKey:title:$normalizedTitle"
+            else -> null
+        }
 
-                val imdbScore = if (!normalizedImdb.isNullOrBlank() && normalizeImdbId(item.imdb) == normalizedImdb) 10_000 else 0
-                val tmdbScore = if (!normalizedTmdb.isNullOrBlank() && normalizeTmdbId(item.tmdb) == normalizedTmdb) 9_500 else 0
-                val titleScore = if (normalizedTitle.isNotBlank()) {
-                    maxOf(scoreNameMatch(name, normalizedTitle), looseSeriesTitleScore(name, normalizedTitle))
-                } else {
-                    0
-                }
-                if (imdbScore == 0 && tmdbScore == 0 && titleScore <= 0) return@mapNotNull null
-                Triple(item, seriesId, imdbScore + tmdbScore + titleScore)
+        // Check if we have cached series matches for this show
+        val cachedResult = cacheKey?.let { cachedSeriesMatchResults[it] }
+        val matchingSeriesWithScores: List<Triple<Int?, Int, Int>> // (seriesId in XtreamSeriesItem or null, seriesId, rawScore)
+        val maxScore: Int
+
+        if (cachedResult != null && (System.currentTimeMillis() - cachedResult.cachedAtMs) <= xtreamSeriesCacheMs) {
+            // Cache hit — skip full catalog scan, use cached series IDs directly
+            System.err.println("[VOD] Series match cache hit for $cacheKey (${cachedResult.matches.size} matches)")
+            matchingSeriesWithScores = cachedResult.matches.map { (seriesId, score) ->
+                Triple(null, seriesId, score) // null = no XtreamSeriesItem needed for cached path
             }
-            .sortedByDescending { it.third }
-            .take(10)
-            .toList()
+            maxScore = cachedResult.maxScore
+        } else {
+            // Cache miss — do full catalog scan
+            val seriesList = getXtreamSeriesList(creds, allowNetwork = allowNetwork, fast = true)
+            if (seriesList.isEmpty()) return emptyList()
 
-        if (matchingSeries.isEmpty()) return emptyList()
+            val matched = seriesList.asSequence()
+                .mapNotNull { item ->
+                    val seriesId = item.seriesId ?: return@mapNotNull null
+                    val name = item.name?.trim().orEmpty()
+                    if (name.isBlank()) return@mapNotNull null
+                    if (isLanguageVariantTitle(name)) return@mapNotNull null
+
+                    val imdbScore = if (!normalizedImdb.isNullOrBlank() && normalizeImdbId(item.imdb) == normalizedImdb) 10_000 else 0
+                    val tmdbScore = if (!normalizedTmdb.isNullOrBlank() && normalizeTmdbId(item.tmdb) == normalizedTmdb) 9_500 else 0
+                    val titleScore = if (normalizedTitle.isNotBlank()) {
+                        maxOf(scoreNameMatch(name, normalizedTitle), looseSeriesTitleScore(name, normalizedTitle))
+                    } else {
+                        0
+                    }
+                    if (imdbScore == 0 && tmdbScore == 0 && titleScore <= 0) return@mapNotNull null
+                    Triple(item, seriesId, imdbScore + tmdbScore + titleScore)
+                }
+                .sortedByDescending { it.third }
+                .take(10)
+                .toList()
+
+            if (matched.isEmpty()) return emptyList()
+
+            // Store in cache
+            val computedMaxScore = matched.maxOfOrNull { it.third } ?: 1
+            if (cacheKey != null) {
+                val toCache = CachedSeriesMatchResult(
+                    matches = matched.map { (_, seriesId, score) -> Pair(seriesId, score) },
+                    maxScore = computedMaxScore,
+                    cachedAtMs = System.currentTimeMillis()
+                )
+                cachedSeriesMatchResults = cachedSeriesMatchResults + (cacheKey to toCache)
+                System.err.println("[VOD] Cached ${matched.size} series matches for $cacheKey")
+            }
+
+            matchingSeriesWithScores = matched.map { (item, seriesId, score) ->
+                Triple(item.seriesId, seriesId, score)
+            }
+            maxScore = computedMaxScore
+        }
+
+        if (matchingSeriesWithScores.isEmpty()) return emptyList()
 
         val sources = mutableListOf<StreamSource>()
-        val maxScore = matchingSeries.maxOfOrNull { it.third } ?: 1
-        for ((seriesItem, seriesId, rawScore) in matchingSeries) {
+        for ((_, seriesId, rawScore) in matchingSeriesWithScores) {
             val episodes = getXtreamSeriesEpisodes(creds, seriesId, allowNetwork = allowNetwork, fast = true)
             val matchingEpisode = episodes.find { it.season == season && it.episode == episode }
             if (matchingEpisode != null) {
@@ -3239,10 +3342,10 @@ class IptvRepository @Inject constructor(
                 }
                 sources.add(
                     StreamSource(
-                        source = seriesItem.name?.trim().orEmpty().ifBlank { "$title S${season}E${episode}" },
+                        source = matchingEpisode.title?.trim().orEmpty().ifBlank { "$title S${season}E${episode}" },
                         addonName = "IPTV Episode Series",
                         addonId = "iptv_xtream_series",
-                        quality = inferQuality(seriesItem.name.orEmpty()),
+                        quality = inferQuality(title),
                         size = "",
                         url = streamUrl,
                         matchScore = normalizedScore
@@ -4016,6 +4119,7 @@ class IptvRepository @Inject constructor(
         cachedXtreamSeries = emptyList()
         cachedXtreamSeriesEpisodes = emptyMap()
         xtreamSeriesEpisodeInFlight = emptyMap()
+        cachedSeriesMatchResults = emptyMap()
     }
 
     // ── Disk cache helpers for Xtream VOD / Series catalogs ──────────────
@@ -4828,6 +4932,19 @@ class IptvRepository @Inject constructor(
             lower.contains("480") -> "480p"
             else -> "VOD"
         }
+    }
+
+    /**
+     * Returns true if the title appears to be a dubbed/language-variant entry
+     * (e.g. "Breaking Bad (Turkish)", "Severance (Türkçe)").
+     * These are excluded from series matching to avoid wrong-language results.
+     */
+    private fun isLanguageVariantTitle(name: String): Boolean {
+        val lower = name.lowercase(Locale.US)
+        return lower.contains("(turkish)") ||
+            lower.contains("(türkçe)") ||
+            lower.contains("(turk)") ||
+            lower.contains("(arabic)")
     }
 
     private fun resolveXtreamCredentials(url: String): XtreamCredentials? {

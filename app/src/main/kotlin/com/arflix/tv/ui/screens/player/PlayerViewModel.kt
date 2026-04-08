@@ -17,6 +17,7 @@ import com.arflix.tv.data.repository.SkipInterval
 import com.arflix.tv.data.repository.SkipIntroRepository
 import com.arflix.tv.data.repository.StreamRepository
 import com.arflix.tv.data.repository.CloudSyncRepository
+import com.arflix.tv.data.repository.DownloadsRepository
 import com.arflix.tv.data.repository.LauncherContinueWatchingRepository
 import com.arflix.tv.data.repository.TraktRepository
 import com.arflix.tv.data.repository.WatchHistoryEntry
@@ -76,6 +77,7 @@ class PlayerViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
     private val watchHistoryRepository: WatchHistoryRepository,
     private val cloudSyncRepository: CloudSyncRepository,
+    private val downloadsRepository: DownloadsRepository,
     private val launcherContinueWatchingRepository: LauncherContinueWatchingRepository,
     private val tmdbApi: TmdbApi,
     private val skipIntroRepository: SkipIntroRepository,
@@ -204,7 +206,21 @@ class PlayerViewModel @Inject constructor(
             )
 
             // If stream URL provided, use it directly (except magnet links, which require resolution).
-            if (providedStreamUrl != null) {
+            // First, check if there's a local download available (prefer offline)
+            val effectiveStreamUrl = providedStreamUrl ?: run {
+                val localDownload = downloadsRepository.getDownloadForMedia(
+                    tmdbId = mediaId,
+                    mediaType = mediaType,
+                    season = seasonNumber,
+                    episode = episodeNumber
+                )
+                if (localDownload?.status == com.arflix.tv.data.db.DownloadStatus.COMPLETED && localDownload.localUri != null) {
+                    // Ensure local paths are returned as a proper file:// URI
+                    val uri = localDownload.localUri
+                    if (uri.startsWith("/")) "file://$uri" else uri
+                } else null
+            }
+            if (effectiveStreamUrl != null) {
                 val resumeData = resolveResumeData(
                     mediaType = mediaType,
                     mediaId = mediaId,
@@ -212,8 +228,8 @@ class PlayerViewModel @Inject constructor(
                     episodeNumber = episodeNumber,
                     navigationStartPositionMs = startPositionMs
                 )
-                val isMagnet = providedStreamUrl.startsWith("magnet:", ignoreCase = true)
-                val resolvedProvidedUrl = if (isMagnet) null else providedStreamUrl
+                val isMagnet = effectiveStreamUrl.startsWith("magnet:", ignoreCase = true)
+                val resolvedProvidedUrl = if (isMagnet) null else effectiveStreamUrl
 
                 if (resolvedProvidedUrl.isNullOrBlank()) {
                     _uiState.value = _uiState.value.copy(
@@ -237,13 +253,48 @@ class PlayerViewModel @Inject constructor(
                     size = "",
                     url = resolvedProvidedUrl
                 )
+                // For local files, fetch the saved subtitle synchronously BEFORE emitting
+                // selectedStreamUrl. This ensures the subtitle is baked into the initial
+                // MediaItem when PlayerScreen's LaunchedEffect(selectedStreamUrl) fires,
+                // avoiding a race where STATE_IDLE blocks the subtitle-rebuild effect.
+                var localSub: com.arflix.tv.data.model.Subtitle? = null
+                if (resolvedProvidedUrl.startsWith("file://", ignoreCase = true)) {
+                    val rawLocalUri = resolvedProvidedUrl.removePrefix("file://")
+                    // Try exact match first
+                    var localDownload = downloadsRepository.getDownloadByLocalUri(rawLocalUri)
+                    
+                    // If not found, try with leading slash in case of path normalization issues
+                    if (localDownload == null && !rawLocalUri.startsWith("/")) {
+                        localDownload = downloadsRepository.getDownloadByLocalUri("/$rawLocalUri")
+                    }
+                    
+                    if (localDownload != null) {
+                        val subUri = localDownload.subtitleLocalUri
+                        if (!subUri.isNullOrBlank()) {
+                            val fileSubUri = if (subUri.startsWith("/")) "file://$subUri" else subUri
+                            localSub = com.arflix.tv.data.model.Subtitle(
+                                id = "local_subtitle_0",
+                                url = fileSubUri,
+                                lang = localDownload.subtitleLang ?: "eng",
+                                label = localDownload.subtitleLang?.ifBlank { "English" } ?: "English",
+                                isEmbedded = false
+                            )
+                            android.util.Log.d("PlayerViewModel", "Loaded local subtitle from DB: $fileSubUri (lang: ${localDownload.subtitleLang})")
+                        } else {
+                            android.util.Log.w("PlayerViewModel", "No subtitle URI found in download entry for: $rawLocalUri")
+                        }
+                    }
+                }
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isLoadingStreams = false,
                     selectedStreamUrl = resolvedProvidedUrl,
                     selectedStream = placeholderStream,
                     streams = listOf(placeholderStream),
-                    savedPosition = resumeData.positionMs
+                    savedPosition = resumeData.positionMs,
+                    subtitles = if (localSub != null) listOf(localSub) else _uiState.value.subtitles,
+                    selectedSubtitle = localSub ?: _uiState.value.selectedSubtitle
                 )
                 launch {
                     kotlinx.coroutines.delay(1_500L)
@@ -1952,9 +2003,22 @@ class PlayerViewModel @Inject constructor(
     /**
      * Build a direct episode URL from cached IPTV series info.
      * Returns null if series context is not set or episode not cached.
+     *
+     * Also persists the current series context so the next PlayerViewModel
+     * (which is recreated during navigation) can reliably recover the same
+     * series ID via loadIptvSeriesContextFromStorage() instead of re-resolving
+     * and potentially picking a different language variant.
      */
     suspend fun buildNextEpisodeUrl(nextSeason: Int, nextEpisode: Int): String? {
         val seriesId = currentIptvSeriesId ?: return null
+        // Persist the current series context before we navigate away, so the
+        // new PlayerViewModel created for the next episode always gets the
+        // same series ID without needing to re-resolve.
+        if (currentMediaType == MediaType.TV && currentMediaId != 0) {
+            runCatching {
+                iptvRepository.storeSeriesContext(currentMediaId, seriesId, currentIptvSeriesName.orEmpty())
+            }
+        }
         return runCatching {
             iptvRepository.buildEpisodeUrlFromCache(seriesId, nextSeason, nextEpisode)
         }.getOrNull()

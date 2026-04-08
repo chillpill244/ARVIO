@@ -27,6 +27,7 @@ import com.arflix.tv.ui.screens.series.SeriesScreen
 import com.arflix.tv.ui.screens.settings.SettingsScreen
 import com.arflix.tv.ui.screens.tv.TvScreen
 import com.arflix.tv.ui.screens.watchlist.WatchlistScreen
+import com.arflix.tv.ui.screens.downloads.DownloadedEpisodesScreen
 import com.arflix.tv.ui.screens.profile.ProfileSelectionScreen
 
 /**
@@ -49,6 +50,12 @@ sealed class Screen(val route: String) {
     }
     object Settings : Screen("settings")
     object ProfileSelection : Screen("profile_selection")
+    object DownloadedEpisodes : Screen("downloaded_episodes/{tmdbId}?title={title}") {
+        fun createRoute(tmdbId: Int, title: String): String {
+            val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
+            return "downloaded_episodes/$tmdbId?title=$encodedTitle"
+        }
+    }
     
     object Details : Screen("details/{mediaType}/{mediaId}?initialSeason={initialSeason}&initialEpisode={initialEpisode}&preferSource={preferSource}&iptvSeriesId={iptvSeriesId}") {
         fun createRoute(
@@ -236,6 +243,22 @@ fun AppNavigation(
                 onNavigateToDetails = { mediaType, mediaId ->
                     navController.navigate(Screen.Details.createRoute(mediaType, mediaId))
                 },
+                onNavigateToPlayer = { mediaType, mediaId, season, episode, imdbId, streamUrl, startPositionMs ->
+                    navController.navigate(
+                        Screen.Player.createRoute(
+                            mediaType = mediaType,
+                            mediaId = mediaId,
+                            seasonNumber = season,
+                            episodeNumber = episode,
+                            imdbId = imdbId,
+                            streamUrl = streamUrl,
+                            startPositionMs = startPositionMs
+                        )
+                    )
+                },
+                onNavigateToDownloadedEpisodes = { tmdbId, title ->
+                    navController.navigate(Screen.DownloadedEpisodes.createRoute(tmdbId, title))
+                },
                 onNavigateToHome = { navigateHome() },
                 onNavigateToSearch = { navigateTopLevel(Screen.Search.route) },
                 onNavigateToMovies = { navigateTopLevel(Screen.Movies.route) },
@@ -253,6 +276,37 @@ fun AppNavigation(
                     navController.navigate(Screen.ProfileSelection.route) {
                         popUpTo(Screen.Home.route) { inclusive = true }
                     }
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // Downloaded Episodes screen (Series downloads)
+        composable(
+            route = Screen.DownloadedEpisodes.route,
+            arguments = listOf(
+                navArgument("tmdbId") { type = NavType.IntType },
+                navArgument("title") { type = NavType.StringType; defaultValue = "" }
+            )
+        ) { backStackEntry ->
+            val tmdbId = backStackEntry.arguments?.getInt("tmdbId") ?: 0
+            val title = backStackEntry.arguments?.getString("title") ?: ""
+            DownloadedEpisodesScreen(
+                tmdbId = tmdbId,
+                title = title,
+                onPlayEpisode = { download ->
+                    val mt = if (download.mediaType == "MOVIE") MediaType.MOVIE else MediaType.TV
+                    val rawUri = download.localUri
+                    val fileUri = if (rawUri != null && rawUri.startsWith("/")) "file://$rawUri" else rawUri
+                    navController.navigate(
+                        Screen.Player.createRoute(
+                            mediaType = mt,
+                            mediaId = download.tmdbId,
+                            seasonNumber = download.season,
+                            episodeNumber = download.episode,
+                            streamUrl = fileUri
+                        )
+                    )
                 },
                 onBack = { navController.popBackStack() }
             )

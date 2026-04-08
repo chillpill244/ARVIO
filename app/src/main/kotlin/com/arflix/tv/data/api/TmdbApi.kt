@@ -59,6 +59,8 @@ interface TmdbApi {
         @Query("release_date.gte") releaseDateGte: String? = null,
         @Query("release_date.lte") releaseDateLte: String? = null,
         @Query("language") language: String? = null,
+        @Query("with_watch_providers") watchProviders: Int? = null,
+        @Query("watch_region") watchRegion: String? = null,
         @Query("page") page: Int = 1
     ): TmdbListResponse
     

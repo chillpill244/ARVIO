@@ -327,7 +327,7 @@ fun MediaCard(
 
         Text(
             text = content.title,
-            style = ArvioSkin.typography.cardTitle,
+            style = ArvioSkin.typography.cardTitle.copy(fontSize = 12.sp),
             color = if (visualFocused) {
                 ArvioSkin.colors.textPrimary
             } else {
@@ -350,7 +350,7 @@ fun MediaCard(
         }
         Text(
             text = subtitle,
-            style = ArvioSkin.typography.caption,
+            style = ArvioSkin.typography.caption.copy(fontSize = 9.sp),
             color = ArvioSkin.colors.textMuted.copy(alpha = 0.85f),
             maxLines = subtitleMaxLines,
             overflow = TextOverflow.Ellipsis,
@@ -481,7 +481,7 @@ fun PosterCard(
 
             Text(
                 text = content.title,
-                style = ArvioSkin.typography.caption,
+                style = ArvioSkin.typography.caption.copy(fontSize = 9.sp),
                 color = ArvioSkin.colors.textPrimary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -492,7 +492,7 @@ fun PosterCard(
             if (mediaItem?.year?.isNotBlank() == true) {
                 Text(
                     text = mediaItem.year,
-                    style = ArvioSkin.typography.caption,
+                    style = ArvioSkin.typography.caption.copy(fontSize = 9.sp),
                     color = ArvioSkin.colors.textMuted.copy(alpha = 0.65f),
                 )
             }

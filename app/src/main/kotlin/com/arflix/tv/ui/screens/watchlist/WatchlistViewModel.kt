@@ -8,6 +8,7 @@ import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.repository.CloudSyncRepository
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.repository.IptvRepository
+import com.arflix.tv.data.repository.TraktRepository
 import com.arflix.tv.data.repository.WatchlistRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -42,7 +43,8 @@ val WatchlistUiState.items: List<MediaItem>
 class WatchlistViewModel @Inject constructor(
     private val watchlistRepository: WatchlistRepository,
     private val cloudSyncRepository: CloudSyncRepository,
-    private val iptvRepository: IptvRepository
+    private val iptvRepository: IptvRepository,
+    private val traktRepository: TraktRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WatchlistUiState())
@@ -55,6 +57,8 @@ class WatchlistViewModel @Inject constructor(
         loadFavoriteTvChannels()
         // Also observe the repository's StateFlow for live updates
         observeWatchlistChanges()
+        // Sync Trakt watchlist → local (merge any items added via Trakt)
+        syncTraktWatchlist()
     }
 
     private fun observeWatchlistChanges() {
@@ -180,6 +184,8 @@ class WatchlistViewModel @Inject constructor(
                     )
                     // Then sync to backend
                     watchlistRepository.removeFromWatchlist(item.mediaType, item.id)
+                    // Also remove from Trakt if connected
+                    runCatching { traktRepository.removeFromWatchlist(item.mediaType, item.id) }
                     runCatching { cloudSyncRepository.pushToCloud() }
                 }
             } catch (e: Exception) {
@@ -193,6 +199,38 @@ class WatchlistViewModel @Inject constructor(
 
     fun dismissToast() {
         _uiState.value = _uiState.value.copy(toastMessage = null)
+    }
+
+    /**
+     * Pull Trakt watchlist and merge new items into local watchlist.
+     * Items on Trakt but not local get added; local-only items are preserved.
+     */
+    private fun syncTraktWatchlist() {
+        viewModelScope.launch {
+            try {
+                val traktItems = traktRepository.getWatchlist()
+                if (traktItems.isEmpty()) return@launch
+
+                // Merge: add any Trakt items not already in local watchlist
+                var addedNew = false
+                for (item in traktItems) {
+                    val inLocal = watchlistRepository.isInWatchlist(item.mediaType, item.id)
+                    if (!inLocal) {
+                        watchlistRepository.addToWatchlist(item.mediaType, item.id, item)
+                        addedNew = true
+                    }
+                }
+
+                // Only refresh if we actually added new items (avoids clearing cache)
+                if (addedNew) {
+                    val items = watchlistRepository.refreshWatchlistItems()
+                    val (movies, series, _) = organizeItems(items)
+                    _uiState.value = _uiState.value.copy(movies = movies, series = series, isLoading = false)
+                }
+            } catch (_: Exception) {
+                // Trakt sync is best-effort, don't show errors
+            }
+        }
     }
 
     private fun loadFavoriteTvChannels() {

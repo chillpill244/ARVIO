@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Visibility
@@ -84,6 +86,8 @@ object ContextActions {
     val removeWatchlist = ContextAction("remove_watchlist", "Remove from Watchlist", Icons.Default.Bookmark, TextSecondary)
     val viewDetails = ContextAction("view_details", "View Details", Icons.Default.Info, TextPrimary)
     val markSeasonWatched = ContextAction("mark_season_watched", "Mark Season Watched", Icons.Default.Check, Color(0xFF22C55E))
+    val downloadEpisode = ContextAction("download", "Download", Icons.Default.Download, Color(0xFF3B82F6))
+    val removeDownload = ContextAction("remove_download", "Remove Download", Icons.Default.Delete, Color(0xFFFF5252))
 }
 
 /**
@@ -417,16 +421,27 @@ fun EpisodeContextMenu(
     episodeName: String,
     seasonEpisode: String,
     isWatched: Boolean,
+    downloadStatus: String? = null,
     onPlay: () -> Unit,
     onSelectSource: () -> Unit,
     onToggleWatched: () -> Unit,
+    onDownload: (() -> Unit)? = null,
+    onRemoveDownload: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
-    val actions = listOf(
-        ContextActions.play,
-        ContextActions.selectSource,
-        if (isWatched) ContextActions.markUnwatched else ContextActions.markWatched
-    )
+    val downloadAction = when {
+        onDownload != null && (downloadStatus == null || downloadStatus == "FAILED") ->
+            ContextActions.downloadEpisode
+        onRemoveDownload != null && downloadStatus != null && downloadStatus != "FAILED" ->
+            ContextActions.removeDownload
+        else -> null
+    }
+    val actions = buildList {
+        add(ContextActions.play)
+        add(ContextActions.selectSource)
+        downloadAction?.let { add(it) }
+        add(if (isWatched) ContextActions.markUnwatched else ContextActions.markWatched)
+    }
     
     ContextMenu(
         isVisible = isVisible,
@@ -437,6 +452,8 @@ fun EpisodeContextMenu(
             when (action.id) {
                 "play" -> onPlay()
                 "sources" -> onSelectSource()
+                "download" -> onDownload?.invoke()
+                "remove_download" -> onRemoveDownload?.invoke()
                 "mark_watched", "mark_unwatched" -> onToggleWatched()
             }
             onDismiss()

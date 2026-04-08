@@ -160,6 +160,159 @@ class MediaRepository @Inject constructor(
         items.forEach { cacheItem(it) }
     }
 
+    // ── Home category config ──────────────────────────────────────────────────
+    // Single source of truth: add/change/remove a category here and both the
+    // initial load (getHomeCategories) and pagination (loadHomeCategoryPage)
+    // automatically pick it up.
+
+    private sealed class HomeCategoryFetcher {
+        object TrendingMovies : HomeCategoryFetcher()
+        object TrendingTv : HomeCategoryFetcher()
+        data class DiscoverMovies(
+            val genres: String? = null,
+            val keywords: String? = null,
+            val originalLanguage: String? = null,
+            val originCountry: String? = null,
+            val region: String? = null,
+            val releaseType: Int? = null,
+            val sortBy: String = "popularity.desc",
+            val minVoteCount: Int? = null,
+            val dateWindowMonths: Int = 12
+        ) : HomeCategoryFetcher()
+        data class DiscoverTv(
+            val genres: String? = null,
+            val keywords: String? = null,
+            val originCountry: String? = null,
+            val region: String? = null,
+            val sortBy: String = "popularity.desc",
+            val minVoteCount: Int? = null,
+            val dateWindowMonths: Int = 12
+        ) : HomeCategoryFetcher()
+        data class ProviderInterleaved(
+            val providerId: Int,
+            val minVoteCount: Int = 10,
+            val dateWindowMonths: Int = 12
+        ) : HomeCategoryFetcher()
+    }
+
+    private data class HomeCategoryDef(val id: String, val title: String, val fetcher: HomeCategoryFetcher)
+
+    private val homeCategories: List<HomeCategoryDef> = listOf(
+        HomeCategoryDef("trending_movies",     "Trending Movies",          HomeCategoryFetcher.TrendingMovies),
+        HomeCategoryDef("trending_tv",         "Trending Series",          HomeCategoryFetcher.TrendingTv),
+        HomeCategoryDef("trending_indian",     "Trending Indian Movies",   HomeCategoryFetcher.DiscoverMovies(
+            originCountry = "IN", region = "IN", releaseType = 4, minVoteCount = 5, dateWindowMonths = 6
+        )),
+        HomeCategoryDef("trending_anime",      "Trending Anime",           HomeCategoryFetcher.DiscoverTv(
+            genres = "16", keywords = "210024", minVoteCount = 10, dateWindowMonths = 18
+        )),
+        HomeCategoryDef("trending_netflix",    "Trending on Netflix",      HomeCategoryFetcher.ProviderInterleaved(8)),
+        HomeCategoryDef("trending_disney",     "Trending on Disney+",      HomeCategoryFetcher.ProviderInterleaved(337)),
+        HomeCategoryDef("trending_prime",      "Trending on Prime Video",  HomeCategoryFetcher.ProviderInterleaved(9)),
+        HomeCategoryDef("trending_hbo",        "Trending on Max",          HomeCategoryFetcher.ProviderInterleaved(1899)),
+        HomeCategoryDef("trending_apple",      "Trending on Apple TV+",    HomeCategoryFetcher.ProviderInterleaved(350)),
+        HomeCategoryDef("trending_telugu",     "Trending Telugu Movies",   HomeCategoryFetcher.DiscoverMovies(
+            originalLanguage = "te", region = "IN", releaseType = 4, minVoteCount = 3, dateWindowMonths = 6
+        )),
+        HomeCategoryDef("trending_paramount",  "Trending on Paramount+",   HomeCategoryFetcher.ProviderInterleaved(2303)),
+        HomeCategoryDef("trending_hulu",       "Trending on Hulu",         HomeCategoryFetcher.ProviderInterleaved(15)),
+        HomeCategoryDef("trending_shows_india","Trending TV Shows India",  HomeCategoryFetcher.DiscoverTv(
+            originCountry = "IN", region = "IN", minVoteCount = 5, dateWindowMonths = 3
+        )),
+        HomeCategoryDef("trending_peacock",    "Trending on Peacock",      HomeCategoryFetcher.ProviderInterleaved(386)),
+    )
+
+    private fun monthsAgoDate(months: Int): String {
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.MONTH, -months)
+        return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
+    }
+
+    private suspend fun fetchUpTo40(fetchPage: suspend (Int) -> TmdbListResponse): List<TmdbMediaItem> {
+        val first = runCatching { fetchPage(1) }.getOrNull() ?: return emptyList()
+        val firstItems = first.results
+        if (firstItems.size >= 40 || first.totalPages < 2) return firstItems.take(40)
+        val secondItems = runCatching { fetchPage(2) }.getOrNull()?.results.orEmpty()
+        return (firstItems + secondItems).distinctBy { it.id }.take(40)
+    }
+
+    private fun interleaveMediaItems(tvItems: List<MediaItem>, movieItems: List<MediaItem>, max: Int = 40): List<MediaItem> {
+        val result = mutableListOf<MediaItem>()
+        for (i in 0 until maxOf(tvItems.size, movieItems.size)) {
+            if (i < tvItems.size) result.add(tvItems[i])
+            if (i < movieItems.size) result.add(movieItems[i])
+        }
+        return result.distinctBy { "${it.mediaType}_${it.id}" }.take(max)
+    }
+
+    private suspend fun fetchHomeCategoryItems(fetcher: HomeCategoryFetcher): List<MediaItem> = when (fetcher) {
+        HomeCategoryFetcher.TrendingMovies ->
+            fetchUpTo40 { page -> tmdbApi.getTrendingMovies(apiKey, language = contentLanguage, page = page) }
+                .map { it.toMediaItem(MediaType.MOVIE) }
+        HomeCategoryFetcher.TrendingTv ->
+            fetchUpTo40 { page -> tmdbApi.getTrendingTv(apiKey, language = contentLanguage, page = page) }
+                .map { it.toMediaItem(MediaType.TV) }
+        is HomeCategoryFetcher.DiscoverMovies ->
+            fetchUpTo40 { page ->
+                tmdbApi.discoverMovies(
+                    apiKey, language = contentLanguage,
+                    genres = fetcher.genres,
+                    keywords = fetcher.keywords,
+                    originalLanguage = fetcher.originalLanguage,
+                    originCountry = fetcher.originCountry,
+                    region = fetcher.region,
+                    releaseType = fetcher.releaseType,
+                    sortBy = fetcher.sortBy,
+                    minVoteCount = fetcher.minVoteCount,
+                    releaseDateGte = monthsAgoDate(fetcher.dateWindowMonths),
+                    page = page
+                )
+            }.map { it.toMediaItem(MediaType.MOVIE) }
+        is HomeCategoryFetcher.DiscoverTv ->
+            fetchUpTo40 { page ->
+                tmdbApi.discoverTv(
+                    apiKey, language = contentLanguage,
+                    genres = fetcher.genres,
+                    keywords = fetcher.keywords,
+                    originCountry = fetcher.originCountry,
+                    region = fetcher.region,
+                    sortBy = fetcher.sortBy,
+                    minVoteCount = fetcher.minVoteCount,
+                    airDateGte = monthsAgoDate(fetcher.dateWindowMonths),
+                    page = page
+                )
+            }.map { it.toMediaItem(MediaType.TV) }
+        is HomeCategoryFetcher.ProviderInterleaved -> coroutineScope {
+            val dateGte = monthsAgoDate(fetcher.dateWindowMonths)
+            val tvDeferred = async {
+                fetchUpTo40 { page ->
+                    tmdbApi.discoverTv(
+                        apiKey, language = contentLanguage,
+                        watchProviders = fetcher.providerId,
+                        sortBy = "popularity.desc",
+                        minVoteCount = fetcher.minVoteCount,
+                        airDateGte = dateGte,
+                        page = page
+                    )
+                }.map { it.toMediaItem(MediaType.TV) }
+            }
+            val moviesDeferred = async {
+                fetchUpTo40 { page ->
+                    tmdbApi.discoverMovies(
+                        apiKey, language = contentLanguage,
+                        watchProviders = fetcher.providerId,
+                        watchRegion = "US",
+                        sortBy = "popularity.desc",
+                        minVoteCount = fetcher.minVoteCount,
+                        releaseDateGte = dateGte,
+                        page = page
+                    )
+                }.map { it.toMediaItem(MediaType.MOVIE) }
+            }
+            interleaveMediaItems(tvDeferred.await(), moviesDeferred.await(), max = 60)
+        }
+    }
+
     fun getDefaultCatalogConfigs(): List<CatalogConfig> {
         return listOf(
             CatalogConfig("trending_telugu", "Trending Telugu Movies", CatalogSourceType.PREINSTALLED, isPreinstalled = true),
@@ -178,441 +331,126 @@ class MediaRepository @Inject constructor(
     }
     
     /**
-     * Fetch home screen categories
-     * Uses improved filters for better quality results:
-     * - Trending: Uses daily TMDB trending (updates every day)
-     * - Indian Movies: Uses "IN" origin country for accurate Indian content
-     * - Provider categories: wider recency window to keep full rows populated
+     * Fetch home screen categories.
+     * Category parameters are declared once in [homeCategories]; both initial
+     * load and pagination share the same config automatically.
      */
     suspend fun getHomeCategories(): List<Category> = coroutineScope {
-        suspend fun fetchUpTo40(fetchPage: suspend (Int) -> TmdbListResponse): List<TmdbMediaItem> {
-            val first = runCatching { fetchPage(1) }.getOrNull() ?: return emptyList()
-            val firstItems = first.results
-            if (firstItems.size >= 40 || first.totalPages < 2) return firstItems.take(40)
-            val secondItems = runCatching { fetchPage(2) }.getOrNull()?.results.orEmpty()
-            return (firstItems + secondItems).distinctBy { it.id }.take(40)
+        val deferred = homeCategories.map { def ->
+            def to async { runCatching { fetchHomeCategoryItems(def.fetcher) }.getOrElse { emptyList() } }
         }
-
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val calendar = Calendar.getInstance()
-        // Wider windows keep rows filled up to 40 items consistently.
-        calendar.add(Calendar.MONTH, -12)
-        val twelveMonthsAgo = dateFormat.format(calendar.time)
-
-        // Main trending - TMDB's daily trending for fresh content
-        val trendingMovies = async { fetchUpTo40 { page -> tmdbApi.getTrendingMovies(apiKey, language = contentLanguage, page = page) } }
-        val trendingTv = async { fetchUpTo40 { page -> tmdbApi.getTrendingTv(apiKey, language = contentLanguage, page = page) } }
-
-        // Anime: popularity.desc tracks current buzz, air_date filter for currently airing
-        // Wider horizon for slower seasonal cycles.
-        val eighteenMonthsAgoCal = Calendar.getInstance()
-        eighteenMonthsAgoCal.add(Calendar.MONTH, -18)
-        val eighteenMonthsAgo = dateFormat.format(eighteenMonthsAgoCal.time)
-        val trendingAnime = async {
-            fetchUpTo40 { page ->
-                tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    genres = "16",
-                    keywords = "210024",  // "anime" keyword ID
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = eighteenMonthsAgo,
-                    page = page
-                )
-            }
+        val categories = deferred.mapNotNull { (def, job) ->
+            val items = job.await()
+            val maxItems = if (def.fetcher is HomeCategoryFetcher.ProviderInterleaved) 60 else 40
+            if (items.isEmpty()) null else Category(id = def.id, title = def.title, items = items.take(maxItems))
         }
-
-        // Indian Movies: popularity.desc tracks current buzz, release_date filter for recent releases
-        val trendingIndian = async {
-            // Indian cinema - 6 months window for regional content
-            val indianCalendar = Calendar.getInstance()
-            indianCalendar.add(Calendar.MONTH, -6)
-            val sixMonthsAgo = dateFormat.format(indianCalendar.time)
-            fetchUpTo40 { page ->
-                tmdbApi.discoverMovies(
-                    apiKey,
-                    region = "IN", // India region
-                    originCountry = "IN", // Indian productions
-                    sortBy = "popularity.desc",
-                    minVoteCount = 5, // Lower threshold for regional cinema
-                    releaseDateGte = sixMonthsAgo,
-                    releaseType = 4, // Digital releases
-                    page = page
-                )
-            }
-        }
-
-        // Provider-based categories
-        val netflix = async {
-            fetchUpTo40 { page ->
-                tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 8,
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-            }
-        }
-        val disney = async {
-            fetchUpTo40 { page ->
-                tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 337,
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-            }
-        }
-        val prime = async {
-            fetchUpTo40 { page ->
-                tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 9,
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-            }
-        }
-        val hboMax = async {
-            fetchUpTo40 { page ->
-                tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 1899, // Max (formerly HBO Max)
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-            }
-        }
-        val appleTv = async {
-            fetchUpTo40 { page ->
-                tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 350, // Apple TV+
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-            }
-        }
-        val telugu = async {
-            // Telugu cinema - 6 months window for regional content
-            val teluguCalendar = Calendar.getInstance()
-            teluguCalendar.add(Calendar.MONTH, -6)
-            val sixMonthsAgo = dateFormat.format(teluguCalendar.time)
-            fetchUpTo40 { page ->
-                tmdbApi.discoverMovies(
-                    apiKey,
-                    originalLanguage = "te", // Telugu language
-                    region = "IN", // India region
-                    sortBy = "popularity.desc",
-                    minVoteCount = 3, // Lower threshold for regional cinema
-                    releaseType = 4, // Digital releases
-                    releaseDateGte = sixMonthsAgo,
-                    page = page
-                )
-            }
-        }
-        val paramount = async {
-            fetchUpTo40 { page ->
-                tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 2303, // Paramount+ Premium
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-            }
-        }
-        val hulu = async {
-            fetchUpTo40 { page ->
-                tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 15, // Hulu
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-            }
-        }
-        val showsIndia = async {
-            // Indian TV shows - 6 months window for regional content
-            val indiaCalendar = Calendar.getInstance()
-            indiaCalendar.add(Calendar.MONTH, -6)
-            val sixMonthsAgo = dateFormat.format(indiaCalendar.time)
-            fetchUpTo40 { page ->
-                tmdbApi.discoverTv(
-                    apiKey,
-                    originCountry = "IN", // Indian productions
-                    region = "IN", // India region
-                    sortBy = "popularity.desc",
-                    minVoteCount = 5, // Lower threshold for regional content
-                    airDateGte = sixMonthsAgo,
-                    page = page
-                )
-            }
-        }
-        val peacock = async {
-            fetchUpTo40 { page ->
-                tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 386, // Peacock
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-            }
-        }
-
-        // Show up to 40 items per category.
-        // Keep categories resilient: if a provider call fails, we keep the other rows.
-        val maxItemsPerCategory = 40
-        suspend fun safeItems(fetch: suspend () -> List<TmdbMediaItem>, mediaType: MediaType): List<MediaItem> {
-            return runCatching { fetch() }
-                .getOrElse { emptyList() }
-                .take(maxItemsPerCategory)
-                .map { it.toMediaItem(mediaType) }
-        }
-
-        val categories = listOf(
-            Category(
-                id = "trending_movies",
-                title = "Trending Movies",
-                items = safeItems({ trendingMovies.await() }, MediaType.MOVIE)
-            ),
-            Category(
-                id = "trending_tv",
-                title = "Trending Series",
-                items = safeItems({ trendingTv.await() }, MediaType.TV)
-            ),
-            Category(
-                id = "trending_indian",
-                title = "Trending Indian Movies",
-                items = safeItems({ trendingIndian.await() }, MediaType.MOVIE)
-            ),
-            Category(
-                id = "trending_anime",
-                title = "Trending Anime",
-                items = safeItems({ trendingAnime.await() }, MediaType.TV)
-            ),
-            Category(
-                id = "trending_netflix",
-                title = "Trending on Netflix",
-                items = safeItems({ netflix.await() }, MediaType.TV)
-            ),
-            Category(
-                id = "trending_disney",
-                title = "Trending on Disney+",
-                items = safeItems({ disney.await() }, MediaType.TV)
-            ),
-            Category(
-                id = "trending_prime",
-                title = "Trending on Prime Video",
-                items = safeItems({ prime.await() }, MediaType.TV)
-            ),
-            Category(
-                id = "trending_hbo",
-                title = "Trending on Max",
-                items = safeItems({ hboMax.await() }, MediaType.TV)
-            ),
-            Category(
-                id = "trending_apple",
-                title = "Trending on Apple TV+",
-                items = safeItems({ appleTv.await() }, MediaType.TV)
-            ),
-            Category(
-                id = "trending_telugu",
-                title = "Trending Telugu Movies",
-                items = safeItems({ telugu.await() }, MediaType.MOVIE)
-            ),
-            Category(
-                id = "trending_paramount",
-                title = "Trending on Paramount+",
-                items = safeItems({ paramount.await() }, MediaType.TV)
-            ),
-            Category(
-                id = "trending_hulu",
-                title = "Trending on Hulu",
-                items = safeItems({ hulu.await() }, MediaType.TV)
-            ),
-            Category(
-                id = "trending_shows_india",
-                title = "Trending TV Shows India",
-                items = safeItems({ showsIndia.await() }, MediaType.TV)
-            ),
-            Category(
-                id = "trending_peacock",
-                title = "Trending on Peacock",
-                items = safeItems({ peacock.await() }, MediaType.TV)
-            )
-        )
-        val nonEmpty = categories.filter { it.items.isNotEmpty() }
-        nonEmpty.forEach { cacheItems(it.items) }
-        nonEmpty
+        categories.forEach { cacheItems(it.items) }
+        categories
     }
 
-    suspend fun loadHomeCategoryPage(
-        categoryId: String,
-        page: Int
-    ): CategoryPageResult {
+    suspend fun loadHomeCategoryPage(categoryId: String, page: Int): CategoryPageResult {
         if (page < 1) return CategoryPageResult(emptyList(), hasMore = false)
+        val def = homeCategories.find { it.id == categoryId }
+            ?: return CategoryPageResult(emptyList(), hasMore = false)
 
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val calendar = Calendar.getInstance()
-        calendar.add(Calendar.MONTH, -12)
-        val twelveMonthsAgo = dateFormat.format(calendar.time)
-
-        val eighteenMonthsAgoCal2 = Calendar.getInstance()
-        eighteenMonthsAgoCal2.add(Calendar.MONTH, -18)
-        val eighteenMonthsAgo = dateFormat.format(eighteenMonthsAgoCal2.time)
-
-        val response = runCatching {
-            when (categoryId) {
-                "trending_movies" -> tmdbApi.getTrendingMovies(apiKey, language = contentLanguage, page = page, releaseType = 4)
-                "trending_tv" -> tmdbApi.getTrendingTv(apiKey, language = contentLanguage, page = page)
-                "trending_anime" -> tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    genres = "16",
-                    keywords = "210024",
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = eighteenMonthsAgo,
-                    page = page
-                )
-                "trending_indian" -> {
-                    val indianCalendar = Calendar.getInstance()
-                    indianCalendar.add(Calendar.MONTH, -6)
-                    val sixMonthsAgo = dateFormat.format(indianCalendar.time)
-                    tmdbApi.discoverMovies(
-                        apiKey,
-                        originCountry = "IN",
-                        region = "IN",
-                        sortBy = "popularity.desc",
-                        minVoteCount = 5,
-                        releaseDateGte = sixMonthsAgo,
-                        page = page,
-                        releaseType = 4
-                    )
-                }
-                "trending_netflix" -> tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 8,
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-                "trending_disney" -> tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 337,
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-                "trending_prime" -> tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 9,
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-                "trending_hbo" -> tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 1899,
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-                "trending_apple" -> tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 350,
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-                "trending_telugu" -> {
-                    val teluguCalendar = Calendar.getInstance()
-                    teluguCalendar.add(Calendar.MONTH, -6)
-                    val sixMonthsAgo = dateFormat.format(teluguCalendar.time)
-                    tmdbApi.discoverMovies(
-                        apiKey,
-                        originalLanguage = "te",
-                        region = "IN",
-                        sortBy = "popularity.desc",
-                        minVoteCount = 3,
-                        releaseType = 4,
-                        releaseDateGte = sixMonthsAgo,
-                        page = page
-                    )
-                }
-                "trending_paramount" -> tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 2303,
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-                "trending_hulu" -> tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 15,
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-                "trending_shows_india" -> {
-                    val indiaCalendar = Calendar.getInstance()
-                    indiaCalendar.add(Calendar.MONTH, -6)
-                    val sixMonthsAgo = dateFormat.format(indiaCalendar.time)
-                    tmdbApi.discoverTv(
-                        apiKey,
-                        originCountry = "IN",
-                        region = "IN",
-                        sortBy = "popularity.desc",
-                        minVoteCount = 5,
-                        airDateGte = sixMonthsAgo,
-                        page = page
-                    )
-                }
-                "trending_peacock" -> tmdbApi.discoverTv(
-                    apiKey, language = contentLanguage,
-                    watchProviders = 386,
-                    sortBy = "popularity.desc",
-                    minVoteCount = 10,
-                    airDateGte = twelveMonthsAgo,
-                    page = page
-                )
-                else -> null
+        return when (val fetcher = def.fetcher) {
+            HomeCategoryFetcher.TrendingMovies -> {
+                val response = runCatching {
+                    tmdbApi.getTrendingMovies(apiKey, language = contentLanguage, page = page)
+                }.getOrNull() ?: return CategoryPageResult(emptyList(), hasMore = false)
+                val items = response.results.map { it.toMediaItem(MediaType.MOVIE) }
+                    .distinctBy { "${it.mediaType.name}_${it.id}" }
+                if (items.isNotEmpty()) cacheItems(items)
+                CategoryPageResult(items, hasMore = response.page < response.totalPages)
             }
-        }.getOrNull() ?: return CategoryPageResult(emptyList(), hasMore = false)
-
-        val mediaType = if (categoryId == "trending_movies" || categoryId == "trending_telugu" || categoryId == "trending_indian") MediaType.MOVIE else MediaType.TV
-        val items = response.results
-            .map { it.toMediaItem(mediaType) }
-            .distinctBy { "${it.mediaType.name}_${it.id}" }
-        if (items.isNotEmpty()) {
-            cacheItems(items)
+            HomeCategoryFetcher.TrendingTv -> {
+                val response = runCatching {
+                    tmdbApi.getTrendingTv(apiKey, language = contentLanguage, page = page)
+                }.getOrNull() ?: return CategoryPageResult(emptyList(), hasMore = false)
+                val items = response.results.map { it.toMediaItem(MediaType.TV) }
+                    .distinctBy { "${it.mediaType.name}_${it.id}" }
+                if (items.isNotEmpty()) cacheItems(items)
+                CategoryPageResult(items, hasMore = response.page < response.totalPages)
+            }
+            is HomeCategoryFetcher.DiscoverMovies -> {
+                val response = runCatching {
+                    tmdbApi.discoverMovies(
+                        apiKey, language = contentLanguage,
+                        genres = fetcher.genres,
+                        keywords = fetcher.keywords,
+                        originalLanguage = fetcher.originalLanguage,
+                        originCountry = fetcher.originCountry,
+                        region = fetcher.region,
+                        releaseType = fetcher.releaseType,
+                        sortBy = fetcher.sortBy,
+                        minVoteCount = fetcher.minVoteCount,
+                        releaseDateGte = monthsAgoDate(fetcher.dateWindowMonths),
+                        page = page
+                    )
+                }.getOrNull() ?: return CategoryPageResult(emptyList(), hasMore = false)
+                val items = response.results.map { it.toMediaItem(MediaType.MOVIE) }
+                    .distinctBy { "${it.mediaType.name}_${it.id}" }
+                if (items.isNotEmpty()) cacheItems(items)
+                CategoryPageResult(items, hasMore = response.page < response.totalPages)
+            }
+            is HomeCategoryFetcher.DiscoverTv -> {
+                val response = runCatching {
+                    tmdbApi.discoverTv(
+                        apiKey, language = contentLanguage,
+                        genres = fetcher.genres,
+                        keywords = fetcher.keywords,
+                        originCountry = fetcher.originCountry,
+                        region = fetcher.region,
+                        sortBy = fetcher.sortBy,
+                        minVoteCount = fetcher.minVoteCount,
+                        airDateGte = monthsAgoDate(fetcher.dateWindowMonths),
+                        page = page
+                    )
+                }.getOrNull() ?: return CategoryPageResult(emptyList(), hasMore = false)
+                val items = response.results.map { it.toMediaItem(MediaType.TV) }
+                    .distinctBy { "${it.mediaType.name}_${it.id}" }
+                if (items.isNotEmpty()) cacheItems(items)
+                CategoryPageResult(items, hasMore = response.page < response.totalPages)
+            }
+            is HomeCategoryFetcher.ProviderInterleaved -> coroutineScope {
+                val dateGte = monthsAgoDate(fetcher.dateWindowMonths)
+                val tvResponse = async {
+                    runCatching {
+                        tmdbApi.discoverTv(
+                            apiKey, language = contentLanguage,
+                            watchProviders = fetcher.providerId,
+                            sortBy = "popularity.desc",
+                            minVoteCount = fetcher.minVoteCount,
+                            airDateGte = dateGte,
+                            page = page
+                        )
+                    }.getOrNull()
+                }
+                val moviesResponse = async {
+                    runCatching {
+                        tmdbApi.discoverMovies(
+                            apiKey, language = contentLanguage,
+                            watchProviders = fetcher.providerId,
+                            watchRegion = "US",
+                            sortBy = "popularity.desc",
+                            minVoteCount = fetcher.minVoteCount,
+                            releaseDateGte = dateGte,
+                            page = page
+                        )
+                    }.getOrNull()
+                }
+                val tvResult = tvResponse.await()
+                val moviesResult = moviesResponse.await()
+                val items = interleaveMediaItems(
+                    tvItems = tvResult?.results?.map { it.toMediaItem(MediaType.TV) } ?: emptyList(),
+                    movieItems = moviesResult?.results?.map { it.toMediaItem(MediaType.MOVIE) } ?: emptyList()
+                )
+                if (items.isNotEmpty()) cacheItems(items)
+                val tvHasMore = tvResult?.let { it.page < it.totalPages } ?: false
+                val moviesHasMore = moviesResult?.let { it.page < it.totalPages } ?: false
+                CategoryPageResult(items, hasMore = tvHasMore || moviesHasMore)
+            }
         }
-        return CategoryPageResult(
-            items = items,
-            hasMore = response.page < response.totalPages
-        )
     }
 
     suspend fun loadCustomCatalog(catalog: CatalogConfig, maxItems: Int = 40): Category? = coroutineScope {

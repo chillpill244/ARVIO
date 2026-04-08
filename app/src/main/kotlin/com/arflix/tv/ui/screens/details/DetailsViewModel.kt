@@ -14,6 +14,7 @@ import com.arflix.tv.data.model.StreamSource
 import com.arflix.tv.data.model.Subtitle
 import com.arflix.tv.data.api.TmdbApi
 import com.arflix.tv.data.repository.CloudSyncRepository
+import com.arflix.tv.data.repository.DownloadsRepository
 import com.arflix.tv.data.repository.LauncherContinueWatchingRepository
 import com.arflix.tv.data.repository.MediaRepository
 import com.arflix.tv.data.repository.ProfileManager
@@ -21,11 +22,13 @@ import com.arflix.tv.data.repository.StreamRepository
 import com.arflix.tv.data.repository.TraktRepository
 import com.arflix.tv.data.repository.WatchHistoryRepository
 import kotlinx.coroutines.coroutineScope
+import com.arflix.tv.data.db.DownloadEntity
 import com.arflix.tv.data.repository.WatchlistRepository
 import com.arflix.tv.util.Constants
 import com.arflix.tv.util.settingsDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
@@ -91,7 +94,10 @@ data class DetailsUiState(
     // IPTV Series matching for instant next episode (TASK_17)
     val iptvSeriesMatches: List<com.arflix.tv.data.model.IptvSeriesMatch> = emptyList(),
     val iptvSeriesContext: com.arflix.tv.data.model.IptvSeriesContext? = null,
-    val isLoadingIptvMatches: Boolean = false
+    val isLoadingIptvMatches: Boolean = false,
+    // Subtitles fetched for offline download (English from OpenSubtitles)
+    val downloadSubtitles: List<Subtitle> = emptyList(),
+    val isLoadingDownloadSubtitles: Boolean = false
 )
 
 data class StreamingServiceUi(
@@ -171,6 +177,7 @@ class DetailsViewModel @Inject constructor(
     private val watchHistoryRepository: WatchHistoryRepository,
     private val watchlistRepository: WatchlistRepository,
     private val cloudSyncRepository: CloudSyncRepository,
+    private val downloadsRepository: DownloadsRepository,
     private val launcherContinueWatchingRepository: LauncherContinueWatchingRepository,
     private val iptvRepository: com.arflix.tv.data.repository.IptvRepository
 ) : ViewModel() {
@@ -178,11 +185,16 @@ class DetailsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DetailsUiState())
     val uiState: StateFlow<DetailsUiState> = _uiState.asStateFlow()
 
+    // Separate StateFlow for per-episode downloads — never reset by loadDetails()
+    private val _episodeDownloads = MutableStateFlow<Map<String, DownloadEntity>>(emptyMap())
+    val episodeDownloads: StateFlow<Map<String, DownloadEntity>> = _episodeDownloads.asStateFlow()
+
     private var currentMediaType: MediaType = MediaType.MOVIE
     private var currentMediaId: Int = 0
     private var currentIptvSeriesId: Int? = null  // TASK_18: Store IPTV series ID for instant first click
     private var vodAppendJob: kotlinx.coroutines.Job? = null
     private var loadStreamsJob: kotlinx.coroutines.Job? = null
+    private var downloadObserverJob: Job? = null
     private var loadStreamsRequestId: Long = 0L
     /** Set to true after loadDetails() child coroutines finish populating episodes/seasons. */
     @Volatile private var initialLoadComplete = false
@@ -593,10 +605,20 @@ class DetailsViewModel @Inject constructor(
                         }
 
                         val targetEpisodeForRow = if (initialSeason == seasonToLoad) initialEpisode else null
-                        val initialEpisodeIndex = if (targetEpisodeForRow != null) {
-                            decoratedEpisodes.indexOfFirst { it.episodeNumber == targetEpisodeForRow }.coerceAtLeast(0)
-                        } else 0
                         val nextUnwatchedEpisode = decoratedEpisodes.firstOrNull { !it.isWatched }
+                        // Focus the explicit target episode if the caller passed one (deeplink /
+                        // Continue Watching tile), otherwise focus the first unwatched episode so
+                        // users don't have to scroll past every episode they've already seen.
+                        // When every episode in the current season is watched we fall back to
+                        // the first episode (index 0) — from there the user can jump to the next
+                        // season via the season selector. See issue #117.
+                        val initialEpisodeIndex = when {
+                            targetEpisodeForRow != null ->
+                                decoratedEpisodes.indexOfFirst { it.episodeNumber == targetEpisodeForRow }.coerceAtLeast(0)
+                            nextUnwatchedEpisode != null ->
+                                decoratedEpisodes.indexOf(nextUnwatchedEpisode).coerceAtLeast(0)
+                            else -> 0
+                        }
                         val hasWatchedEpisodes = decoratedEpisodes.any { it.isWatched }
                         updateState { state ->
                             val shouldUseEpisodeTarget = !hasExplicitEpisodeTarget &&
@@ -1746,12 +1768,18 @@ class DetailsViewModel @Inject constructor(
                             .distinctBy { "${it.url?.trim().orEmpty()}|${it.source}" }
                         val addonCount = streamRepository.installedAddons.first()
                             .count { it.isEnabled && it.type != com.arflix.tv.data.model.AddonType.SUBTITLE }
+                        val vodStillRunning = vodAppendJob?.isActive == true
                         _uiState.value = _uiState.value.copy(
-                            isLoadingStreams = !progressive.isFinal,
+                            isLoadingStreams = !progressive.isFinal || vodStillRunning,
                             streams = mergedStreams,
                             subtitles = progressive.subtitles,
                             hasStreamingAddons = addonCount > 0
                         )
+                    }
+                    // Wait for VOD append to finish before clearing spinner
+                    vodAppendJob?.join()
+                    if (isCurrentRequest()) {
+                        _uiState.value = _uiState.value.copy(isLoadingStreams = false)
                     }
                     return@launch
                 } else {
@@ -1787,12 +1815,18 @@ class DetailsViewModel @Inject constructor(
                             .distinctBy { "${it.url?.trim().orEmpty()}|${it.source}" }
                         val addonCount = streamRepository.installedAddons.first()
                             .count { it.isEnabled && it.type != com.arflix.tv.data.model.AddonType.SUBTITLE }
+                        val vodStillRunning = vodAppendJob?.isActive == true
                         _uiState.value = _uiState.value.copy(
-                            isLoadingStreams = !progressive.isFinal,
+                            isLoadingStreams = !progressive.isFinal || vodStillRunning,
                             streams = mergedStreams,
                             subtitles = progressive.subtitles,
                             hasStreamingAddons = addonCount > 0
                         )
+                    }
+                    // Wait for VOD append to finish before clearing spinner
+                    vodAppendJob?.join()
+                    if (isCurrentRequest()) {
+                        _uiState.value = _uiState.value.copy(isLoadingStreams = false)
                     }
                     return@launch
                 }
@@ -2565,6 +2599,120 @@ class DetailsViewModel @Inject constructor(
             }.getOrNull()
         } else {
             null
+        }
+    }
+
+    /**
+     * Fetch English subtitles from OpenSubtitles for the offline download picker.
+     * Always launches a fresh fetch so the result is available even when streams
+     * carry no embedded subs (e.g. plain HTTP progressive streams).
+     */
+    fun loadSubtitlesForDownload(season: Int?, episode: Int?) {
+        val imdbId = _uiState.value.imdbId ?: return
+        val mediaType = currentMediaType
+        _uiState.value = _uiState.value.copy(
+            downloadSubtitles = emptyList(),
+            isLoadingDownloadSubtitles = true
+        )
+        viewModelScope.launch {
+            val subs = runCatching {
+                streamRepository.fetchSubtitlesForSelectedStream(
+                    mediaType = mediaType,
+                    imdbId = imdbId,
+                    season = season,
+                    episode = episode,
+                    stream = null
+                )
+            }.getOrDefault(emptyList())
+            // Keep only English tracks for download
+            val english = subs.filter { sub ->
+                sub.lang.equals("eng", ignoreCase = true) ||
+                sub.lang.equals("en", ignoreCase = true)
+            }
+            _uiState.value = _uiState.value.copy(
+                downloadSubtitles = english,
+                isLoadingDownloadSubtitles = false
+            )
+        }
+    }
+
+    fun enqueueDownload(
+        stream: StreamSource,
+        season: Int? = null,
+        episode: Int? = null,
+        episodeTitle: String? = null,
+        subtitleUrl: String? = null,
+        subtitleLang: String? = null
+    ) {
+        val item = _uiState.value.item ?: return
+        viewModelScope.launch {
+            try {
+                downloadsRepository.enqueueDownload(
+                    tmdbId = item.id,
+                    mediaType = item.mediaType,
+                    title = item.title,
+                    stream = stream,
+                    season = season,
+                    episode = episode,
+                    episodeTitle = episodeTitle,
+                    posterPath = item.image,
+                    backdropPath = item.backdrop,
+                    subtitleUrl = subtitleUrl,
+                    subtitleLang = subtitleLang
+                )
+                _uiState.value = _uiState.value.copy(
+                    toastMessage = "Download started",
+                    toastType = ToastType.SUCCESS
+                )
+            } catch (e: Exception) {
+                Log.e("DetailsViewModel", "Failed to enqueue download", e)
+                _uiState.value = _uiState.value.copy(
+                    toastMessage = "Download failed: ${e.message}",
+                    toastType = ToastType.ERROR
+                )
+            }
+        }
+    }
+
+    /**
+     * Start observing per-episode download progress for a TV series.
+     * Populates [DetailsUiState.episodeDownloads] keyed by "season_episode".
+     */
+    fun startObservingEpisodeDownloads(tmdbId: Int) {
+        if (tmdbId <= 0) return
+        // Guard: don't restart if already observing the same tmdbId
+        if (downloadObserverJob?.isActive == true) return
+        downloadObserverJob?.cancel()
+        downloadObserverJob = viewModelScope.launch {
+            downloadsRepository.observeDownloadsForMedia(tmdbId, MediaType.TV)
+                .collect { downloads ->
+                    val map = downloads.associateBy { "${it.season}_${it.episode}" }
+                    _episodeDownloads.value = map
+                }
+        }
+    }
+
+    fun pauseEpisodeDownload(downloadId: Long) {
+        viewModelScope.launch {
+            try { downloadsRepository.pauseDownload(downloadId) } catch (_: Exception) { }
+        }
+    }
+
+    fun resumeEpisodeDownload(downloadId: Long) {
+        viewModelScope.launch {
+            try { downloadsRepository.resumeDownload(downloadId) } catch (_: Exception) { }
+        }
+    }
+
+    fun cancelEpisodeDownload(downloadId: Long) {
+        viewModelScope.launch {
+            try { downloadsRepository.cancelDownload(downloadId) } catch (_: Exception) { }
+        }
+    }
+
+    fun deleteEpisodeDownload(downloadId: Long) {
+        viewModelScope.launch {
+            try { downloadsRepository.deleteDownload(downloadId) } catch (_: Exception) { }
         }
     }
 }

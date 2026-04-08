@@ -2,7 +2,6 @@ package com.arflix.tv
 
 import android.os.Bundle
 import android.view.ViewTreeObserver
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -146,12 +145,12 @@ class MainActivity : ComponentActivity() {
         val initialDeviceType = detectDeviceType(this)
         requestedOrientation = when (initialDeviceType) {
             DeviceType.TV -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-            DeviceType.TABLET -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
-            DeviceType.PHONE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            DeviceType.TABLET -> ActivityInfo.SCREEN_ORIENTATION_USER
+            DeviceType.PHONE -> ActivityInfo.SCREEN_ORIENTATION_USER
         }
 
-        // Keep screen on during playback
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Screen timeout is honored on all devices.
+        // PlayerScreen and TvScreen add/clear FLAG_KEEP_SCREEN_ON via DisposableEffect.
 
         // System UI mode: immersive on TV, show status bar on mobile
         isTvDevice = initialDeviceType == DeviceType.TV

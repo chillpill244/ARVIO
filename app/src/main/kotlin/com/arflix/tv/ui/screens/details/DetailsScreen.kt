@@ -42,15 +42,26 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.TextButton
+import com.arflix.tv.data.db.DownloadEntity
+import com.arflix.tv.data.db.DownloadStatus
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -136,6 +147,7 @@ import com.arflix.tv.ui.components.topBarMaxIndex
 import com.arflix.tv.ui.skin.ArvioFocusableSurface
 import com.arflix.tv.ui.skin.ArvioSkin
 import com.arflix.tv.ui.skin.rememberArvioCardShape
+import com.arflix.tv.data.repository.DownloadsRepository
 import com.arflix.tv.ui.theme.AnimationConstants
 import com.arflix.tv.ui.theme.ArflixTypography
 import com.arflix.tv.ui.theme.BackgroundCard
@@ -179,6 +191,8 @@ fun DetailsScreen(
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    // Separate live map — never reset by loadDetails() state mutations
+    val episodeDownloads by viewModel.episodeDownloads.collectAsState()
     val usePosterCards = rememberCardLayoutMode() == CardLayoutMode.POSTER
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -203,6 +217,12 @@ fun DetailsScreen(
     
     // Stream Selector state
     var showStreamSelector by remember { mutableStateOf(false) }
+    var showDownloadPicker by remember { mutableStateOf(false) }
+    var downloadPickerSeason by remember { mutableStateOf<Int?>(null) }
+    var downloadPickerEpisode by remember { mutableStateOf<Int?>(null) }
+    // Subtitle download state
+    var pendingDownloadStream by remember { mutableStateOf<com.arflix.tv.data.model.StreamSource?>(null) }
+    var showSubtitleDownloadDialog by remember { mutableStateOf(false) }
     var showTrailerPlayer by remember { mutableStateOf(false) }
     var pendingAutoPlayRequest by remember { mutableStateOf<PendingAutoPlayRequest?>(null) }
     
@@ -218,6 +238,13 @@ fun DetailsScreen(
 
     LaunchedEffect(mediaType, mediaId, initialSeason, initialEpisode, preferSource, iptvSeriesId) {
         viewModel.loadDetails(mediaType, mediaId, initialSeason, initialEpisode, preferSource, iptvSeriesId)
+    }
+
+    // Observe per-episode download progress live
+    LaunchedEffect(mediaType, mediaId) {
+        if (mediaType == MediaType.TV) {
+            viewModel.startObservingEpisodeDownloads(mediaId)
+        }
     }
 
     // Keep watched badges and continue target fresh when returning from player.
@@ -677,6 +704,22 @@ fun DetailsScreen(
                     contentHasFocus = !isSidebarFocused,
                     usePosterCards = usePosterCards,
                     isMobile = isMobile,
+                    onDownloadClick = {
+                        if (isMobile) {
+                            val season = if (mediaType == MediaType.TV) {
+                                uiState.playSeason
+                                    ?: uiState.episodes.getOrNull(episodeIndex)?.seasonNumber
+                            } else null
+                            val episode = if (mediaType == MediaType.TV) {
+                                uiState.playEpisode
+                                    ?: uiState.episodes.getOrNull(episodeIndex)?.episodeNumber
+                            } else null
+                            downloadPickerSeason = season
+                            downloadPickerEpisode = episode
+                            showDownloadPicker = true
+                            viewModel.loadStreams(uiState.imdbId, season, episode)
+                        }
+                    },
                     onButtonClick = { idx ->
                         when (idx) {
                             0 -> { // Play
@@ -730,6 +773,12 @@ fun DetailsScreen(
                         val actualSeason = uiState.availableSeasons.getOrNull(idx) ?: (idx + 1)
                         viewModel.loadSeason(actualSeason)
                     },
+                    onEpisodeDownloadClick = if (isMobile) { season, episode ->
+                        downloadPickerSeason = season
+                        downloadPickerEpisode = episode
+                        showDownloadPicker = true
+                        viewModel.loadStreams(uiState.imdbId, season, episode)
+                    } else null,
                     onEpisodeClick = { idx ->
                         val ep = uiState.episodes.getOrNull(idx)
                         if (ep != null) {
@@ -748,14 +797,9 @@ fun DetailsScreen(
                                         viewModel.loadStreams(uiState.imdbId, ep.seasonNumber, ep.episodeNumber)
                                     }
                                 }
-                            } else if (isMobile) {
+                            } else {
                                 showStreamSelector = true
                                 viewModel.loadStreams(uiState.imdbId, ep.seasonNumber, ep.episodeNumber)
-                            } else {
-                                onNavigateToPlayer(
-                                    mediaType, mediaId,
-                                    ep.seasonNumber, ep.episodeNumber, uiState.imdbId, null, null, null, null
-                                )
                             }
                         }
                     },
@@ -770,7 +814,19 @@ fun DetailsScreen(
                         if (sim != null) {
                             onNavigateToDetails(sim.mediaType, sim.id)
                         }
-                    }
+                    },
+                    episodeDownloads = episodeDownloads,
+                    onPauseEpisodeDownload = { id -> viewModel.pauseEpisodeDownload(id) },
+                    onResumeEpisodeDownload = { id -> viewModel.resumeEpisodeDownload(id) },
+                    onCancelEpisodeDownload = { id -> viewModel.cancelEpisodeDownload(id) },
+                    onDeleteEpisodeDownload = { id -> viewModel.deleteEpisodeDownload(id) },
+                    onEpisodeLongClick = if (isMobile) { idx ->
+                        val ep = uiState.episodes.getOrNull(idx)
+                        if (ep != null) {
+                            contextMenuEpisode = ep
+                            showEpisodeContextMenu = true
+                        }
+                    } else null
                 )
             }
         }
@@ -835,13 +891,164 @@ fun DetailsScreen(
             onClose = { showStreamSelector = false }
         )
 
+        // Download Stream Picker Modal (mobile only)
+        if (isMobile) {
+            StreamSelector(
+                isVisible = showDownloadPicker,
+                streams = uiState.streams,
+                selectedStream = null,
+                isLoading = uiState.isLoadingStreams,
+                hasStreamingAddons = uiState.hasStreamingAddons,
+                onSelect = { stream ->
+                    showDownloadPicker = false
+                    // Always show subtitle dialog — fetch English subs from OpenSubtitles
+                    pendingDownloadStream = stream
+                    showSubtitleDownloadDialog = true
+                    viewModel.loadSubtitlesForDownload(downloadPickerSeason, downloadPickerEpisode)
+                },
+                onClose = { showDownloadPicker = false }
+            )
+        }
+
+        // Subtitle download dialog — always shown after stream selection
+        if (showSubtitleDownloadDialog) {
+            val downloadSubs = uiState.downloadSubtitles
+            val isLoadingSubs = uiState.isLoadingDownloadSubtitles
+
+            // Helper: enqueue with no subtitle
+            fun enqueueNoSub() {
+                showSubtitleDownloadDialog = false
+                pendingDownloadStream?.let { stream ->
+                    viewModel.enqueueDownload(
+                        stream = stream,
+                        season = downloadPickerSeason,
+                        episode = downloadPickerEpisode,
+                        episodeTitle = uiState.episodes.firstOrNull {
+                            it.seasonNumber == downloadPickerSeason && it.episodeNumber == downloadPickerEpisode
+                        }?.name
+                    )
+                }
+                pendingDownloadStream = null
+            }
+
+            // Helper: enqueue with chosen subtitle
+            fun enqueueSub(subtitle: com.arflix.tv.data.model.Subtitle) {
+                showSubtitleDownloadDialog = false
+                pendingDownloadStream?.let { stream ->
+                    viewModel.enqueueDownload(
+                        stream = stream,
+                        season = downloadPickerSeason,
+                        episode = downloadPickerEpisode,
+                        episodeTitle = uiState.episodes.firstOrNull {
+                            it.seasonNumber == downloadPickerSeason && it.episodeNumber == downloadPickerEpisode
+                        }?.name,
+                        subtitleUrl = subtitle.url,
+                        subtitleLang = subtitle.label.ifBlank { subtitle.lang }
+                    )
+                }
+                pendingDownloadStream = null
+            }
+
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { enqueueNoSub() },
+                containerColor = Color(0xFF1C1C1E),
+                title = {
+                    androidx.compose.material3.Text(
+                        "Download Subtitles?",
+                        color = Color.White,
+                        style = ArflixTypography.body.copy(fontWeight = FontWeight.Bold)
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        // While fetching show a spinner
+                        if (isLoadingSubs) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    color = Color.White,
+                                    modifier = Modifier.size(28.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                        } else {
+                            // "No subtitles" option always present
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { enqueueNoSub() }
+                                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.Icon(
+                                    Icons.Default.Download,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                androidx.compose.material3.Text(
+                                    "Video only (no subtitles)",
+                                    style = ArflixTypography.body.copy(fontSize = 14.sp),
+                                    color = Color.White.copy(alpha = 0.7f)
+                                )
+                            }
+                            if (downloadSubs.isEmpty()) {
+                                androidx.compose.material3.Text(
+                                    "No English subtitles found",
+                                    style = ArflixTypography.body.copy(fontSize = 13.sp),
+                                    color = Color.White.copy(alpha = 0.45f),
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                                )
+                            } else {
+                                downloadSubs.forEach { subtitle ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { enqueueSub(subtitle) }
+                                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        androidx.compose.material3.Icon(
+                                            Icons.Default.List,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        androidx.compose.material3.Text(
+                                            subtitle.label.ifBlank { subtitle.lang },
+                                            style = ArflixTypography.body.copy(fontSize = 14.sp),
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    if (!isLoadingSubs) {
+                        androidx.compose.material3.TextButton(onClick = { enqueueNoSub() }) {
+                            androidx.compose.material3.Text("Skip", color = Color.White.copy(alpha = 0.7f))
+                        }
+                    }
+                }
+            )
+        }
+
         // Episode Context Menu
         contextMenuEpisode?.let { episode ->
+            val episodeDlEntity = episodeDownloads["${episode.seasonNumber}_${episode.episodeNumber}"]
             EpisodeContextMenu(
                 isVisible = showEpisodeContextMenu,
                 episodeName = episode.name,
                 seasonEpisode = "S${episode.seasonNumber}:E${episode.episodeNumber}",
                 isWatched = episode.isWatched,
+                downloadStatus = episodeDlEntity?.status,
                 onPlay = {
                     showEpisodeContextMenu = false
                     onNavigateToPlayer(
@@ -861,6 +1068,17 @@ fun DetailsScreen(
                         !episode.isWatched
                     )
                 },
+                onDownload = if (isMobile) {
+                    {
+                        downloadPickerSeason = episode.seasonNumber
+                        downloadPickerEpisode = episode.episodeNumber
+                        showDownloadPicker = true
+                        viewModel.loadStreams(uiState.imdbId, episode.seasonNumber, episode.episodeNumber)
+                    }
+                } else null,
+                onRemoveDownload = if (isMobile && episodeDlEntity != null) {
+                    { viewModel.deleteEpisodeDownload(episodeDlEntity.id) }
+                } else null,
                 onDismiss = {
                     showEpisodeContextMenu = false
                     contextMenuEpisode = null
@@ -1008,10 +1226,18 @@ private fun DetailsContent(
     isMobile: Boolean = false,
     isPlayLoading: Boolean = false,
     onButtonClick: (Int) -> Unit = {},
+    onDownloadClick: () -> Unit = {},
     onSeasonClick: (Int) -> Unit = {},
     onEpisodeClick: (Int) -> Unit = {},
+    onEpisodeDownloadClick: ((season: Int, episode: Int) -> Unit)? = null,
+    onEpisodeLongClick: ((index: Int) -> Unit)? = null,
     onCastClick: (Int) -> Unit = {},
-    onSimilarClick: (Int) -> Unit = {}
+    onSimilarClick: (Int) -> Unit = {},
+    episodeDownloads: Map<String, DownloadEntity> = emptyMap(),
+    onPauseEpisodeDownload: (Long) -> Unit = {},
+    onResumeEpisodeDownload: (Long) -> Unit = {},
+    onCancelEpisodeDownload: (Long) -> Unit = {},
+    onDeleteEpisodeDownload: (Long) -> Unit = {}
 ) {
     val focusSectionForUi = if (contentHasFocus) focusedSection else null
     // === PREMIUM LAYERED TEXT SHADOWS ===
@@ -1198,6 +1424,9 @@ private fun DetailsContent(
                         val playButtonLabel = if (!playLabel.isNullOrBlank()) playLabel else "Play"
                         MobileActionButton(icon = Icons.Default.PlayArrow, text = playButtonLabel, isPrimary = true, onClick = { onButtonClick(0) })
                         MobileActionButton(icon = Icons.Default.List, text = "Sources", onClick = { onButtonClick(1) })
+                        if (item.mediaType == MediaType.MOVIE) {
+                            MobileActionButton(icon = Icons.Default.Download, text = "Download", onClick = { onDownloadClick() })
+                        }
                         MobileActionButton(icon = Icons.Default.Movie, text = "Trailer", onClick = { onButtonClick(2) })
                         MobileActionButton(
                             icon = if (buttonWatched) Icons.Default.Check else Icons.Default.Visibility,
@@ -1266,11 +1495,44 @@ private fun DetailsContent(
                             episodes,
                             key = { index, ep -> "mob_ep_${ep.seasonNumber}_${ep.episodeNumber}_$index" }
                         ) { index, episode ->
-                            EpisodeCard(
-                                episode = episode,
-                                isFocused = false,
-                                onClick = { onEpisodeClick(index) }
-                            )
+                            val dlEntity = episodeDownloads["${episode.seasonNumber}_${episode.episodeNumber}"]
+                            Box {
+                                EpisodeCard(
+                                    episode = episode,
+                                    isFocused = false,
+                                    downloadEntity = dlEntity,
+                                    onPauseDownload = { dlEntity?.let { onPauseEpisodeDownload(it.id) } },
+                                    onResumeDownload = { dlEntity?.let { onResumeEpisodeDownload(it.id) } },
+                                    onCancelDownload = { dlEntity?.let { onCancelEpisodeDownload(it.id) } },
+                                    onDeleteDownload = { dlEntity?.let { onDeleteEpisodeDownload(it.id) } },
+                                    onClick = { onEpisodeClick(index) },
+                                    onLongClick = onEpisodeLongClick?.let { callback -> { callback(index) } }
+                                )
+                                // Show download button only when episode hasn't been downloaded/queued yet
+                                if (onEpisodeDownloadClick != null && dlEntity == null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(8.dp)
+                                            .size(32.dp)
+                                            .background(Color.Black.copy(alpha = 0.65f), CircleShape)
+                                            .clickable {
+                                                onEpisodeDownloadClick(
+                                                    episode.seasonNumber,
+                                                    episode.episodeNumber
+                                                )
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Download,
+                                            contentDescription = "Download episode",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1827,9 +2089,15 @@ private fun DetailsContent(
                             key = { index, ep -> "${ep.seasonNumber}_${ep.episodeNumber}_$index" }
                         ) { index, episode ->
                             val isFocused = currentFocusedSection == FocusSection.EPISODES && index == currentEpisodeIndex
+                            val dlEntity = episodeDownloads["${episode.seasonNumber}_${episode.episodeNumber}"]
                             EpisodeCard(
                                 episode = episode,
                                 isFocused = isFocused,
+                                downloadEntity = dlEntity,
+                                onPauseDownload = { dlEntity?.let { onPauseEpisodeDownload(it.id) } },
+                                onResumeDownload = { dlEntity?.let { onResumeEpisodeDownload(it.id) } },
+                                onCancelDownload = { dlEntity?.let { onCancelEpisodeDownload(it.id) } },
+                                onDeleteDownload = { dlEntity?.let { onDeleteEpisodeDownload(it.id) } },
                                 onClick = { onEpisodeClick(index) }
                             )
                         }
@@ -2293,8 +2561,16 @@ private fun PremiumActionButton(
 private fun EpisodeCard(
     episode: Episode,
     isFocused: Boolean,
-    onClick: () -> Unit = {}
+    downloadEntity: DownloadEntity? = null,
+    onPauseDownload: () -> Unit = {},
+    onResumeDownload: () -> Unit = {},
+    onCancelDownload: () -> Unit = {},
+    onDeleteDownload: () -> Unit = {},
+    onClick: () -> Unit = {},
+    onLongClick: (() -> Unit)? = null
 ) {
+    var showDownloadMenu by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
     val cardWidth = if (configuration.screenWidthDp < 1400) 300.dp else 320.dp
     val aspectRatio = 16f / 9f
@@ -2346,6 +2622,87 @@ private fun EpisodeCard(
         Modifier
     }
 
+    // Download action menu (pause/resume/cancel)
+    if (showDownloadMenu && downloadEntity != null) {
+        AlertDialog(
+            onDismissRequest = { showDownloadMenu = false },
+            containerColor = Color(0xFF1C1C1E),
+            title = {
+                androidx.compose.material3.Text(
+                    text = episode.name,
+                    color = Color.White,
+                    style = ArflixTypography.body.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    when (downloadEntity.status) {
+                        DownloadStatus.DOWNLOADING, DownloadStatus.QUEUED -> {
+                            EpisodeDownloadMenuAction(Icons.Default.Pause, "Pause") {
+                                showDownloadMenu = false; onPauseDownload()
+                            }
+                            EpisodeDownloadMenuAction(Icons.Default.Cancel, "Cancel") {
+                                showDownloadMenu = false; onCancelDownload()
+                            }
+                        }
+                        DownloadStatus.PAUSED -> {
+                            EpisodeDownloadMenuAction(Icons.Default.PlayArrow, "Resume") {
+                                showDownloadMenu = false; onResumeDownload()
+                            }
+                            EpisodeDownloadMenuAction(Icons.Default.Cancel, "Cancel") {
+                                showDownloadMenu = false; onCancelDownload()
+                            }
+                        }
+                        DownloadStatus.FAILED -> {
+                            EpisodeDownloadMenuAction(Icons.Default.Refresh, "Retry") {
+                                showDownloadMenu = false; onResumeDownload()
+                            }
+                            EpisodeDownloadMenuAction(Icons.Default.Delete, "Delete") {
+                                showDownloadMenu = false; showDeleteConfirm = true
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showDownloadMenu = false }) {
+                    androidx.compose.material3.Text("Close", color = Color.White.copy(alpha = 0.7f))
+                }
+            }
+        )
+    }
+
+    // Delete confirmation dialog
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            containerColor = Color(0xFF1C1C1E),
+            title = {
+                androidx.compose.material3.Text("Delete download?", color = Color.White)
+            },
+            text = {
+                androidx.compose.material3.Text(
+                    "Remove \"${episode.name}\" from downloads?",
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showDeleteConfirm = false; onDeleteDownload() }) {
+                    androidx.compose.material3.Text("Delete", color = Color(0xFFFF5252))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    androidx.compose.material3.Text("Cancel", color = Color.White.copy(alpha = 0.7f))
+                }
+            }
+        )
+    }
+
     ArvioFocusableSurface(
         modifier = Modifier
             .width(cardWidth)
@@ -2360,6 +2717,7 @@ private fun EpisodeCard(
         enableSystemFocus = false,
         isFocusedOverride = isFocused,
         onClick = onClick,
+        onLongClick = onLongClick,
     ) { _ ->
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
@@ -2523,7 +2881,147 @@ private fun EpisodeCard(
                     )
                 }
             }
+
+            // Download status overlay
+            if (downloadEntity != null) {
+                when (downloadEntity.status) {
+                    DownloadStatus.DOWNLOADING, DownloadStatus.PAUSED -> {
+                        val progress = if (downloadEntity.fileSize > 0) {
+                            downloadEntity.downloadedBytes.toFloat() / downloadEntity.fileSize.toFloat()
+                        } else (downloadEntity.progress / 100f)
+                        val progressPct = (progress * 100).toInt()
+                        val barColor = if (downloadEntity.status == DownloadStatus.PAUSED)
+                            Color(0xFFFFC107) else Color(0xFF4CAF50)
+                        val statusLabel = if (downloadEntity.status == DownloadStatus.PAUSED)
+                            "Paused · $progressPct%" else "$progressPct%"
+
+                        // Progress bar at bottom
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .background(Color.Black.copy(alpha = 0.72f))
+                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                        ) {
+                            LinearProgressIndicator(
+                                progress = progress,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .clip(RoundedCornerShape(2.dp)),
+                                color = barColor,
+                                trackColor = Color.White.copy(alpha = 0.2f)
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = statusLabel,
+                                style = ArflixTypography.caption.copy(fontSize = 9.sp),
+                                color = barColor
+                            )
+                        }
+
+                        // 3-dot action icon
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp)
+                                .size(24.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                .clickable { showDownloadMenu = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "Download options",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                    DownloadStatus.QUEUED -> {
+                        // Queued indicator at bottom-left
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(6.dp)
+                                .background(Color(0xFF1C1C1E).copy(alpha = 0.85f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                        ) {
+                            Text("Queued", style = ArflixTypography.caption.copy(fontSize = 9.sp), color = Color(0xFFFFC107))
+                        }
+                        // 3-dot action icon
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp)
+                                .size(24.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                .clickable { showDownloadMenu = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Download options", tint = Color.White, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                    DownloadStatus.COMPLETED -> {
+                        // Delete icon at top-end (separate from the watched checkmark at bottom-end)
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp)
+                                .size(24.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                .clickable { showDeleteConfirm = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete download", tint = Color(0xFFFF5252), modifier = Modifier.size(14.dp))
+                        }
+                    }
+                    DownloadStatus.FAILED -> {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(6.dp)
+                                .background(Color(0xFF1C1C1E).copy(alpha = 0.85f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                        ) {
+                            Text("Failed", style = ArflixTypography.caption.copy(fontSize = 9.sp), color = Color(0xFFFF5252))
+                        }
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp)
+                                .size(24.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                .clickable { showDownloadMenu = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Download options", tint = Color.White, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                    else -> {}
+                }
+            }
         }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun EpisodeDownloadMenuAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp, horizontal = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(20.dp))
+        Text(label, style = ArflixTypography.body.copy(fontSize = 14.sp), color = Color.White)
     }
 }
 

@@ -171,6 +171,15 @@ fun TvScreen(
     val context = LocalContext.current
     val isMobile = LocalDeviceType.current.isTouchDevice()
 
+    // Keep screen on while live TV is active on all device types.
+    DisposableEffect(Unit) {
+        val window = (context as? android.app.Activity)?.window
+        window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     var focusZone by rememberSaveable { mutableStateOf(if (uiState.isConfigured) TvFocusZone.CONTENT_MENU else TvFocusZone.SIDEBAR) }
     var searchActive by remember { mutableStateOf(false) }
     val hasProfile = currentProfile != null

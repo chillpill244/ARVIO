@@ -2378,7 +2378,12 @@ private fun ContentRow(
             lastScrollOffset = -1
         }
     }
-    LaunchedEffect(scrollTargetIndex, isCurrentRow, focusedItemIndex) {
+    // Track identity of the first item so that when items are prepended (e.g. local
+    // continue-watching items inserted before Trakt items on first load), the scroll
+    // effect re-fires and resets the LazyRow back to position 0 even though
+    // scrollTargetIndex and focusedItemIndex are both still 0 and unchanged.
+    val firstItemId = category.items.firstOrNull()?.id ?: -1
+    LaunchedEffect(scrollTargetIndex, isCurrentRow, focusedItemIndex, firstItemId) {
         if (!isCurrentRow || scrollTargetIndex < 0) return@LaunchedEffect
 
         // Calculate extra offset for items at the end of the list (past maxFirstIndex)
