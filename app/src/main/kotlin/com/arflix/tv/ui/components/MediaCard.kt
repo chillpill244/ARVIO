@@ -93,14 +93,13 @@ sealed class CardContent {
  * - Supports both MediaItem and IptvChannel via CardContent sealed class
  */
 
-// Shared gradient overlay for all cards - avoids per-card Brush allocation.
-// Uses pre-computed ARGB values for BackgroundDark (0x0D0D14).
+// Shared gradient overlay for all cards — glass-style depth gradient.
 private val sharedCardOverlayBrush = Brush.verticalGradient(
     colors = listOf(
         Color.Transparent,
         Color.Transparent,
-        Color(0x8C_0D0D14),  // ~55% alpha
-        Color(0xD9_0D0D14),  // ~85% alpha
+        Color(0x73_08090A),  // ~45% — gentler glass gradient
+        Color(0xCC_08090A),  // ~80%
     )
 )
 
@@ -230,16 +229,16 @@ fun MediaCard(
             },
         ) { _ ->
             Box(modifier = Modifier.fillMaxSize()) {
-                // Glass UI background for missing images
+                // Glass surface background for missing images
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
-                                    Color.White.copy(alpha = 0.05f),
-                                    Color.White.copy(alpha = 0.08f),
-                                    Color.White.copy(alpha = 0.05f)
+                                    Color.White.copy(alpha = 0.04f),
+                                    Color.White.copy(alpha = 0.07f),
+                                    Color.White.copy(alpha = 0.03f)
                                 )
                             )
                         )

@@ -9,11 +9,11 @@ import androidx.tv.material3.darkColorScheme
 import com.arflix.tv.ui.skin.ProvideArvioSkin
 
 /**
- * ARVIO Color scheme holder - Arctic Fuse 2 inspired
- * Minimal dark theme with light gray (#EDEDED) on pure black (#000000)
+ * ARVIO Color scheme holder — Apple Glass Design
+ * Translucent surfaces, luminous borders, refined depth
  */
 data class ArvioColors(
-    // Arctic Fuse 2 Main Colors
+    // Main Colors
     val arcticWhite: androidx.compose.ui.graphics.Color = ArcticWhite,
     val arcticWhite90: androidx.compose.ui.graphics.Color = ArcticWhite90,
     val arcticWhite70: androidx.compose.ui.graphics.Color = ArcticWhite70,
@@ -21,7 +21,7 @@ data class ArvioColors(
     val arcticBlack: androidx.compose.ui.graphics.Color = ArcticBlack,
     val arcticGray: androidx.compose.ui.graphics.Color = ArcticGray,
     
-    // Legacy gradient colors (mapped to Arctic style)
+    // Legacy gradient colors (mapped to glass style)
     val cyan: androidx.compose.ui.graphics.Color = ArcticWhite,
     val cyanDark: androidx.compose.ui.graphics.Color = ArcticGray,
     val cyanGlow: androidx.compose.ui.graphics.Color = FocusGlow,
@@ -37,6 +37,10 @@ data class ArvioColors(
     val backgroundCard: androidx.compose.ui.graphics.Color = BackgroundCard,
     val backgroundElevated: androidx.compose.ui.graphics.Color = BackgroundElevated,
     val backgroundGlass: androidx.compose.ui.graphics.Color = BackgroundGlass,
+
+    // Glass surface colors
+    val glassSurface: androidx.compose.ui.graphics.Color = GlassSurfaceRegular,
+    val glassBorder: androidx.compose.ui.graphics.Color = GlassBorderLight,
 
     // Text colors
     val textPrimary: androidx.compose.ui.graphics.Color = TextPrimary,
@@ -57,11 +61,11 @@ data class ArvioColors(
     val imdbYellow: androidx.compose.ui.graphics.Color = ImdbYellow,
     val accentRed: androidx.compose.ui.graphics.Color = AccentRed,
 
-    // Focus states (White for Arctic Fuse 2)
+    // Focus states
     val focusRing: androidx.compose.ui.graphics.Color = FocusRing,
     val focusGlow: androidx.compose.ui.graphics.Color = FocusGlow,
 
-    // Particle colors (subtle white)
+    // Particle colors
     val particleCyan: androidx.compose.ui.graphics.Color = ParticleCyan,
     val particlePurple: androidx.compose.ui.graphics.Color = ParticlePurple,
     val particlePink: androidx.compose.ui.graphics.Color = ParticlePink
@@ -73,8 +77,8 @@ val LocalArvioColors = staticCompositionLocalOf { ArvioColors() }
 val LocalArflixColors = LocalArvioColors
 
 /**
- * Main ARVIO TV theme - Arctic Fuse 2 inspired
- * Pure black background, light gray text, white focus states
+ * Main ARVIO TV theme — Apple Glass Design
+ * Deep dark background, translucent surfaces, luminous borders
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable

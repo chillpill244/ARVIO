@@ -4,18 +4,18 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * ARVIO Color Palette
- * Arctic Fuse 2 Inspired - Minimal Dark Theme
+ * Apple Glass Design — translucent depth, luminous borders, frosted surfaces
  */
 
 // ============================================
 // ARCTIC FUSE 2 MAIN COLORS
 // ============================================
-val ArcticWhite = Color(0xFFEDEDED)          // Main foreground #ededed
-val ArcticWhite90 = Color(0xE7EDEDED)        // 90% opacity
-val ArcticWhite70 = Color(0xB3EDEDED)        // 70% opacity
-val ArcticWhite50 = Color(0x80EDEDED)        // 50% opacity
-val ArcticWhite30 = Color(0x4DEDEDED)        // 30% opacity
-val ArcticWhite12 = Color(0x1FEDEDED)        // 12% opacity
+val ArcticWhite = Color(0xFFF5F5F7)          // Apple-style near-white foreground
+val ArcticWhite90 = Color(0xE7F5F5F7)        // 90% opacity
+val ArcticWhite70 = Color(0xB3F5F5F7)        // 70% opacity
+val ArcticWhite50 = Color(0x80F5F5F7)        // 50% opacity
+val ArcticWhite30 = Color(0x4DF5F5F7)        // 30% opacity
+val ArcticWhite12 = Color(0x1FF5F5F7)        // 12% opacity
 
 val ArcticBlack = Color(0xFF000000)          // Main background #000000
 val ArcticBlack90 = Color(0xE7000000)        // 90% opacity
@@ -24,15 +24,27 @@ val ArcticBlack50 = Color(0x80000000)        // 50% opacity
 val ArcticBlack30 = Color(0x4D000000)        // 30% opacity
 val ArcticBlack12 = Color(0x1F000000)        // 12% opacity
 
-val ArcticGray = Color(0xFF4D4D4D)           // Soft gray accent
-val ArcticGrayLight = Color(0xFFB3B3B3)      // Logo/subtle elements
+val ArcticGray = Color(0xFF48484A)           // Apple system gray
+val ArcticGrayLight = Color(0xFFAEAEB2)      // Apple secondary label
 
 // ============================================
 // ACCENT COLORS
 // ============================================
 val AccentWhite = Color(0xFFFFFFFF)          // Pure white for focus
-val AccentYellow = Color(0xFFFFCD3C)         // Star ratings
-val AccentGreen = Color(0xFF00D588)          // "New episode" badges
+val AccentYellow = Color(0xFFFFD60A)         // Apple system yellow
+val AccentGreen = Color(0xFF30D158)          // Apple system green
+
+// ============================================
+// GLASS / FROSTED SURFACE COLORS
+// ============================================
+val GlassSurfaceThin = Color(0x1AFFFFFF)     // 10% white — ultra-thin glass
+val GlassSurfaceRegular = Color(0x26FFFFFF)  // 15% white — standard glass panel
+val GlassSurfaceThick = Color(0x33FFFFFF)    // 20% white — elevated glass
+val GlassSurfaceUltra = Color(0x40FFFFFF)    // 25% white — prominent glass (modals)
+val GlassBorderLight = Color(0x26FFFFFF)     // 15% white luminous edge
+val GlassBorderMedium = Color(0x40FFFFFF)    // 25% white — stronger edge on focus
+val GlassBorderFocus = Color(0x66FFFFFF)     // 40% white — focused glass edge
+val GlassInnerLight = Color(0x0DFFFFFF)      // 5% white — inner specular highlight
 
 // Legacy aliases for compatibility
 val PrimeBlue = ArcticWhite
@@ -69,10 +81,10 @@ val GradientEnd = Color(0xFF08090A)
 // BACKGROUND COLORS (App Background)
 // ============================================
 val BackgroundDark = Color(0xFF08090A)        // #08090A
-val BackgroundCard = Color(0xFF0D0D0D)        // Slightly elevated
-val BackgroundElevated = Color(0xFF1A1A1A)    // Elevated surfaces
-val BackgroundOverlay = BackgroundDark.copy(alpha = 0.90f)
-val BackgroundGlass = BackgroundDark.copy(alpha = 0.60f)
+val BackgroundCard = Color(0xFF111114)        // Slightly elevated, warmer
+val BackgroundElevated = Color(0xFF1C1C1E)   // Apple elevated surface
+val BackgroundOverlay = Color(0xE5080808)     // 90% dark overlay
+val BackgroundGlass = Color(0x99080808)       // 60% — frosted dark glass
 
 // Gradient backgrounds
 val BackgroundGradientStart = BackgroundDark
@@ -84,13 +96,13 @@ val BackgroundGradientEnd = BackgroundDark
 // SURFACE COLORS
 // ============================================
 val SurfaceDark = BackgroundDark
-val SurfaceVariant = Color(0xFF0D0D0D)
-val SurfaceGlass = Color(0x4D000000)
+val SurfaceVariant = Color(0xFF111114)
+val SurfaceGlass = GlassSurfaceRegular
 
 // ============================================
-// TEXT COLORS (Light Gray #EDEDED)
+// TEXT COLORS (Apple-style near-white)
 // ============================================
-val TextPrimary = ArcticWhite                 // #EDEDED
+val TextPrimary = ArcticWhite                 // #F5F5F7
 val TextSecondary = ArcticWhite70             // 70% opacity
 val TextTertiary = ArcticWhite50              // 50% opacity
 val TextDisabled = ArcticWhite30              // 30% opacity
@@ -98,32 +110,32 @@ val TextDisabled = ArcticWhite30              // 30% opacity
 // ============================================
 // BORDER COLORS
 // ============================================
-val BorderLight = ArcticWhite12               // 12% white
-val BorderMedium = ArcticWhite30              // 30% white
-val BorderGradient = ArcticWhite50            // 50% white
+val BorderLight = GlassBorderLight            // Glass luminous edge
+val BorderMedium = GlassBorderMedium          // Stronger glass edge
+val BorderGradient = GlassBorderFocus         // Focus-level edge
 
 // ============================================
-// STATUS COLORS
+// STATUS COLORS (Apple system colors)
 // ============================================
 val SuccessGreen = AccentGreen
-val ErrorRed = Color(0xFFE74C3C)
-val WarningOrange = Color(0xFFF39C12)
-val InfoBlue = ArcticWhite
-val OngoingBlue = ArcticWhite
+val ErrorRed = Color(0xFFFF453A)             // Apple system red
+val WarningOrange = Color(0xFFFF9F0A)        // Apple system orange
+val InfoBlue = Color(0xFF0A84FF)             // Apple system blue
+val OngoingBlue = Color(0xFF0A84FF)
 
 // ============================================
 // SPECIAL COLORS
 // ============================================
 val ImdbYellow = AccentYellow                 // Star ratings
-val AccentRed = Color(0xFFE53935)
+val AccentRed = Color(0xFFFF453A)
 
 // ============================================
-// FOCUS & GLOW STATES (Kodi Inspired)
+// FOCUS & GLOW STATES (Glass Design)
 // ============================================
 val KodiMagenta = Color(0xFFFC1C8E)           // Pink focus indicator
 val KodiPurple = Color(0xFFB64BFF)            // Purple card border
-val FocusRing = AccentWhite                   // Arctic Fuse 2 default: white focus
-val FocusGlow = AccentWhite.copy(alpha = 0.20f)
+val FocusRing = AccentWhite                   // Pure white focus
+val FocusGlow = Color(0x33FFFFFF)             // 20% white glow
 val FocusShadowColor = Color(0x40000000)
 val FocusGradientStart = AccentWhite
 val FocusGradientEnd = ArcticWhite90

@@ -22,6 +22,11 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
@@ -46,9 +51,9 @@ fun Modifier.arvioFocusable(
     @Suppress("UNUSED_PARAMETER") glowAlpha: Float,
     outlineColor: Color,
     focusedTransformOriginX: Float = 0.5f,
-    useGradientBorder: Boolean = false,  // Arctic Fuse 2: SOLID border, not gradient
-    gradientStartColor: Color = Color(0xFFFF00FF),  // Magenta (unused when solid)
-    gradientEndColor: Color = Color(0xFF00D4FF),    // Cyan (unused when solid)
+    useGradientBorder: Boolean = false,
+    gradientStartColor: Color = Color(0xFFFF00FF),
+    gradientEndColor: Color = Color(0xFF00D4FF),
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     onFocusChanged: (Boolean) -> Unit = {},
@@ -65,22 +70,30 @@ fun Modifier.arvioFocusable(
     }
 
     val tokens = ArvioSkin.focus
+    val motionTokens = ArvioSkin.motion
 
-    // Use spring physics for natural, bouncy feel
+    // Apple-style spring: fluid, minimal bounce
     val scale by animateFloatAsState(
         targetValue = targetScale,
         animationSpec = spring(
-            dampingRatio = 0.75f,  // Slight bounce for premium feel
-            stiffness = 400f       // Snappy but smooth
+            dampingRatio = motionTokens.springDampingFocus,
+            stiffness = motionTokens.springStiffnessFocus
         ),
         label = "arvio_focus_scale",
     )
 
-    // Animate alpha for smooth border fade in/out
+    // Smooth alpha transition for glass border
     val highlightAlpha by animateFloatAsState(
         targetValue = if (visualFocused) 1f else 0f,
-        animationSpec = tween(durationMillis = 120, easing = tokens.easing),
+        animationSpec = tween(durationMillis = tokens.durationMillis, easing = tokens.easing),
         label = "arvio_focus_alpha",
+    )
+
+    // Subtle glass border at rest (luminous edge)
+    val restBorderAlpha by animateFloatAsState(
+        targetValue = if (!visualFocused) 0.4f else 0f,
+        animationSpec = tween(durationMillis = tokens.durationMillis, easing = tokens.easing),
+        label = "arvio_rest_border",
     )
 
     val originX = if (visualFocused) focusedTransformOriginX.coerceIn(0f, 1f) else 0.5f
@@ -129,21 +142,22 @@ fun Modifier.arvioFocusable(
         Modifier.graphicsLayer {
             scaleX = scale
             scaleY = scale
-            // Removed shadowElevation - it creates rectangular shadows that don't follow rounded corners
             transformOrigin = focusTransformOrigin
         }
     } else {
         Modifier
     }
 
-    val borderModifier = if (highlightAlpha > 0f) {
+    // Glass-style border drawing: luminous edge at rest + bright on focus
+    val borderModifier = if (highlightAlpha > 0f || restBorderAlpha > 0f) {
         Modifier.drawWithContent {
             drawContent()
             val outline = shape.createOutline(size, layoutDirection, this)
 
-            // Simple solid border
-            val outlineStroke = Stroke(width = outlineWidth.toPx())
-            val ringColor = outlineColor.copy(alpha = highlightAlpha)
+            val effectiveAlpha = if (highlightAlpha > 0f) highlightAlpha else restBorderAlpha * 0.5f
+            val effectiveWidth = if (highlightAlpha > 0f) outlineWidth.toPx() else 0.5.dp.toPx()
+            val ringColor = outlineColor.copy(alpha = effectiveAlpha)
+            val outlineStroke = Stroke(width = effectiveWidth)
 
             when (outline) {
                 is Outline.Rectangle -> {
@@ -155,6 +169,20 @@ fun Modifier.arvioFocusable(
                 }
                 is Outline.Generic -> {
                     drawPath(path = outline.path, color = ringColor, style = outlineStroke)
+                }
+            }
+
+            // Focused: add a soft glow halo behind the border
+            if (highlightAlpha > 0.3f) {
+                val glowStroke = Stroke(width = outlineWidth.toPx() + 6.dp.toPx())
+                val glowColor = outlineColor.copy(alpha = highlightAlpha * 0.12f)
+                when (outline) {
+                    is Outline.Rounded -> {
+                        val path = Path().apply { addRoundRect(outline.roundRect) }
+                        drawPath(path = path, color = glowColor, style = glowStroke)
+                    }
+                    is Outline.Rectangle -> drawRect(color = glowColor, style = glowStroke)
+                    is Outline.Generic -> drawPath(path = outline.path, color = glowColor, style = glowStroke)
                 }
             }
         }
@@ -182,7 +210,7 @@ fun ArvioFocusableSurface(
     glowAlpha: Float = ArvioSkin.focus.glowAlpha,
     outlineColor: Color = ArvioSkin.colors.focusOutline,
     focusedTransformOriginX: Float = 0.5f,
-    useGradientBorder: Boolean = false,  // Arctic Fuse 2: SOLID border, not gradient
+    useGradientBorder: Boolean = false,
     gradientStartColor: Color = ArvioSkin.colors.focusGradientStart,
     gradientEndColor: Color = ArvioSkin.colors.focusGradientEnd,
     enabled: Boolean = true,

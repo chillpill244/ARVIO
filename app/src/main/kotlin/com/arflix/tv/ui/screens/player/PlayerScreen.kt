@@ -176,6 +176,7 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.session.MediaSession
 
 /**
  * Netflix-style Player UI for Android TV
@@ -801,6 +802,12 @@ fun PlayerScreen(
                     }
                 })
             }
+    }
+
+    // MediaSession signals active playback to the OS, preventing the Android TV
+    // screensaver from activating while video is playing.
+    val mediaSession = remember(exoPlayer) {
+        MediaSession.Builder(context, exoPlayer).build()
     }
 
     val queueControlsSeek: (Long) -> Unit = queueSeek@{ deltaMs ->
@@ -1435,6 +1442,7 @@ fun PlayerScreen(
                 )
             }
             runCatching { exoPlayer.release() }
+            runCatching { mediaSession.release() }
         }
     }
 
@@ -1949,8 +1957,8 @@ fun PlayerScreen(
                                     android.graphics.Color.WHITE,                         // Always white text
                                     backgroundWithAlpha,                                  // Black background with user opacity
                                     android.graphics.Color.TRANSPARENT,                   // Window color (transparent)
-                                    androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE,  // Text outline for readability
-                                    android.graphics.Color.BLACK,                         // Black outline
+                                    androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE,     // No outline
+                                    android.graphics.Color.TRANSPARENT,                   // No edge color
                                     subtitleStyle.fontFamily.getTypeface()                // User's chosen font family
                                 )
                             )

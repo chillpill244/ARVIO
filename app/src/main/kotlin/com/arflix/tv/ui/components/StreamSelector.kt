@@ -234,7 +234,7 @@ fun StreamSelector(
                 // .fillMaxSize()
                 .focusRequester(focusRequester)
                 .focusable()
-                .background(Color.Black.copy(alpha = 0.95f))
+                .background(Color.Black.copy(alpha = 0.88f))
                 // .padding(top = AppTopBarContentTopInset() + 12.dp)
                 .onKeyEvent { event ->
                     if (event.type == KeyEventType.KeyDown) {

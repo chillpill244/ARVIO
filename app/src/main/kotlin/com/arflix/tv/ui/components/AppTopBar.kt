@@ -2,8 +2,10 @@ package com.arflix.tv.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -90,8 +92,8 @@ fun AppTopBar(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color.Black.copy(alpha = 0.72f),
-                        Color.Black.copy(alpha = 0.36f),
+                        Color.Black.copy(alpha = 0.65f),
+                        Color.Black.copy(alpha = 0.30f),
                         Color.Transparent
                     )
                 )
@@ -131,7 +133,7 @@ fun AppTopBar(
             Text(
                 text = currentTime,
                 style = ArflixTypography.clock,
-                color = Color.White.copy(alpha = 0.88f)
+                color = Color.White.copy(alpha = 0.80f)
             )
         }
     }
@@ -144,43 +146,63 @@ private fun TopBarNavChip(
     isFocused: Boolean,
     isSelected: Boolean
 ) {
+    // Glass chip background — frosted when focused
     val containerColor by animateColorAsState(
         targetValue = when {
-            isFocused -> Color.White.copy(alpha = 0.2f)
-            isSelected -> Color.White.copy(alpha = 0.1f)
+            isFocused -> Color.White.copy(alpha = 0.16f)
+            isSelected -> Color.White.copy(alpha = 0.08f)
             else -> Color.Transparent
         },
-        animationSpec = tween(AnimationConstants.DURATION_FAST),
+        animationSpec = tween(AnimationConstants.DURATION_FAST, easing = AnimationConstants.EaseOut),
         label = "topbar_chip_bg"
     )
     val iconColor by animateColorAsState(
         targetValue = when {
             isFocused -> Color.White
-            isSelected -> Color.White.copy(alpha = 0.92f)
-            else -> Color.White.copy(alpha = 0.62f)
+            isSelected -> Color.White.copy(alpha = 0.88f)
+            else -> Color.White.copy(alpha = 0.50f)
         },
-        animationSpec = tween(AnimationConstants.DURATION_FAST),
+        animationSpec = tween(AnimationConstants.DURATION_FAST, easing = AnimationConstants.EaseOut),
         label = "topbar_icon_color"
     )
     val textColor by animateColorAsState(
         targetValue = when {
             isFocused -> Color.White
-            isSelected -> Color.White.copy(alpha = 0.92f)
-            else -> Color.White.copy(alpha = 0.68f)
+            isSelected -> Color.White.copy(alpha = 0.88f)
+            else -> Color.White.copy(alpha = 0.55f)
         },
-        animationSpec = tween(AnimationConstants.DURATION_FAST),
+        animationSpec = tween(AnimationConstants.DURATION_FAST, easing = AnimationConstants.EaseOut),
         label = "topbar_text_color"
     )
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.04f else 1f,
-        animationSpec = tween(AnimationConstants.DURATION_FAST),
+        targetValue = if (isFocused) 1.03f else 1f,
+        animationSpec = spring(
+            dampingRatio = AnimationConstants.SPRING_DAMPING_FOCUS,
+            stiffness = AnimationConstants.SPRING_STIFFNESS_FOCUS
+        ),
         label = "topbar_scale"
     )
+    // Glass border for focused chip
+    val borderAlpha by animateFloatAsState(
+        targetValue = if (isFocused) 0.20f else 0f,
+        animationSpec = tween(AnimationConstants.DURATION_FAST, easing = AnimationConstants.EaseOut),
+        label = "topbar_border"
+    )
 
+    val chipShape = RoundedCornerShape(16.dp)
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(chipShape)
             .background(containerColor)
+            .then(
+                if (borderAlpha > 0.01f) {
+                    Modifier.border(
+                        width = 0.5.dp,
+                        color = Color.White.copy(alpha = borderAlpha),
+                        shape = chipShape
+                    )
+                } else Modifier
+            )
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale

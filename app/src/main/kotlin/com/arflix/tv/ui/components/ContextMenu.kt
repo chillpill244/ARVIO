@@ -127,7 +127,7 @@ fun ContextMenu(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.56f))
+                    .background(Color.Black.copy(alpha = 0.60f))
                     .focusRequester(focusRequester)
                     .focusable()
                     .onPreviewKeyEvent { event ->
@@ -161,7 +161,12 @@ fun ContextMenu(
                     modifier = Modifier
                         .padding(top = 110.dp)
                         .width(360.dp)
-                        .background(BackgroundElevated, RoundedCornerShape(18.dp))
+                        .background(Color(0xFF1C1C1E).copy(alpha = 0.85f), RoundedCornerShape(20.dp))
+                        .border(
+                            width = 0.5.dp,
+                            color = Color.White.copy(alpha = 0.10f),
+                            shape = RoundedCornerShape(20.dp)
+                        )
                         .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -189,7 +194,7 @@ fun ContextMenu(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(1.dp)
-                            .background(Color.White.copy(alpha = 0.1f))
+                            .background(Color.White.copy(alpha = 0.06f))
                     )
                     
                     Spacer(modifier = Modifier.height(12.dp))
@@ -263,8 +268,13 @@ fun ContextMenu(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(
-                                BackgroundElevated,
-                                RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                                Color(0xFF1C1C1E).copy(alpha = 0.92f),
+                                RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+                            )
+                            .border(
+                                width = 0.5.dp,
+                                color = Color.White.copy(alpha = 0.08f),
+                                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
                             )
                             .clickable(
                                 indication = null,
@@ -279,7 +289,7 @@ fun ContextMenu(
                                 .width(36.dp)
                                 .height(4.dp)
                                 .background(
-                                    Color.White.copy(alpha = 0.2f),
+                                    Color.White.copy(alpha = 0.15f),
                                     RoundedCornerShape(2.dp)
                                 )
                         )

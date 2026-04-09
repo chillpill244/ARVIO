@@ -16,15 +16,21 @@ data class ArvioColorTokens(
     val background: Color,
     val surface: Color,
     val surfaceRaised: Color,
+    val glassSurface: Color,
+    val glassSurfaceHover: Color,
+    val glassBorder: Color,
+    val glassBorderFocus: Color,
+    val glassInnerHighlight: Color,
     val textPrimary: Color,
     val textMuted: Color,
     val accent: Color,
     val focusOutline: Color,
     val focusGradientStart: Color,
     val focusGradientEnd: Color,
+    val focusGlow: Color,
     val tealAccent: Color,
-    val watchedGreen: Color,      // Green checkmark for watched items (Arctic Fuse 2 style)
-    val inProgressGrey: Color,    // Grey clock for in-progress items
+    val watchedGreen: Color,
+    val inProgressGrey: Color,
 )
 
 @Immutable
@@ -44,6 +50,7 @@ data class ArvioRadiusTokens(
     val sm: Dp,
     val md: Dp,
     val lg: Dp,
+    val xl: Dp,
 )
 
 @Immutable
@@ -63,6 +70,10 @@ data class ArvioMotionTokens(
     val focusEasing: Easing,
     val screenTransitionMillis: Int,
     val heroFadeMillis: Int,
+    val springDampingFocus: Float,
+    val springStiffnessFocus: Float,
+    val springDampingGentle: Float,
+    val springStiffnessGentle: Float,
 )
 
 @Immutable
@@ -87,23 +98,34 @@ data class ArvioSkinTokens(
     val focus: ArvioFocusTokens,
 ) {
     companion object {
+        /**
+         * Apple Glass design tokens — translucent depth, luminous edges,
+         * ultra-smooth spring physics.
+         */
         fun defaults(): ArvioSkinTokens {
-            val easeOut: Easing = CubicBezierEasing(0.0f, 0.0f, 0.2f, 1.0f)
+            // Apple-style ease-out: fast start, gentle deceleration
+            val easeOut: Easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
 
             return ArvioSkinTokens(
                 colors = ArvioColorTokens(
                     background = Color(0xFF000000),
-                    surface = Color(0xFF0D0D0D),
-                    surfaceRaised = Color(0xFF1A1A1A),
-                    textPrimary = Color(0xFFEDEDED),
-                    textMuted = Color(0xB3EDEDED),
-                    accent = Color(0xFFEDEDED),
-                    focusOutline = Color(0xFFFFFFFF),  // Glowing white focus
-                    focusGradientStart = Color(0xFFFFFFFF),  // White
-                    focusGradientEnd = Color(0xFFFFFFFF),    // White (no gradient)
-                    tealAccent = Color(0xFF00D9B5),  // Teal checkmark color
-                    watchedGreen = Color(0xFF4CAF50),  // Green checkmark (Arctic Fuse 2 style)
-                    inProgressGrey = Color(0xFF757575),  // Grey clock for in-progress
+                    surface = Color(0xFF111114),
+                    surfaceRaised = Color(0xFF1C1C1E),
+                    glassSurface = Color(0x26FFFFFF),         // 15% white frosted glass
+                    glassSurfaceHover = Color(0x33FFFFFF),    // 20% white — hovered glass
+                    glassBorder = Color(0x26FFFFFF),           // 15% white luminous edge
+                    glassBorderFocus = Color(0x66FFFFFF),      // 40% white — focus edge
+                    glassInnerHighlight = Color(0x0DFFFFFF),   // 5% specular highlight
+                    textPrimary = Color(0xFFF5F5F7),
+                    textMuted = Color(0xB3F5F5F7),
+                    accent = Color(0xFFF5F5F7),
+                    focusOutline = Color(0xCCFFFFFF),         // 80% white — softer than pure white
+                    focusGradientStart = Color(0xFFFFFFFF),
+                    focusGradientEnd = Color(0xB3FFFFFF),
+                    focusGlow = Color(0x33FFFFFF),             // 20% white ambient glow
+                    tealAccent = Color(0xFF64D2FF),           // Apple system teal
+                    watchedGreen = Color(0xFF30D158),          // Apple system green
+                    inProgressGrey = Color(0xFF636366),        // Apple system gray 3
                 ),
                 spacing = ArvioSpacingTokens(
                     x1 = 4.dp,
@@ -116,28 +138,29 @@ data class ArvioSkinTokens(
                     x16 = 64.dp,
                 ),
                 radius = ArvioRadiusTokens(
-                    sm = 8.dp,
-                    md = 12.dp,
-                    lg = 16.dp,
+                    sm = 10.dp,   // Slightly larger for glass panels
+                    md = 14.dp,
+                    lg = 20.dp,
+                    xl = 28.dp,   // Extra-large for modals / sheets
                 ),
                 typography = ArvioTypographyTokens(
                     heroTitle = TextStyle(
                         fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 50.sp,
+                        fontWeight = FontWeight.Bold,       // Bold instead of Black for elegance
+                        fontSize = 48.sp,
                         letterSpacing = (-0.5).sp,
-                        lineHeight = 56.sp,
+                        lineHeight = 54.sp,
                     ),
                     sectionTitle = TextStyle(
                         fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.SemiBold,
                         fontSize = 20.sp,
-                        letterSpacing = 0.4.sp,
+                        letterSpacing = 0.2.sp,
                         lineHeight = 26.sp,
                     ),
                     cardTitle = TextStyle(
                         fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Medium,     // Lighter weight for glass aesthetic
                         fontSize = 15.sp,
                         letterSpacing = 0.sp,
                         lineHeight = 20.sp,
@@ -158,34 +181,38 @@ data class ArvioSkinTokens(
                     ),
                     badge = TextStyle(
                         fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.SemiBold,
                         fontSize = 9.sp,
                         letterSpacing = 0.4.sp,
                         lineHeight = 12.sp,
                     ),
                     button = TextStyle(
                         fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp,
-                        letterSpacing = 0.4.sp,
+                        letterSpacing = 0.2.sp,
                         lineHeight = 20.sp,
                     ),
                 ),
                 motion = ArvioMotionTokens(
-                    focusDurationMillis = 120,    // Smooth focus transitions
+                    focusDurationMillis = 180,             // Slightly longer for silky smooth
                     focusEasing = easeOut,
-                    screenTransitionMillis = 150, // Smooth screen transitions
-                    heroFadeMillis = 200,         // Smooth backdrop dissolve
+                    screenTransitionMillis = 200,
+                    heroFadeMillis = 280,                  // Slower dissolve for cinematic feel
+                    springDampingFocus = 0.82f,            // Less bounce — refined Apple feel
+                    springStiffnessFocus = 350f,           // Lower stiffness — fluid motion
+                    springDampingGentle = 0.88f,
+                    springStiffnessGentle = 250f,
                 ),
                 focus = ArvioFocusTokens(
-                    scaleFocused = 1.05f,  // Noticeable scale for TV viewing distance
-                    scalePressed = 0.97f,
-                    durationMillis = 120,  // Smooth but responsive animations
+                    scaleFocused = 1.04f,                  // Subtle scale — glass panels don't "jump"
+                    scalePressed = 0.98f,
+                    durationMillis = 180,
                     easing = easeOut,
-                    outlineWidth = 3.dp,   // Prominent white border
-                    glowWidth = 0.dp,      // No glow for performance
-                    glowAlpha = 0f,        // No glow
-                    translationZFocused = 8.dp,  // Visible lift effect
+                    outlineWidth = 1.5.dp,                 // Thin luminous border, not thick ring
+                    glowWidth = 12.dp,                     // Soft ambient glow around focused items
+                    glowAlpha = 0.15f,                     // Subtle glow
+                    translationZFocused = 6.dp,
                 ),
             )
         }

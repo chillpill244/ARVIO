@@ -52,8 +52,8 @@ import com.arflix.tv.ui.theme.AnimationConstants
 import com.arflix.tv.ui.theme.TextSecondary
 
 /**
- * Premium navigation sidebar with smooth animations
- * Ultra slim icon-only bar with animated focus states
+ * Premium navigation sidebar with glass morphism design
+ * Translucent frosted panel with luminous focus indicators
  */
 enum class SidebarItem(val icon: ImageVector, val label: String) {
     SEARCH(Icons.Outlined.Search, "Search"),
@@ -82,7 +82,7 @@ fun Sidebar(
     val centerFocusedIndex = if (hasProfile) focusedIndex - 1 else focusedIndex
     val settingsFocused = centerFocusedIndex == centerItems.size
 
-    // Sidebar: subtle transparent gradient so backdrop shows through
+    // Glass sidebar: translucent frosted panel with luminous right edge
     Box(
         modifier = modifier
             .width(56.dp)
@@ -90,13 +90,32 @@ fun Sidebar(
             .background(
                 Brush.horizontalGradient(
                     listOf(
-                        Color.Black.copy(alpha = 0.4f),
-                        Color.Black.copy(alpha = 0.2f),
+                        Color.Black.copy(alpha = 0.50f),
+                        Color.Black.copy(alpha = 0.25f),
                         Color.Transparent
                     )
                 )
             )
     ) {
+        // Subtle luminous right edge
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .width(0.5.dp)
+                .fillMaxHeight(0.7f)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.08f),
+                            Color.White.copy(alpha = 0.12f),
+                            Color.White.copy(alpha = 0.08f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxHeight()
@@ -116,7 +135,7 @@ fun Sidebar(
             // Flexible space - pushes center group down
             Spacer(modifier = Modifier.weight(1f))
 
-            // Center group: Search, Home, Movies, Series, Watchlist, TV (vertically centered)
+            // Center group: Search, Home, Watchlist, TV (vertically centered)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -225,33 +244,34 @@ private fun SidebarIcon(
     isSelected: Boolean,
     isFocused: Boolean,
 ) {
-    // Animated icon color - dark grey normally, pure white when focused
+    // Glass icon color — soft glow when focused
     val iconColor by animateColorAsState(
         targetValue = when {
-            isFocused -> Color.White  // Pure white when focused
-            isSelected -> Color(0xFF666666)  // Dark grey when selected
-            else -> Color(0xFF444444)  // Darker grey when unfocused
+            isFocused -> Color.White
+            isSelected -> Color.White.copy(alpha = 0.55f)
+            else -> Color.White.copy(alpha = 0.30f)
         },
-        animationSpec = tween(
-            durationMillis = AnimationConstants.DURATION_FAST,
-            easing = AnimationConstants.EaseOut
+        animationSpec = spring(
+            dampingRatio = AnimationConstants.SPRING_DAMPING_FOCUS,
+            stiffness = AnimationConstants.SPRING_STIFFNESS_FOCUS
         ),
         label = "icon_color"
     )
 
-    // Slight scale when focused
+    // Subtle spring scale
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.12f else 1f,
-        animationSpec = tween(
-            durationMillis = AnimationConstants.DURATION_FAST,
-            easing = AnimationConstants.EaseOut
+        targetValue = if (isFocused) 1.10f else 1f,
+        animationSpec = spring(
+            dampingRatio = AnimationConstants.SPRING_DAMPING_FOCUS,
+            stiffness = AnimationConstants.SPRING_STIFFNESS_FOCUS
         ),
         label = "icon_scale"
     )
 
+    // Glass chip background
     val chipBackground by animateColorAsState(
         targetValue = when {
-            isFocused -> Color.White.copy(alpha = 0.16f)
+            isFocused -> Color.White.copy(alpha = 0.14f)
             isSelected -> Color.White.copy(alpha = 0.06f)
             else -> Color.Transparent
         },
@@ -264,9 +284,9 @@ private fun SidebarIcon(
 
     val indicatorAlpha by animateFloatAsState(
         targetValue = if (isFocused) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = AnimationConstants.DURATION_FAST,
-            easing = AnimationConstants.EaseOut
+        animationSpec = spring(
+            dampingRatio = AnimationConstants.SPRING_DAMPING_FOCUS,
+            stiffness = AnimationConstants.SPRING_STIFFNESS_FOCUS
         ),
         label = "sidebar_indicator_alpha"
     )
@@ -277,14 +297,15 @@ private fun SidebarIcon(
             .height(34.dp),
         contentAlignment = Alignment.Center
     ) {
+        // Luminous focus indicator line
         if (indicatorAlpha > 0.01f) {
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
-                    .width(3.dp)
-                    .height(22.dp)
+                    .width(2.dp)
+                    .height(18.dp)
                     .clip(RoundedCornerShape(999.dp))
-                    .background(ArvioSkin.colors.focusOutline.copy(alpha = indicatorAlpha))
+                    .background(Color.White.copy(alpha = indicatorAlpha * 0.9f))
             )
         }
 

@@ -46,7 +46,7 @@ object ShimmerState {
             initialValue = 0f,
             targetValue = 1000f,
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1200, easing = LinearEasing),
+                animation = tween(durationMillis = 1400, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "shimmerTranslate"
@@ -54,9 +54,9 @@ object ShimmerState {
 
         return Brush.linearGradient(
             colors = listOf(
-                Color(0xFF151520),
-                Color(0xFF1F1F2A),
-                Color(0xFF151520)
+                Color.White.copy(alpha = 0.03f),
+                Color.White.copy(alpha = 0.08f),
+                Color.White.copy(alpha = 0.03f)
             ),
             start = Offset(translateAnim - 500f, 0f),
             end = Offset(translateAnim, 0f)
@@ -76,7 +76,7 @@ fun shimmerBrush(): Brush = ShimmerState.getShimmerBrush()
 @Composable
 fun SkeletonBox(
     modifier: Modifier = Modifier,
-    shape: RoundedCornerShape = RoundedCornerShape(8.dp)
+    shape: RoundedCornerShape = RoundedCornerShape(10.dp)
 ) {
     Box(
         modifier = modifier
