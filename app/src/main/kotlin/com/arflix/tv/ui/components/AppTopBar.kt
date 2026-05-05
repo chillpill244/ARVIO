@@ -334,6 +334,6 @@ private fun rememberTopBarTime(): String {
 }
 
 private fun topBarCurrentTime(): String {
-    val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+    val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
     return sdf.format(Date())
 }

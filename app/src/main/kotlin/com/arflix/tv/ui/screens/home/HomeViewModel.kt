@@ -250,7 +250,7 @@ class HomeViewModel @Inject constructor(
 
         val nowProgram = epg?.now
         val nextProgram = epg?.next ?: epg?.later ?: epg?.upcoming?.firstOrNull()
-        val timeFmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).apply {
+        val timeFmt = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).apply {
             timeZone = java.util.TimeZone.getDefault()
         }
         fun fmtRange(p: com.arflix.tv.data.model.IptvProgram): String {
@@ -2570,4 +2570,3 @@ class HomeViewModel @Inject constructor(
         }
     }
 }
-

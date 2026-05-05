@@ -135,8 +135,7 @@ private fun ProfileIndicator(
 }
 
 private fun getCurrentTime(): String {
-    val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+    val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
     return sdf.format(Date())
 }
-
 

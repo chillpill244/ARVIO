@@ -2317,7 +2317,7 @@ private fun IptvSettings(
         val intervalSubtitle = buildString {
             append(refreshInterval.displayName)
             if (lastRefreshTime != null && lastRefreshTime > 0) {
-                val lastRefreshFormatted = java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault())
+                val lastRefreshFormatted = java.text.SimpleDateFormat("MMM dd, h:mm a", java.util.Locale.getDefault())
                     .format(java.util.Date(lastRefreshTime))
                 append(" | Last: $lastRefreshFormatted")
             }

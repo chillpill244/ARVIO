@@ -2181,7 +2181,7 @@ fun PlayerScreen(
                             LaunchedEffect(duration, currentPosition) {
                                 while (true) {
                                     val now = System.currentTimeMillis()
-                                    val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                                    val sdf = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
                                     currentTime.value = sdf.format(java.util.Date(now))
                                     if (duration > 0 && currentPosition >= 0) {
                                         val remainingMs = (duration - currentPosition).coerceAtLeast(0L)

@@ -294,7 +294,7 @@ class WatchlistViewModel @Inject constructor(
     }
 
     private fun formatProgramTime(program: com.arflix.tv.data.model.IptvProgram): String {
-        val formatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+        val formatter = java.time.format.DateTimeFormatter.ofPattern("h:mm a")
         val start = java.time.Instant.ofEpochMilli(program.startUtcMillis)
             .atZone(java.time.ZoneId.systemDefault())
             .format(formatter)
