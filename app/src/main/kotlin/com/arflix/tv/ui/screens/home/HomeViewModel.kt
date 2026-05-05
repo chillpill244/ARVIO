@@ -2308,8 +2308,10 @@ class HomeViewModel @Inject constructor(
                 val isInWatchlist = watchlistRepository.isInWatchlist(item.mediaType, item.id)
                 if (isInWatchlist) {
                     watchlistRepository.removeFromWatchlist(item.mediaType, item.id)
+                    runCatching { traktRepository.removeFromWatchlist(item.mediaType, item.id) }
                 } else {
                     watchlistRepository.addToWatchlist(item.mediaType, item.id)
+                    runCatching { traktRepository.addToWatchlist(item.mediaType, item.id) }
                 }
                 runCatching { cloudSyncRepository.pushToCloud() }
                 _uiState.value = _uiState.value.copy(

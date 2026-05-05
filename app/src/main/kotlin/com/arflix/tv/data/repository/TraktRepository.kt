@@ -1585,7 +1585,8 @@ class TraktRepository @Inject constructor(
         streamKey: String? = null,
         streamAddonId: String? = null,
         streamTitle: String? = null,
-        year: String = ""
+        year: String = "",
+        subtitleLanguage: String? = null
     ) {
         val hasMeaningfulPosition = positionSeconds >= 60L
 
@@ -1614,7 +1615,8 @@ class TraktRepository @Inject constructor(
             streamKey = streamKey,
             streamAddonId = streamAddonId,
             streamTitle = streamTitle,
-            year = year
+            year = year,
+            subtitleLanguage = subtitleLanguage
         )
 
         // Load existing items (raw - no enrichment needed when saving)
@@ -2809,7 +2811,8 @@ data class ContinueWatchingItem(
     val overview: String = "",
     val imdbRating: String = "",
     val duration: String = "",
-    val budget: Long? = null
+    val budget: Long? = null,
+    val subtitleLanguage: String? = null
 ) {
     fun toMediaItem(): MediaItem {
         val resumeSeconds = when {

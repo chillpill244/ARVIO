@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.StarOutline
@@ -200,11 +201,18 @@ fun TvScreen(
     var fullscreenOverlayTrigger by remember { mutableStateOf(0L) } // timestamp to reset auto-hide timer
     var centerDownAtMs by remember { mutableStateOf<Long?>(null) }
     var showGroupsMobile by rememberSaveable { mutableStateOf(true) }
+    var isPiPMode by rememberSaveable { mutableStateOf(false) }
 
-    BackHandler(enabled = isMobile && isFullScreen) {
-        // Always return to EPG guide first, regardless of how we got here
-        isFullScreen = false
-        showFullscreenOverlay = false
+    BackHandler(enabled = isMobile && isFullScreen || isPiPMode) {
+        // Exit PiP first if in PiP mode
+        if (isPiPMode) {
+            isPiPMode = false
+            // Exit PiP mode gracefully - app will receive PiP lifecycle changes
+        } else {
+            // Always return to EPG guide first, regardless of how we got here
+            isFullScreen = false
+            showFullscreenOverlay = false
+        }
     }
 
     val groupsListState = rememberLazyListState()
@@ -361,13 +369,31 @@ fun TvScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_PAUSE -> exoPlayer.pause()
-                Lifecycle.Event.ON_RESUME -> if (playingChannelId != null) exoPlayer.play()
+                Lifecycle.Event.ON_PAUSE -> if (!isPiPMode) exoPlayer.pause()
+                Lifecycle.Event.ON_RESUME -> if (playingChannelId != null && !isPiPMode) exoPlayer.play()
                 else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Handle PiP mode entry
+    LaunchedEffect(isPiPMode) {
+        if (isPiPMode && isMobile) {
+            val activity = context as? android.app.Activity
+            if (activity != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                try {
+                    val ratio = android.app.PictureInPictureParams.Builder()
+                        .setAspectRatio(android.util.Rational(16, 9))
+                        .build()
+                    activity.enterPictureInPictureMode(ratio)
+                } catch (e: Exception) {
+                    // Fallback for older devices or if PiP is not supported
+                    isPiPMode = false
+                }
+            }
+        }
     }
 
     // Helper: prepare ExoPlayer with a stream URL (shared by normal play + error retry)
@@ -1337,7 +1363,9 @@ fun TvScreen(
                             channel = playingChannel,
                             nowProgram = fsNow,
                             nextProgram = fsNext,
-                            isMobile = isMobile
+                            isMobile = isMobile,
+                            isPiPMode = isPiPMode,
+                            onEnterPiP = { isPiPMode = true }
                         )
                     }
                 }
@@ -1608,7 +1636,9 @@ private fun FullscreenEpgOverlay(
     channel: IptvChannel,
     nowProgram: IptvProgram?,
     nextProgram: IptvProgram?,
-    isMobile: Boolean = false
+    isMobile: Boolean = false,
+    isPiPMode: Boolean = false,
+    onEnterPiP: () -> Unit = {}
 ) {
     val topScrimBrush = remember {
         androidx.compose.ui.graphics.Brush.verticalGradient(
@@ -1675,13 +1705,34 @@ private fun FullscreenEpgOverlay(
                     )
                 }
             }
-            // Clock on the right
-            Text(
-                text = programTimeFormatter.format(java.time.LocalTime.now()),
-                style = ArflixTypography.sectionTitle.copy(fontSize = if (isMobile) 13.sp else 18.sp),
-                color = Color.White.copy(alpha = 0.8f),
-                modifier = Modifier.align(Alignment.TopEnd)
-            )
+            // Top right: PiP button (mobile only) + Clock
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.align(Alignment.TopEnd),
+                horizontalArrangement = Arrangement.spacedBy(if (isMobile) 8.dp else 12.dp)
+            ) {
+                if (isMobile && !isPiPMode) {
+                    IconButton(
+                        onClick = onEnterPiP,
+                        modifier = Modifier
+                            .size(if (isMobile) 36.dp else 44.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.White.copy(alpha = 0.1f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PictureInPicture,
+                            contentDescription = "Picture in Picture",
+                            tint = Color.White,
+                            modifier = Modifier.size(if (isMobile) 20.dp else 24.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = programTimeFormatter.format(java.time.LocalTime.now()),
+                    style = ArflixTypography.sectionTitle.copy(fontSize = if (isMobile) 13.sp else 18.sp),
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+            }
         }
 
         // Bottom scrim: NOW / NEXT program info

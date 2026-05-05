@@ -110,6 +110,8 @@ class PlayerViewModel @Inject constructor(
     private var lastWatchHistorySaveTime: Long = 0
     private var lastIsPlaying: Boolean = false
     private var hasMarkedWatched: Boolean = false
+    // Subtitle language from the continue watching entry (auto-restore on resume)
+    private var cwSubtitleLang: String? = null
 
     // TASK_17: IPTV Series context for instant next episode
     private var currentIptvSeriesId: Int? = null
@@ -193,6 +195,16 @@ class PlayerViewModel @Inject constructor(
             if (mediaType == MediaType.TV && currentIptvSeriesId == null) {
                 loadIptvSeriesContextFromStorage()
             }
+
+            // Load subtitle language from continue watching entry for auto-restore
+            cwSubtitleLang = runCatching {
+                traktRepository.getLocalContinueWatchingEntry(
+                    mediaType = mediaType,
+                    tmdbId = mediaId,
+                    season = seasonNumber,
+                    episode = episodeNumber
+                )?.subtitleLanguage
+            }.getOrNull()
             
             val preferredAudioLanguage = resolvePreferredAudioLanguage()
             val frameRateMatchingMode = resolveFrameRateMatchingMode()
@@ -352,7 +364,7 @@ class PlayerViewModel @Inject constructor(
                         )
 
                         if (_uiState.value.selectedSubtitle == null) {
-                            val preferredSub = getDefaultSubtitle()
+                            val preferredSub = resolveSubtitlePreference()
                             applyPreferredSubtitle(preferredSub, mergedSubs, currentOriginalLanguage)
                         }
                     } else {
@@ -553,7 +565,7 @@ class PlayerViewModel @Inject constructor(
                         .filter { it.url.isNotBlank() }
                         .distinctBy { "${it.id}|${it.url}" }
 
-                    val preferredSub = getDefaultSubtitle()
+                    val preferredSub = resolveSubtitlePreference()
                     _uiState.value = _uiState.value.copy(
                         subtitles = mergedSubs,
                         isLoadingSubtitles = false
@@ -757,6 +769,19 @@ class PlayerViewModel @Inject constructor(
         } catch (_: Exception) {
             "Off"
         }
+    }
+
+    /**
+     * Resolves the effective subtitle preference for this playback session.
+     * Uses the global setting, but falls back to the subtitle language from
+     * the continue watching entry so subtitles auto-restore on resume.
+     */
+    private suspend fun resolveSubtitlePreference(): String {
+        val globalPref = getDefaultSubtitle()
+        if (isSubtitleDisabledPreference(globalPref) && !cwSubtitleLang.isNullOrBlank()) {
+            return cwSubtitleLang!!
+        }
+        return globalPref
     }
 
     private suspend fun resolveFrameRateMatchingMode(): String {
@@ -1298,7 +1323,7 @@ class PlayerViewModel @Inject constructor(
 
                     // If nothing is selected yet, try to apply the default preference against the merged list.
                     if (_uiState.value.selectedSubtitle == null) {
-                        val preferred = getDefaultSubtitle()
+                        val preferred = resolveSubtitlePreference()
                         applyPreferredSubtitle(preferred, merged, currentOriginalLanguage)
                     }
                 }
@@ -1395,7 +1420,7 @@ class PlayerViewModel @Inject constructor(
 
         if (_uiState.value.selectedSubtitle == null) {
             viewModelScope.launch {
-                val preferred = getDefaultSubtitle()
+                val preferred = resolveSubtitlePreference()
                 applyPreferredSubtitle(preferred, merged, currentOriginalLanguage)
             }
         }
@@ -1702,6 +1727,9 @@ class PlayerViewModel @Inject constructor(
                 // creating the next-episode CW entry instead, avoiding a stale position/duration
                 // from the finished episode leaking into the next-episode's resume label.
                 if (progressPercent < Constants.WATCHED_THRESHOLD) {
+                    val activeSubLang = _uiState.value.selectedSubtitle?.let { sub ->
+                        sub.lang.ifBlank { sub.label }.takeIf { it.isNotBlank() }
+                    }
                     traktRepository.saveLocalContinueWatching(
                         mediaType = currentMediaType,
                         tmdbId = currentMediaId,
@@ -1716,7 +1744,8 @@ class PlayerViewModel @Inject constructor(
                         durationSeconds = durationSeconds,
                         streamKey = streamKey,
                         streamAddonId = streamAddonId,
-                        streamTitle = streamTitle
+                        streamTitle = streamTitle,
+                        subtitleLanguage = activeSubLang
                     )
                 }
 

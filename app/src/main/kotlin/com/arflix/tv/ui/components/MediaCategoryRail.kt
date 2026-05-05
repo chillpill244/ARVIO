@@ -25,7 +25,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
@@ -74,48 +75,66 @@ fun MediaCategoryRail(
         )
 
         // Search box below Categories header
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchChange,
-            placeholder = { Text("Search", color = TextSecondary.copy(alpha = 0.5f)) },
-            textStyle = ArflixTypography.body.copy(color = Color.White.copy(alpha = 1f), fontSize = 12.sp),
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
-                .padding(top= 0.dp, bottom = 3.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .then(
-                    if (searchFocusRequester != null) {
-                        Modifier.focusRequester(searchFocusRequester)
-                    } else {
-                        Modifier
-                    }
-                )
+                .height(36.dp)
+                .padding(bottom = 3.dp)
+                .clip(RoundedCornerShape(4.dp))
                 .background(
-                    if (isSearchFocused) Color.White.copy(alpha = 0.12f) else Color.Transparent
+                    if (isSearchFocused) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.06f)
                 )
                 .then(
                     if (isSearchFocused) Modifier.border(
                         width = 1.5.dp,
                         color = Color.White.copy(alpha = 0.7f),
-                        shape = RoundedCornerShape(2.dp)
-                    ) else Modifier
-                ),
-            singleLine = true,
-            readOnly = !isSearchActive,
-            enabled = true,
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { onSearchChange("") }) {
-                        Icon(
-                            imageVector = Icons.Filled.Clear,
-                            contentDescription = "Clear search",
-                            tint = TextSecondary
-                        )
+                        shape = RoundedCornerShape(4.dp)
+                    ) else Modifier.border(
+                        width = 0.5.dp,
+                        color = Color.White.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(4.dp)
+                    )
+                )
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BasicTextField(
+                value = searchQuery,
+                onValueChange = onSearchChange,
+                textStyle = ArflixTypography.body.copy(color = Color.White, fontSize = 12.sp),
+                cursorBrush = SolidColor(Color.White),
+                singleLine = true,
+                readOnly = !isSearchActive,
+                modifier = Modifier
+                    .weight(1f)
+                    .then(
+                        if (searchFocusRequester != null) {
+                            Modifier.focusRequester(searchFocusRequester)
+                        } else {
+                            Modifier
+                        }
+                    ),
+                decorationBox = { innerTextField ->
+                    if (searchQuery.isEmpty()) {
+                        Text("Search", color = TextSecondary.copy(alpha = 0.5f), style = ArflixTypography.body.copy(fontSize = 12.sp))
                     }
+                    innerTextField()
+                }
+            )
+            if (searchQuery.isNotEmpty()) {
+                IconButton(
+                    onClick = { onSearchChange("") },
+                    modifier = Modifier.size(20.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Clear,
+                        contentDescription = "Clear search",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(14.dp)
+                    )
                 }
             }
-        )
+        }
 
         LazyColumn(
             state = listState,

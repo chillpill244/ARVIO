@@ -83,6 +83,9 @@ data class DetailsUiState(
     // Initial positions for Continue Watching navigation
     val initialEpisodeIndex: Int = 0,
     val initialSeasonIndex: Int = 0,
+    // Monotonic counter to force LaunchedEffect re-trigger when episode focus must
+    // update even though initialEpisodeIndex didn't change (e.g. returning from player).
+    val episodeFocusTrigger: Int = 0,
     // Season progress: Map<seasonNumber, Pair<watchedCount, totalCount>>
     val seasonProgress: Map<Int, Pair<Int, Int>> = emptyMap(),
     val playSeason: Int? = null,
@@ -1478,8 +1481,10 @@ class DetailsViewModel @Inject constructor(
                 if (newInWatchlist) {
                     // Pass the full MediaItem so it appears instantly in watchlist
                     watchlistRepository.addToWatchlist(currentMediaType, currentMediaId, currentItem)
+                    runCatching { traktRepository.addToWatchlist(currentMediaType, currentMediaId) }
                 } else {
                     watchlistRepository.removeFromWatchlist(currentMediaType, currentMediaId)
+                    runCatching { traktRepository.removeFromWatchlist(currentMediaType, currentMediaId) }
                 }
                 runCatching { cloudSyncRepository.pushToCloud() }
 
@@ -1559,14 +1564,15 @@ class DetailsViewModel @Inject constructor(
             }
 
             // 3. Re-derive play target: PRIORITY 1 = resume info, PRIORITY 2 = next unwatched
-            // But PRESERVE existing play target if it already has a position (resume position).
-            // Only override if we have NEW resume info or if no target is currently set.
+            // Use full fetchResumeInfo (checks local Trakt CW + Supabase) to avoid race
+            // conditions where the player's Supabase save hasn't completed yet but the
+            // local CW cache is already up-to-date.
             val currentHasPosition = (latestForEpisodes.playPositionMs ?: 0L) > 0
-            val quickResume = fetchResumeInfoFromHistoryOnly(tmdbId, mediaType)
+            val resumeInfo = fetchResumeInfo(tmdbId, mediaType)
             
-            val playTarget = if (quickResume != null) {
-                // We have new resume info - use it (highest priority)
-                buildPlayTarget(mediaType, null, quickResume)
+            val playTarget = if (resumeInfo != null) {
+                // We have resume info - use it (highest priority, includes timestamp)
+                buildPlayTarget(mediaType, null, resumeInfo)
             } else if (!currentHasPosition) {
                 // No resume info and current target has no position - derive next unwatched
                 if (mediaType == MediaType.TV) {
@@ -1576,6 +1582,16 @@ class DetailsViewModel @Inject constructor(
                 }
             } else {
                 // Keep existing play target (it already has a resume position)
+                null
+            }
+
+            // 4. Update episode focus to match the play target so the episode list
+            // scrolls to the episode the user was just watching.
+            val resolvedEpisodes = if (updatedEpisodes.isNotEmpty()) updatedEpisodes else _uiState.value.episodes
+            val targetEpisodeNum = playTarget?.episode ?: latestForEpisodes.playEpisode
+            val newEpisodeIndex = if (mediaType == MediaType.TV && targetEpisodeNum != null && resolvedEpisodes.isNotEmpty()) {
+                resolvedEpisodes.indexOfFirst { it.episodeNumber == targetEpisodeNum }.coerceAtLeast(0)
+            } else {
                 null
             }
 
@@ -1592,7 +1608,10 @@ class DetailsViewModel @Inject constructor(
                 playSeason = playTarget?.season ?: latestState.playSeason,
                 playEpisode = playTarget?.episode ?: latestState.playEpisode,
                 playLabel = playTarget?.label ?: latestState.playLabel,
-                playPositionMs = playTarget?.positionMs ?: latestState.playPositionMs
+                playPositionMs = playTarget?.positionMs ?: latestState.playPositionMs,
+                // Update episode focus so the list scrolls to the last-played episode
+                initialEpisodeIndex = newEpisodeIndex ?: latestState.initialEpisodeIndex,
+                episodeFocusTrigger = if (newEpisodeIndex != null) latestState.episodeFocusTrigger + 1 else latestState.episodeFocusTrigger
             )
         }
     }

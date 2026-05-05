@@ -308,8 +308,8 @@ fun DetailsScreen(
     }
 
     // Sync episodeIndex with initialEpisodeIndex from ViewModel
-    LaunchedEffect(uiState.initialEpisodeIndex, uiState.episodes) {
-        if (uiState.initialEpisodeIndex > 0 && uiState.episodes.isNotEmpty()) {
+    LaunchedEffect(uiState.initialEpisodeIndex, uiState.episodeFocusTrigger, uiState.episodes) {
+        if (uiState.episodes.isNotEmpty()) {
             episodeIndex = uiState.initialEpisodeIndex
         }
     }
@@ -2285,8 +2285,11 @@ private fun HomeStyleRowAutoScroll(
     val itemsPerPage = remember(fallbackItemsPerPage, baseVisibleCount) {
         if (baseVisibleCount > 0) minOf(baseVisibleCount, fallbackItemsPerPage) else fallbackItemsPerPage
     }
-    val effectiveVisibleCount = remember(totalItems, itemsPerPage, visibleCount) {
-        if (visibleCount > 0) minOf(visibleCount, totalItems.coerceAtLeast(1)) else itemsPerPage
+    // Use stable itemsPerPage instead of live visibleCount to prevent a feedback loop:
+    // partially-visible items cause visibleCount to fluctuate → maxFirstIndex changes →
+    // triggers re-scroll → visibility changes again → stutter.
+    val effectiveVisibleCount = remember(totalItems, itemsPerPage) {
+        minOf(itemsPerPage, totalItems.coerceAtLeast(1))
     }
     val maxFirstIndex = remember(totalItems, effectiveVisibleCount) {
         (totalItems - effectiveVisibleCount).coerceAtLeast(0)
