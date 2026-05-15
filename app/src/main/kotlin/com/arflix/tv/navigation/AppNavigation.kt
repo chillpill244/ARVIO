@@ -1,5 +1,6 @@
 package com.arflix.tv.navigation
 
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -658,9 +659,8 @@ fun AppNavigation(
                 startPositionMs = startPositionMs,
                 onBack = { navController.popBackStack() },
                 onPlayNext = { nextSeason, nextEpisode, nextPreferredAddonId, nextPreferredSourceName, nextStreamUrl ->
-                    // Navigate to next episode
-                    navController.navigate(
-                        Screen.Player.createRoute(
+                    if (nextSeason > 0 && nextEpisode > 0) {
+                        val nextRoute = Screen.Player.createRoute(
                             mediaType = mediaType,
                             mediaId = mediaId,
                             seasonNumber = nextSeason,
@@ -670,8 +670,15 @@ fun AppNavigation(
                             preferredSourceName = nextPreferredSourceName,
                             preferredBingeGroup = preferredBingeGroup
                         )
-                    ) {
-                        popUpTo(Screen.Player.route) { inclusive = true }
+                        // Navigate to next episode
+                        runCatching {
+                            navController.navigate(nextRoute) {
+                                popUpTo(backStackEntry.destination.id) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }.onFailure { error ->
+                            Log.e("AppNavigation", "Failed to navigate to next episode route: $nextRoute", error)
+                        }
                     }
                 }
             )

@@ -212,6 +212,7 @@ fun PlayerScreen(
     var duration by remember { mutableLongStateOf(0L) }
     var progress by remember { mutableFloatStateOf(0f) }
     var isInLastMinute by remember { mutableStateOf(false) }  // Track if in last 60 seconds
+    var nextEpisodeNavigationInProgress by remember { mutableStateOf(false) }
 
     // Skip overlay state - shows +10/-10 without showing full controls
     var skipAmount by remember { mutableIntStateOf(0) }
@@ -389,6 +390,35 @@ fun PlayerScreen(
                 isAutoAdvancing = true
                 viewModel.selectStream(streams[nextIndex])
                 true
+            }
+        }
+    }
+
+    val nextEpisodeSeason = uiState.nextEpisodeSeason
+    val nextEpisodeNumber = uiState.nextEpisodeNumber
+    val hasNextEpisodeTarget =
+        mediaType == MediaType.TV &&
+            nextEpisodeSeason != null &&
+            nextEpisodeNumber != null
+
+    fun requestNextEpisodePlayback() {
+        if (nextEpisodeNavigationInProgress) return
+        val targetSeason = nextEpisodeSeason ?: return
+        val targetEpisode = nextEpisodeNumber ?: return
+        val selected = uiState.selectedStream
+        nextEpisodeNavigationInProgress = true
+        coroutineScope.launch {
+            val iptvNextUrl = viewModel.buildNextEpisodeUrl(targetSeason, targetEpisode)
+            runCatching {
+                onPlayNext(
+                    targetSeason,
+                    targetEpisode,
+                    selected?.addonId?.takeIf { it.isNotBlank() },
+                    selected?.source?.takeIf { it.isNotBlank() },
+                    iptvNextUrl
+                )
+            }.onFailure {
+                nextEpisodeNavigationInProgress = false
             }
         }
     }
@@ -1394,20 +1424,12 @@ fun PlayerScreen(
             }
 
             // Auto-play next episode when current one ends
-            if (exoPlayer.playbackState == Player.STATE_ENDED && mediaType == MediaType.TV) {
-                if (seasonNumber != null && episodeNumber != null) {
-                    val selected = uiState.selectedStream
-                    val nextEpisode = episodeNumber + 1
-                    // Try to build IPTV URL for instant next episode
-                    val iptvNextUrl = viewModel.buildNextEpisodeUrl(seasonNumber, nextEpisode)
-                    onPlayNext(
-                        seasonNumber,
-                        nextEpisode,
-                        selected?.addonId?.takeIf { it.isNotBlank() },
-                        selected?.source?.takeIf { it.isNotBlank() },
-                        iptvNextUrl
-                    )
-                }
+            if (
+                exoPlayer.playbackState == Player.STATE_ENDED &&
+                hasNextEpisodeTarget &&
+                !nextEpisodeNavigationInProgress
+            ) {
+                requestNextEpisodePlayback()
             }
 
             val tickDelayMs = when {
@@ -2329,7 +2351,7 @@ fun PlayerScreen(
                                 onFocusChanged = {},
                                 onClick = cycleAspectRatio,
                                 onLeftKey = { forwardButtonFocusRequester.requestFocus() },
-                                onRightKey = { if (mediaType == MediaType.TV) nextEpisodeButtonFocusRequester.requestFocus() else subtitleButtonFocusRequester.requestFocus() },
+                                onRightKey = { if (hasNextEpisodeTarget) nextEpisodeButtonFocusRequester.requestFocus() else subtitleButtonFocusRequester.requestFocus() },
                                 onDownKey = { trackbarFocusRequester.requestFocus() })
                         }
                     }
@@ -2478,7 +2500,7 @@ fun PlayerScreen(
                                             subtitleMenuIndex = 0
                                         },
                                         onLeftKey = { sourceButtonFocusRequester.requestFocus() },
-                                        onRightKey = { if (mediaType == MediaType.TV) nextEpisodeButtonFocusRequester.requestFocus() else playButtonFocusRequester.requestFocus() },
+                                        onRightKey = { if (hasNextEpisodeTarget) nextEpisodeButtonFocusRequester.requestFocus() else playButtonFocusRequester.requestFocus() },
                                         onUpKey = { trackbarFocusRequester.requestFocus() }
                                     )
                                 } else {
@@ -2495,12 +2517,12 @@ fun PlayerScreen(
                                             subtitleMenuIndex = 0
                                         },
                                         onLeftKey = { sourceButtonFocusRequester.requestFocus() },
-                                        onRightKey = { if (mediaType == MediaType.TV) nextEpisodeButtonFocusRequester.requestFocus() else playButtonFocusRequester.requestFocus() },
+                                        onRightKey = { if (hasNextEpisodeTarget) nextEpisodeButtonFocusRequester.requestFocus() else playButtonFocusRequester.requestFocus() },
                                         onUpKey = { trackbarFocusRequester.requestFocus() }
                                     )
                                 }
 
-                                if (mediaType == MediaType.TV) {
+                                if (hasNextEpisodeTarget) {
                                     Spacer(modifier = Modifier.width(12.dp))
 
                                     // Next episode button
@@ -2513,22 +2535,7 @@ fun PlayerScreen(
                                             size = smallBtn,
                                             iconSize = smallIcon,
                                             onFocusChanged = { nextEpisodeButtonFocused = it },
-                                            onClick = {
-                                                val season = seasonNumber ?: return@PlayerIconButton
-                                                val episode = episodeNumber ?: return@PlayerIconButton
-                                                val selected = uiState.selectedStream
-                                                val nextEpisode = episode + 1
-                                                coroutineScope.launch {
-                                                    val iptvNextUrl = viewModel.buildNextEpisodeUrl(season, nextEpisode)
-                                                    onPlayNext(
-                                                        season,
-                                                        nextEpisode,
-                                                        selected?.addonId?.takeIf { it.isNotBlank() },
-                                                        selected?.source?.takeIf { it.isNotBlank() },
-                                                        iptvNextUrl
-                                                    )
-                                                }
-                                            },
+                                            onClick = { requestNextEpisodePlayback() },
                                             onLeftKey = { subtitleButtonFocusRequester.requestFocus() },
                                             onRightKey = { queueControlsSeek(10_000L) },
                                             onUpKey = { trackbarFocusRequester.requestFocus() }
@@ -2539,22 +2546,7 @@ fun PlayerScreen(
                                             isFocused = nextEpisodeButtonFocused,
                                             focusRequester = nextEpisodeButtonFocusRequester,
                                             onFocusChanged = { nextEpisodeButtonFocused = it },
-                                            onClick = {
-                                                val season = seasonNumber ?: return@PlayerTextButtonFocusable
-                                                val episode = episodeNumber ?: return@PlayerTextButtonFocusable
-                                                val selected = uiState.selectedStream
-                                                val nextEpisode = episode + 1
-                                                coroutineScope.launch {
-                                                    val iptvNextUrl = viewModel.buildNextEpisodeUrl(season, nextEpisode)
-                                                    onPlayNext(
-                                                        season,
-                                                        nextEpisode,
-                                                        selected?.addonId?.takeIf { it.isNotBlank() },
-                                                        selected?.source?.takeIf { it.isNotBlank() },
-                                                        iptvNextUrl
-                                                    )
-                                                }
-                                            },
+                                            onClick = { requestNextEpisodePlayback() },
                                             onLeftKey = { subtitleButtonFocusRequester.requestFocus() },
                                             onRightKey = { queueControlsSeek(10_000L) },
                                             onUpKey = { trackbarFocusRequester.requestFocus() }
@@ -2580,7 +2572,7 @@ fun PlayerScreen(
                                             (context as? Activity)?.enterPictureInPictureMode(params)
                                         }
                                     },
-                                    onLeftKey = { if (mediaType == MediaType.TV) nextEpisodeButtonFocusRequester.requestFocus() else subtitleButtonFocusRequester.requestFocus() },
+                                    onLeftKey = { if (hasNextEpisodeTarget) nextEpisodeButtonFocusRequester.requestFocus() else subtitleButtonFocusRequester.requestFocus() },
                                     onRightKey = { sourceButtonFocusRequester.requestFocus() }
                                 )
                             }
@@ -2595,7 +2587,7 @@ fun PlayerScreen(
                                     onFocusChanged = {},
                                     onClick = cycleAspectRatio,
                                     onLeftKey = { forwardButtonFocusRequester.requestFocus() },
-                                    onRightKey = { if (mediaType == MediaType.TV) nextEpisodeButtonFocusRequester.requestFocus() else subtitleButtonFocusRequester.requestFocus() },
+                                    onRightKey = { if (hasNextEpisodeTarget) nextEpisodeButtonFocusRequester.requestFocus() else subtitleButtonFocusRequester.requestFocus() },
                                     onUpKey = { trackbarFocusRequester.requestFocus() })
                             }
                         }
@@ -2624,27 +2616,14 @@ fun PlayerScreen(
         )
 
         // Next Episode overlay (appears in last minute or during end credits for TV shows)
-        if (mediaType == MediaType.TV && seasonNumber != null && episodeNumber != null) {
+        if (hasNextEpisodeTarget && nextEpisodeSeason != null && nextEpisodeNumber != null) {
             NextEpisodeButton(
-                hasNextEpisode = true,
+                hasNextEpisode = hasNextEpisodeTarget,
                 isInLastMinute = isInLastMinute || uiState.isInOutro,
                 controlsVisible = showControls,
-                seasonNumber = seasonNumber,
-                nextEpisodeNumber = episodeNumber + 1,
-                onPlayNext = {
-                    coroutineScope.launch {
-                        val selected = uiState.selectedStream
-                        val nextEpisode = episodeNumber + 1
-                        val iptvNextUrl = viewModel.buildNextEpisodeUrl(seasonNumber, nextEpisode)
-                        onPlayNext(
-                            seasonNumber,
-                            nextEpisode,
-                            selected?.addonId?.takeIf { it.isNotBlank() },
-                            selected?.source?.takeIf { it.isNotBlank() },
-                            iptvNextUrl
-                        )
-                    }
-                },
+                seasonNumber = nextEpisodeSeason,
+                nextEpisodeNumber = nextEpisodeNumber,
+                onPlayNext = { requestNextEpisodePlayback() },
                 focusRequester = nextEpisodeOverlayFocusRequester,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)

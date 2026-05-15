@@ -65,7 +65,10 @@ data class PlayerUiState(
     val activeSkipInterval: SkipInterval? = null,
     val skipIntervalDismissed: Boolean = false,
     // Next episode during end credits
-    val isInOutro: Boolean = false
+    val isInOutro: Boolean = false,
+    // Resolved next episode target for safe navigation (handles season rollover)
+    val nextEpisodeSeason: Int? = null,
+    val nextEpisodeNumber: Int? = null
 )
 
 @HiltViewModel
@@ -184,6 +187,7 @@ class PlayerViewModel @Inject constructor(
         currentIptvSeriesId = iptvSeriesId
         currentIptvSeriesName = iptvSeriesName
         _uiState.value = _uiState.value.copy(activeSkipInterval = null, skipIntervalDismissed = false)
+        _uiState.value = _uiState.value.copy(nextEpisodeSeason = null, nextEpisodeNumber = null)
         val cachedItem = mediaRepository.getCachedItem(mediaType, mediaId)
         currentOriginalLanguage = cachedItem?.originalLanguage
         currentGenreIds = cachedItem?.genreIds ?: emptyList()
@@ -216,6 +220,26 @@ class PlayerViewModel @Inject constructor(
                 frameRateMatchingMode = frameRateMatchingMode,
                 subtitleStyle = subtitleStyle
             )
+
+            if (mediaType == MediaType.TV && seasonNumber != null && episodeNumber != null) {
+                val resolvedTarget = resolveNextEpisodeTarget(seasonNumber, episodeNumber)
+                if (
+                    currentMediaType == mediaType &&
+                    currentMediaId == mediaId &&
+                    currentSeason == seasonNumber &&
+                    currentEpisode == episodeNumber
+                ) {
+                    _uiState.value = _uiState.value.copy(
+                        nextEpisodeSeason = resolvedTarget?.first,
+                        nextEpisodeNumber = resolvedTarget?.second
+                    )
+                }
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    nextEpisodeSeason = null,
+                    nextEpisodeNumber = null
+                )
+            }
 
             // If stream URL provided, use it directly (except magnet links, which require resolution).
             // First, check if there's a local download available (prefer offline)
@@ -1814,20 +1838,24 @@ class PlayerViewModel @Inject constructor(
                 val cwEpisode = currentEpisode
                 if (currentMediaType == MediaType.TV && cwSeason != null && cwEpisode != null) {
                     try {
-                        val nextEpisode = cwEpisode + 1
-                        traktRepository.saveLocalContinueWatching(
-                            mediaType = currentMediaType,
-                            tmdbId = currentMediaId,
-                            title = currentItemTitle.ifEmpty { currentTitle },
-                            posterPath = currentPoster,
-                            backdropPath = currentBackdrop,
-                            season = cwSeason,
-                            episode = nextEpisode,
-                            episodeTitle = null,
-                            progress = 3, // meets MIN_PROGRESS_THRESHOLD to avoid filter
-                            positionSeconds = 0L, // next episode: no resume position yet
-                            durationSeconds = 0L  // next episode: unknown duration
-                        )
+                        val nextTarget = resolveNextEpisodeTarget(cwSeason, cwEpisode)
+                        val nextSeason = nextTarget?.first
+                        val nextEpisode = nextTarget?.second
+                        if (nextSeason != null && nextEpisode != null) {
+                            traktRepository.saveLocalContinueWatching(
+                                mediaType = currentMediaType,
+                                tmdbId = currentMediaId,
+                                title = currentItemTitle.ifEmpty { currentTitle },
+                                posterPath = currentPoster,
+                                backdropPath = currentBackdrop,
+                                season = nextSeason,
+                                episode = nextEpisode,
+                                episodeTitle = null,
+                                progress = 3, // meets MIN_PROGRESS_THRESHOLD to avoid filter
+                                positionSeconds = 0L, // next episode: no resume position yet
+                                durationSeconds = 0L  // next episode: unknown duration
+                            )
+                        }
                     } catch (_: Exception) {
                         // Best-effort: don't let CW save failure affect playback
                     }
@@ -2027,6 +2055,75 @@ class PlayerViewModel @Inject constructor(
             .lowercase()
     }
 
+    private suspend fun resolveNextEpisodeTarget(
+        season: Int,
+        episode: Int
+    ): Pair<Int, Int>? {
+        if (currentMediaType != MediaType.TV) return null
+
+        // Fast path: use IPTV cached episodes when available.
+        val iptvSeriesId = currentIptvSeriesId
+        if (iptvSeriesId != null) {
+            val cachedIptvEpisodes = runCatching {
+                iptvRepository.getCachedSeriesEpisodes(iptvSeriesId)
+            }.getOrNull().orEmpty()
+
+            if (cachedIptvEpisodes.isNotEmpty()) {
+                val orderedEpisodes = cachedIptvEpisodes
+                    .mapNotNull { info ->
+                        val s = info.season.takeIf { it > 0 } ?: return@mapNotNull null
+                        val e = info.episode.takeIf { it > 0 } ?: return@mapNotNull null
+                        Pair(s, e)
+                    }
+                    .distinct()
+                    .sortedWith(compareBy<Pair<Int, Int>>({ it.first }, { it.second }))
+
+                if (orderedEpisodes.isNotEmpty()) {
+                    val exactIndex = orderedEpisodes.indexOfFirst { it.first == season && it.second == episode }
+                    if (exactIndex >= 0 && exactIndex < orderedEpisodes.lastIndex) {
+                        return orderedEpisodes[exactIndex + 1]
+                    }
+                    orderedEpisodes.firstOrNull { (s, e) ->
+                        s > season || (s == season && e > episode)
+                    }?.let { return it }
+                }
+            }
+        }
+
+        if (currentMediaId <= 0) return null
+
+        // TMDB fallback: look in current season first.
+        val currentSeasonNextEpisode = runCatching {
+            mediaRepository.getSeasonEpisodes(currentMediaId, season)
+                .map { it.episodeNumber }
+                .filter { it > episode }
+                .minOrNull()
+        }.getOrNull()
+        if (currentSeasonNextEpisode != null) {
+            return Pair(season, currentSeasonNextEpisode)
+        }
+
+        // If no later episode in this season, walk subsequent seasons and pick the first episode found.
+        val totalSeasons = runCatching {
+            mediaRepository.getTvDetails(currentMediaId).totalEpisodes
+        }.getOrNull()?.takeIf { it > 0 } ?: season
+
+        for (candidateSeason in (season + 1)..totalSeasons) {
+            val firstEpisode = runCatching {
+                mediaRepository.getSeasonEpisodes(currentMediaId, candidateSeason)
+                    .map { it.episodeNumber }
+                    .filter { it > 0 }
+                    .minOrNull()
+            }.getOrNull()
+
+            if (firstEpisode != null) {
+                return Pair(candidateSeason, firstEpisode)
+            }
+        }
+
+        return null
+    }
+
     // ========== TASK_17: IPTV Instant Next Episode ==========
 
     /**
@@ -2113,4 +2210,3 @@ class PlayerViewModel @Inject constructor(
         )
     }
 }
-
