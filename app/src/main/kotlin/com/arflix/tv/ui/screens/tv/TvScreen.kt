@@ -17,7 +17,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -29,7 +28,6 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,7 +35,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -116,8 +113,6 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.size.Precision
 import com.arflix.tv.data.model.IptvChannel
-import com.arflix.tv.data.model.IptvNowNext
-import com.arflix.tv.data.model.IptvProgram
 import com.arflix.tv.network.OkHttpProvider
 import com.arflix.tv.ui.components.AppTopBar
 import com.arflix.tv.ui.components.AppTopBarContentTopInset
@@ -137,8 +132,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.input.pointer.pointerInput
 import com.arflix.tv.util.Constants
-import java.time.Instant
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 
@@ -980,8 +973,7 @@ fun TvScreen(
                             } else Modifier
                         )
                 ) {
-                    // Top section: EPG info/header above mini player on mobile, side-by-side on TV
-                    val epgSlice = playingChannel?.id?.let { uiState.snapshot.nowNext[it] }
+                    // Top section: channel info/header above mini player on mobile, side-by-side on TV
                     if (isMobile) {
                         Column(
                             modifier = Modifier
@@ -1135,100 +1127,6 @@ fun TvScreen(
                                         )
                                     }
                                 }
-                                if (!isMobile) {
-                                    // If a channel is playing, show NOW/NEXT/LATER info
-                                    if (playingChannel != null) {
-                                        Spacer(modifier = Modifier.height(10.dp))
-
-                                        // NOW
-                                        val nowProg = epgSlice?.now
-                                        if (nowProg != null) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(
-                                                    text = "NOW",
-                                                    style = ArflixTypography.caption.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
-                                                    color = Color.Black,
-                                                    modifier = Modifier
-                                                        .background(AccentGreen, RoundedCornerShape(3.dp))
-                                                        .padding(horizontal = 5.dp, vertical = 1.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = "${formatProgramTime(nowProg.startUtcMillis)} - ${formatProgramTime(nowProg.endUtcMillis)}",
-                                                    style = ArflixTypography.caption.copy(fontSize = 10.sp),
-                                                    color = Color.White.copy(alpha = 0.5f)
-                                                )
-                                            }
-                                            Text(
-                                                text = nowProg.title,
-                                                style = ArflixTypography.body.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium),
-                                                color = Color.White.copy(alpha = 0.9f),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-
-                                        // NEXT
-                                        val nextProg = epgSlice?.next
-                                        if (nextProg != null) {
-                                            Spacer(modifier = Modifier.height(6.dp))
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(
-                                                    text = "NEXT",
-                                                    style = ArflixTypography.caption.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
-                                                    color = Color.White.copy(alpha = 0.7f),
-                                                    modifier = Modifier
-                                                        .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(3.dp))
-                                                        .padding(horizontal = 5.dp, vertical = 1.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = formatProgramTime(nextProg.startUtcMillis),
-                                                    style = ArflixTypography.caption.copy(fontSize = 10.sp),
-                                                    color = Color.White.copy(alpha = 0.4f)
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = nextProg.title,
-                                                    style = ArflixTypography.caption.copy(fontSize = 11.sp),
-                                                    color = Color.White.copy(alpha = 0.55f),
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                        }
-
-                                        // LATER
-                                        val laterProg = epgSlice?.later
-                                        if (laterProg != null) {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(
-                                                    text = "LATER",
-                                                    style = ArflixTypography.caption.copy(fontSize = 9.sp),
-                                                    color = Color.White.copy(alpha = 0.4f),
-                                                    modifier = Modifier
-                                                        .background(Color.White.copy(alpha = 0.04f), RoundedCornerShape(3.dp))
-                                                        .padding(horizontal = 5.dp, vertical = 1.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = formatProgramTime(laterProg.startUtcMillis),
-                                                    style = ArflixTypography.caption.copy(fontSize = 10.sp),
-                                                    color = Color.White.copy(alpha = 0.3f)
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = laterProg.title,
-                                                    style = ArflixTypography.caption.copy(fontSize = 11.sp),
-                                                    color = Color.White.copy(alpha = 0.35f),
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
                             }
 
                             // Right: mini player (55% on TV)
@@ -1275,7 +1173,6 @@ fun TvScreen(
                     // Channel guide - seamless below video
                     GuidePanel(
                         channels = channels,
-                        nowNext = uiState.snapshot.nowNext,
                         isLoading = uiState.isLoading,
                         focusedChannelIndex = safeChannelIndex,
                         guideFocused = focusZone == TvFocusZone.GUIDE,
@@ -1318,10 +1215,6 @@ fun TvScreen(
                     }
             ) {
                 if (playingChannel != null) {
-                    val fsNowNext = uiState.snapshot.nowNext[playingChannel.id]
-                    val fsNow = fsNowNext?.now
-                    val fsNext = fsNowNext?.next
-
                     // Auto-hide overlay after 5 seconds
                     LaunchedEffect(fullscreenOverlayTrigger, showFullscreenOverlay) {
                         if (showFullscreenOverlay && fullscreenOverlayTrigger > 0L) {
@@ -1353,16 +1246,14 @@ fun TvScreen(
                         }
                     )
 
-                    // Premium EPG overlay (toggle with OK, auto-hides after 5s)
+                    // Channel info overlay (toggle with OK, auto-hides after 5s)
                     AnimatedVisibility(
                         visible = showFullscreenOverlay,
                         enter = fadeIn(),
                         exit = fadeOut()
                     ) {
-                        FullscreenEpgOverlay(
+                        FullscreenChannelOverlay(
                             channel = playingChannel,
-                            nowProgram = fsNow,
-                            nextProgram = fsNext,
                             isMobile = isMobile,
                             isPiPMode = isPiPMode,
                             onEnterPiP = { isPiPMode = true }
@@ -1632,10 +1523,8 @@ private fun GroupRailItem(
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun FullscreenEpgOverlay(
+private fun FullscreenChannelOverlay(
     channel: IptvChannel,
-    nowProgram: IptvProgram?,
-    nextProgram: IptvProgram?,
     isMobile: Boolean = false,
     isPiPMode: Boolean = false,
     onEnterPiP: () -> Unit = {}
@@ -1735,7 +1624,7 @@ private fun FullscreenEpgOverlay(
             }
         }
 
-        // Bottom scrim: NOW / NEXT program info
+        // Bottom scrim: LIVE badge + channel name
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1748,114 +1637,26 @@ private fun FullscreenEpgOverlay(
                     bottom = if (isMobile) 18.dp else 28.dp
                 )
         ) {
-            Column(modifier = Modifier.align(Alignment.BottomStart)) {
-                // NOW program
-                if (nowProgram != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "NOW",
-                            style = ArflixTypography.caption.copy(fontWeight = FontWeight.Bold, fontSize = if (isMobile) 10.sp else 12.sp),
-                            color = Color.Black,
-                            modifier = Modifier
-                                .background(AccentGreen, RoundedCornerShape(4.dp))
-                                .padding(horizontal = if (isMobile) 6.dp else 8.dp, vertical = if (isMobile) 2.dp else 3.dp)
-                        )
-                        Spacer(modifier = Modifier.width(if (isMobile) 8.dp else 10.dp))
-                        Text(
-                            text = "${formatProgramTime(nowProgram.startUtcMillis)} - ${formatProgramTime(nowProgram.endUtcMillis)}",
-                            style = ArflixTypography.caption.copy(fontSize = if (isMobile) 11.sp else 14.sp),
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(if (isMobile) 3.dp else 4.dp))
-                    Text(
-                        text = nowProgram.title,
-                        style = ArflixTypography.sectionTitle.copy(fontSize = if (isMobile) 14.sp else 20.sp),
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    // Progress bar
-                    val progDuration = (nowProgram.endUtcMillis - nowProgram.startUtcMillis).coerceAtLeast(1L)
-                    val progElapsed = (System.currentTimeMillis() - nowProgram.startUtcMillis).coerceIn(0, progDuration)
-                    val progFraction = (progElapsed.toFloat() / progDuration.toFloat()).coerceIn(0f, 1f)
-                    Spacer(modifier = Modifier.height(if (isMobile) 6.dp else 8.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(if (isMobile) 0.6f else 0.4f)
-                            .height(3.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(Color.White.copy(alpha = 0.15f))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(progFraction)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(AccentGreen)
-                        )
-                    }
-                    nowProgram.description?.let { desc ->
-                        if (desc.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(if (isMobile) 4.dp else 6.dp))
-                            Text(
-                                text = desc,
-                                style = ArflixTypography.caption.copy(fontSize = if (isMobile) 11.sp else 13.sp),
-                                color = Color.White.copy(alpha = 0.55f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.fillMaxWidth(if (isMobile) 0.85f else 0.6f)
-                            )
-                        }
-                    }
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "LIVE",
-                            style = ArflixTypography.caption.copy(fontWeight = FontWeight.Bold, fontSize = if (isMobile) 10.sp else 12.sp),
-                            color = Color.Black,
-                            modifier = Modifier
-                                .background(AccentGreen, RoundedCornerShape(4.dp))
-                                .padding(horizontal = if (isMobile) 6.dp else 8.dp, vertical = if (isMobile) 2.dp else 3.dp)
-                        )
-                        Spacer(modifier = Modifier.width(if (isMobile) 8.dp else 10.dp))
-                        Text(
-                            text = channel.name,
-                            style = ArflixTypography.sectionTitle.copy(fontSize = if (isMobile) 14.sp else 20.sp),
-                            color = Color.White,
-                            maxLines = 1,
-                            modifier = Modifier.basicMarquee()
-                        )
-                    }
-                }
-                // NEXT program
-                if (nextProgram != null) {
-                    Spacer(modifier = Modifier.height(if (isMobile) 8.dp else 12.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "NEXT",
-                            style = ArflixTypography.caption.copy(fontWeight = FontWeight.Bold, fontSize = if (isMobile) 9.sp else 11.sp),
-                            color = Color.White.copy(alpha = 0.8f),
-                            modifier = Modifier
-                                .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
-                                .padding(horizontal = if (isMobile) 6.dp else 8.dp, vertical = if (isMobile) 2.dp else 3.dp)
-                        )
-                        Spacer(modifier = Modifier.width(if (isMobile) 6.dp else 10.dp))
-                        Text(
-                            text = formatProgramTime(nextProgram.startUtcMillis),
-                            style = ArflixTypography.caption.copy(fontSize = if (isMobile) 11.sp else 14.sp),
-                            color = Color.White.copy(alpha = 0.5f)
-                        )
-                        Spacer(modifier = Modifier.width(if (isMobile) 6.dp else 8.dp))
-                        Text(
-                            text = nextProgram.title,
-                            style = ArflixTypography.body.copy(fontSize = if (isMobile) 12.sp else 16.sp),
-                            color = Color.White.copy(alpha = 0.65f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.align(Alignment.BottomStart)
+            ) {
+                Text(
+                    text = "LIVE",
+                    style = ArflixTypography.caption.copy(fontWeight = FontWeight.Bold, fontSize = if (isMobile) 10.sp else 12.sp),
+                    color = Color.Black,
+                    modifier = Modifier
+                        .background(AccentGreen, RoundedCornerShape(4.dp))
+                        .padding(horizontal = if (isMobile) 6.dp else 8.dp, vertical = if (isMobile) 2.dp else 3.dp)
+                )
+                Spacer(modifier = Modifier.width(if (isMobile) 8.dp else 10.dp))
+                Text(
+                    text = channel.name,
+                    style = ArflixTypography.sectionTitle.copy(fontSize = if (isMobile) 14.sp else 20.sp),
+                    color = Color.White,
+                    maxLines = 1,
+                    modifier = Modifier.basicMarquee()
+                )
             }
         }
     }
@@ -1865,7 +1666,6 @@ private fun FullscreenEpgOverlay(
 @Composable
 private fun GuidePanel(
     channels: List<IptvChannel>,
-    nowNext: Map<String, IptvNowNext>,
     isLoading: Boolean,
     focusedChannelIndex: Int,
     guideFocused: Boolean,
@@ -1875,28 +1675,13 @@ private fun GuidePanel(
     onChannelClick: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    // Refresh the current time every 30 seconds so the now-line and timeline stay accurate.
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            kotlinx.coroutines.delay(30_000L)
-            now = System.currentTimeMillis()
-        }
-    }
-    val windowStart = now - (15 * 60_000L)   // 15 min past context
-    val windowEnd = now + (180 * 60_000L)    // 3 hours future (fixes missing last-hour)
-    val nowRatio = ((now - windowStart).toFloat() / (windowEnd - windowStart).toFloat()).coerceIn(0f, 1f)
-
     val isMobile = LocalDeviceType.current.isTouchDevice()
 
-    // Seamless guide - no background box
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(start = 2.dp, end = 4.dp)
     ) {
-        GuideTimeHeader(windowStart = windowStart, now = now, windowEnd = windowEnd, isMobile = isMobile)
-
         if (channels.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -1917,26 +1702,11 @@ private fun GuidePanel(
                     contentType = { _, _ -> "guide_channel_row" }
                 ) { index, channel ->
                     val focused = guideFocused && index == focusedChannelIndex
-                    val slice = nowNext[channel.id]
-                    val upcoming = remember(slice) {
-                        buildList {
-                            slice?.next?.let { add(it) }
-                            slice?.later?.let { add(it) }
-                            slice?.upcoming?.let { addAll(it) }
-                        }.distinctBy { "${it.startUtcMillis}-${it.endUtcMillis}" }
-                    }
                     GuideChannelRow(
                         channel = channel,
-                        recentPrograms = slice?.recent.orEmpty(),
-                        nowProgram = slice?.now,
-                        upcomingPrograms = upcoming,
                         isFocused = focused,
                         isPlaying = channel.id == playingChannelId,
                         isFavoriteChannel = favoriteChannels.contains(channel.id),
-                        windowStart = windowStart,
-                        windowEnd = windowEnd,
-                        now = now,
-                        nowRatio = nowRatio,
                         isMobile = isMobile,
                         onClick = { onChannelClick(index) }
                     )
@@ -1946,72 +1716,18 @@ private fun GuidePanel(
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-private fun GuideTimeHeader(windowStart: Long, now: Long, windowEnd: Long, isMobile: Boolean = false) {
-    val timeStyle = ArflixTypography.caption.copy(fontSize = if (isMobile) 9.sp else 11.sp, letterSpacing = 0.2.sp)
-
-    val halfHourMs = 30 * 60_000L
-    val firstMark = ((windowStart / halfHourMs) + 1) * halfHourMs
-    val hourMarkers = mutableListOf<Long>()
-    var h = firstMark
-    while (h < windowEnd) {
-        hourMarkers.add(h)
-        h += halfHourMs
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(modifier = Modifier.width(if (isMobile) 120.dp else 150.dp))
-
-        BoxWithConstraints(modifier = Modifier.weight(1f).height(18.dp)) {
-            val totalMs = (windowEnd - windowStart).coerceAtLeast(1L).toFloat()
-            val totalWidth = maxWidth
-            hourMarkers.forEach { marker ->
-                val fraction = ((marker - windowStart).toFloat() / totalMs).coerceIn(0f, 0.95f)
-                val isNearNow = abs(marker - now) < 15 * 60_000L
-                val isHour = (marker % (60 * 60_000L)) == 0L
-                Text(
-                    formatProgramTime(marker),
-                    style = timeStyle.copy(
-                        fontWeight = if (isHour) FontWeight.Medium else FontWeight.Normal
-                    ),
-                    color = when {
-                        isNearNow -> Color.White.copy(alpha = 0.7f)
-                        isHour -> Color.White.copy(alpha = 0.35f)
-                        else -> Color.White.copy(alpha = 0.2f)
-                    },
-                    modifier = Modifier
-                        .offset(x = totalWidth * fraction)
-                )
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun GuideChannelRow(
     channel: IptvChannel,
-    recentPrograms: List<IptvProgram>,
-    nowProgram: IptvProgram?,
-    upcomingPrograms: List<IptvProgram>,
     isFocused: Boolean,
     isPlaying: Boolean,
     isFavoriteChannel: Boolean,
-    windowStart: Long,
-    windowEnd: Long,
-    now: Long,
-    nowRatio: Float,
     isMobile: Boolean = false,
     onClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    // Seamless rows: very subtle background, only visible on focus/playing
     val rowBg = when {
         isFocused -> Color.White.copy(alpha = 0.05f)
         isPlaying -> AccentGreen.copy(alpha = 0.025f)
@@ -2039,360 +1755,85 @@ private fun GuideChannelRow(
                 ) else Modifier
             )
             .clickable(onClick = onClick)
+            .padding(start = 8.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        // Compact channel info
-        Row(
-            modifier = Modifier
-                .width(if (isMobile) 120.dp else 150.dp)
-                .fillMaxHeight()
-                .padding(start = 8.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(modifier = Modifier.size(if (isMobile) 24.dp else 30.dp)) {
-                if (!channel.logo.isNullOrBlank()) {
-                    val logoRequest = remember(channel.logo) {
-                        ImageRequest.Builder(context)
-                            .data(channel.logo)
-                            .size(64, 64)
-                            .precision(Precision.INEXACT)
-                            .crossfade(false)
-                            .allowHardware(true)
-                            .build()
-                    }
-                    AsyncImage(
-                        model = logoRequest,
-                        contentDescription = channel.name,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .size(if (isMobile) 24.dp else 30.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color.Black.copy(alpha = 0.3f))
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(if (isMobile) 24.dp else 30.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color.White.copy(alpha = 0.04f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.LiveTv, contentDescription = null, tint = Color.White.copy(alpha = 0.2f), modifier = Modifier.size(14.dp))
-                    }
+        Box(modifier = Modifier.size(if (isMobile) 24.dp else 30.dp)) {
+            if (!channel.logo.isNullOrBlank()) {
+                val logoRequest = remember(channel.logo) {
+                    ImageRequest.Builder(context)
+                        .data(channel.logo)
+                        .size(64, 64)
+                        .precision(Precision.INEXACT)
+                        .crossfade(false)
+                        .allowHardware(true)
+                        .build()
                 }
-                if (isFavoriteChannel) {
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = null,
-                        tint = Color(0xFFF5C518).copy(alpha = 0.9f),
-                        modifier = Modifier
-                            .size(10.dp)
-                            .align(Alignment.TopEnd)
-                    )
+                AsyncImage(
+                    model = logoRequest,
+                    contentDescription = channel.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .size(if (isMobile) 24.dp else 30.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color.Black.copy(alpha = 0.3f))
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(if (isMobile) 24.dp else 30.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color.White.copy(alpha = 0.04f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.LiveTv, contentDescription = null, tint = Color.White.copy(alpha = 0.2f), modifier = Modifier.size(14.dp))
                 }
             }
-
-            Spacer(modifier = Modifier.width(6.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = channel.name,
-                        style = ArflixTypography.cardTitle.copy(fontSize = if (isMobile) 10.sp else 11.sp),
-                        color = primaryText,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (isPlaying) {
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = "LIVE",
-                            style = ArflixTypography.caption.copy(fontSize = 7.sp, fontWeight = FontWeight.Bold),
-                            color = Color.White,
-                            modifier = Modifier
-                                .background(AccentGreen.copy(alpha = 0.8f), RoundedCornerShape(3.dp))
-                                .padding(horizontal = 5.dp, vertical = 1.dp)
-                        )
-                    }
-                }
-                Text(
-                    text = channel.group,
-                    style = ArflixTypography.caption.copy(fontSize = if (isMobile) 8.sp else 8.sp),
-                    color = secondaryText.copy(alpha = 0.7f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+            if (isFavoriteChannel) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    tint = Color(0xFFF5C518).copy(alpha = 0.9f),
+                    modifier = Modifier
+                        .size(10.dp)
+                        .align(Alignment.TopEnd)
                 )
             }
         }
 
-        TimelineProgramLane(
-            recentPrograms = recentPrograms,
-            nowProgram = nowProgram,
-            upcomingPrograms = upcomingPrograms,
-            windowStart = windowStart,
-            windowEnd = windowEnd,
-            now = now,
-            nowRatio = nowRatio,
-            isRowFocused = isFocused,
-            isRowPlaying = isPlaying,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .padding(start = 2.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
-        )
-    }
-}
+        Spacer(modifier = Modifier.width(8.dp))
 
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-private fun TimelineProgramLane(
-    recentPrograms: List<IptvProgram>,
-    nowProgram: IptvProgram?,
-    upcomingPrograms: List<IptvProgram>,
-    windowStart: Long,
-    windowEnd: Long,
-    now: Long,
-    nowRatio: Float,
-    isRowFocused: Boolean,
-    isRowPlaying: Boolean = false,
-    modifier: Modifier = Modifier
-) {
-    val nowAccent = AccentGreen
-    Box(modifier = modifier.clip(RoundedCornerShape(3.dp))) {
-        Row(modifier = Modifier.fillMaxSize()) {
-            val segments = remember(recentPrograms, nowProgram, upcomingPrograms, windowStart, windowEnd) {
-                buildProgramSegments(recentPrograms, nowProgram, upcomingPrograms, windowStart, windowEnd)
-            }
-            if (segments.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.White.copy(alpha = 0.02f))
-                        .padding(horizontal = 8.dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = channel.name,
+                    style = ArflixTypography.cardTitle.copy(fontSize = if (isMobile) 10.sp else 11.sp),
+                    color = primaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (isPlaying) {
+                    Spacer(modifier = Modifier.width(5.dp))
                     Text(
-                        "No EPG",
-                        style = ArflixTypography.caption.copy(fontSize = 10.sp),
-                        color = Color.White.copy(alpha = 0.15f)
-                    )
-                }
-            } else {
-                segments.forEach { seg ->
-                    val fillColor = when {
-                        seg.isFiller -> Color.White.copy(alpha = 0.01f)
-                        seg.isPast -> Color.White.copy(alpha = if (isRowFocused) 0.03f else 0.015f)
-                        seg.isNow && isRowPlaying -> nowAccent.copy(alpha = 0.08f)
-                        seg.isNow && isRowFocused -> Color.White.copy(alpha = 0.07f)
-                        seg.isNow -> Color.White.copy(alpha = 0.04f)
-                        isRowFocused -> Color.White.copy(alpha = 0.035f)
-                        else -> Color.White.copy(alpha = 0.02f)
-                    }
-                    Box(
+                        text = "LIVE",
+                        style = ArflixTypography.caption.copy(fontSize = 7.sp, fontWeight = FontWeight.Bold),
+                        color = Color.White,
                         modifier = Modifier
-                            .weight(seg.weight)
-                            .fillMaxHeight()
-                            .padding(horizontal = 0.5.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(fillColor)
-                            .then(
-                                if (seg.isNow && (isRowFocused || isRowPlaying)) Modifier.border(
-                                    width = 0.5.dp,
-                                    color = if (isRowFocused) Color.White.copy(alpha = 0.2f)
-                                        else nowAccent.copy(alpha = 0.15f),
-                                    shape = RoundedCornerShape(2.dp)
-                                ) else Modifier
-                            )
-                    ) {
-                        if (seg.label.isNotBlank()) {
-                            Text(
-                                text = seg.label,
-                                style = ArflixTypography.caption.copy(
-                                    fontSize = 10.sp,
-                                    fontWeight = if (seg.isNow) FontWeight.Medium else FontWeight.Normal,
-                                    lineHeight = 12.sp
-                                ),
-                                color = Color.White.copy(
-                                    alpha = when {
-                                        seg.isFiller -> 0.2f
-                                        seg.isPast -> 0.2f
-                                        seg.isNow -> 0.85f
-                                        isRowFocused -> 0.55f
-                                        else -> 0.35f
-                                    }
-                                ),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .align(Alignment.CenterStart)
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                        if (seg.isNow && nowProgram != null) {
-                            val progDuration = (nowProgram.endUtcMillis - nowProgram.startUtcMillis).coerceAtLeast(1L)
-                            val progElapsed = (now - nowProgram.startUtcMillis).coerceIn(0, progDuration)
-                            val progFraction = (progElapsed.toFloat() / progDuration.toFloat()).coerceIn(0f, 1f)
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .fillMaxWidth()
-                                    .height(1.5.dp)
-                                    .background(Color.White.copy(alpha = 0.04f))
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(progFraction)
-                                        .fillMaxHeight()
-                                        .background(
-                                            if (isRowPlaying) nowAccent.copy(alpha = 0.6f)
-                                            else Color.White.copy(alpha = 0.3f)
-                                        )
-                                )
-                            }
-                        }
-                    }
+                            .background(AccentGreen.copy(alpha = 0.8f), RoundedCornerShape(3.dp))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    )
                 }
             }
-        }
-
-        // Now-line indicator
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(nowRatio)
-                .align(Alignment.CenterStart),
-            contentAlignment = Alignment.CenterEnd
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(1.5.dp)
-                    .background(
-                        if (isRowFocused) nowAccent.copy(alpha = 0.7f)
-                        else nowAccent.copy(alpha = 0.3f)
-                    )
+            Text(
+                text = channel.group,
+                style = ArflixTypography.caption.copy(fontSize = if (isMobile) 8.sp else 8.sp),
+                color = secondaryText.copy(alpha = 0.7f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
-}
-
-private data class ProgramSegment(
-    val label: String,
-    val weight: Float,
-    val isNow: Boolean,
-    val isFiller: Boolean = false,
-    val isPast: Boolean = false
-)
-
-private fun buildProgramSegments(
-    recentPrograms: List<IptvProgram>,
-    nowProgram: IptvProgram?,
-    upcomingPrograms: List<IptvProgram>,
-    windowStart: Long,
-    windowEnd: Long
-): List<ProgramSegment> {
-    val totalWindow = (windowEnd - windowStart).coerceAtLeast(1L).toFloat()
-    fun weight(start: Long, end: Long): Float {
-        val s = start.coerceIn(windowStart, windowEnd)
-        val e = end.coerceIn(windowStart, windowEnd)
-        val clamped = (e - s).coerceAtLeast(0L)
-        return (clamped / totalWindow).coerceIn(0f, 1f)
-    }
-    fun labelWithTime(program: IptvProgram, w: Float): String {
-        // Only prefix time when the segment is wide enough to show it
-        return if (w >= 0.12f) {
-            val time = formatProgramTime(program.startUtcMillis)
-            "$time  ${program.title}"
-        } else {
-            program.title
-        }
-    }
-
-    // Build a chronological list of all programs with their absolute times
-    data class TimedProgram(val start: Long, val end: Long, val program: IptvProgram, val isNow: Boolean, val isPast: Boolean)
-    val allPrograms = mutableListOf<TimedProgram>()
-    recentPrograms.forEach { allPrograms += TimedProgram(it.startUtcMillis, it.endUtcMillis, it, isNow = false, isPast = true) }
-    nowProgram?.let { allPrograms += TimedProgram(it.startUtcMillis, it.endUtcMillis, it, isNow = true, isPast = false) }
-    upcomingPrograms.forEach { allPrograms += TimedProgram(it.startUtcMillis, it.endUtcMillis, it, isNow = false, isPast = false) }
-    allPrograms.sortBy { it.start }
-
-    // Build segments with gap fillers between programs
-    val items = mutableListOf<ProgramSegment>()
-    var cursor = windowStart
-    for (tp in allPrograms) {
-        val segStart = tp.start.coerceIn(windowStart, windowEnd)
-        val segEnd = tp.end.coerceIn(windowStart, windowEnd)
-        if (segEnd <= segStart) continue
-        // Insert gap filler if there's space between cursor and this segment
-        if (segStart > cursor) {
-            val gapW = ((segStart - cursor).toFloat() / totalWindow).coerceIn(0f, 1f)
-            if (gapW > 0.01f) items += ProgramSegment(label = "", weight = gapW, isNow = false, isFiller = true)
-        }
-        val w = ((segEnd - segStart).toFloat() / totalWindow).coerceIn(0f, 1f)
-        if (w > 0.02f) items += ProgramSegment(labelWithTime(tp.program, w), w, isNow = tp.isNow, isPast = tp.isPast)
-        cursor = segEnd.coerceAtLeast(cursor)
-    }
-    // Trailing filler
-    if (cursor < windowEnd) {
-        val trailW = ((windowEnd - cursor).toFloat() / totalWindow).coerceIn(0f, 1f)
-        if (trailW > 0.01f) items += ProgramSegment(label = "", weight = trailW, isNow = false, isFiller = true)
-    }
-
-    val mergedItems = mergeDuplicateSegments(items)
-    return ensureReadableProgramWidths(mergedItems)
-}
-
-private fun mergeDuplicateSegments(items: List<ProgramSegment>): List<ProgramSegment> {
-    if (items.isEmpty()) return items
-    val merged = mutableListOf<ProgramSegment>()
-    items.forEach { seg ->
-        val last = merged.lastOrNull()
-        if (
-            last != null &&
-            last.label.equals(seg.label, ignoreCase = true) &&
-            last.isNow == seg.isNow &&
-            last.isFiller == seg.isFiller
-        ) {
-            merged[merged.lastIndex] = last.copy(weight = last.weight + seg.weight)
-        } else {
-            merged += seg
-        }
-    }
-    return merged
-}
-
-private fun ensureReadableProgramWidths(items: List<ProgramSegment>): List<ProgramSegment> {
-    if (items.isEmpty()) return items
-    val labeled = items.filter { it.label.isNotBlank() }
-    if (labeled.isEmpty()) return items
-
-    val minReadable = 0.14f
-
-    // Boost small labeled segments to minimum readable width
-    val boosted = items.map { seg ->
-        if (seg.label.isNotBlank()) seg.copy(weight = maxOf(seg.weight, minReadable)) else seg
-    }.toMutableList()
-
-    // Normalize: ensure total weights equal 1.0 by adjusting filler segments proportionally
-    val totalWeight = boosted.sumOf { it.weight.toDouble() }.toFloat()
-    if (totalWeight > 1.01f) {
-        // Shrink fillers first to compensate for boosted labels
-        val fillerTotal = boosted.filter { it.isFiller }.sumOf { it.weight.toDouble() }.toFloat()
-        val excess = totalWeight - 1f
-        if (fillerTotal > excess) {
-            val fillerFactor = (fillerTotal - excess) / fillerTotal
-            for (i in boosted.indices) {
-                if (boosted[i].isFiller) boosted[i] = boosted[i].copy(weight = boosted[i].weight * fillerFactor)
-            }
-        } else {
-            // Not enough filler to absorb - proportionally shrink everything
-            val factor = 1f / totalWeight
-            for (i in boosted.indices) boosted[i] = boosted[i].copy(weight = boosted[i].weight * factor)
-        }
-    }
-
-    // Remove zero-weight fillers
-    return boosted.filter { !(it.isFiller && it.weight < 0.01f) }
 }
 
 @Composable
@@ -2439,7 +1880,3 @@ private fun NotConfiguredPanel() {
 }
 
 private val programTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
-
-private fun formatProgramTime(utcMillis: Long): String {
-    return programTimeFormatter.format(Instant.ofEpochMilli(utcMillis).atZone(ZoneId.systemDefault()))
-}

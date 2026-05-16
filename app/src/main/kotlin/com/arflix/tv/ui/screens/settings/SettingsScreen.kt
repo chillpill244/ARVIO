@@ -2298,10 +2298,9 @@ private fun IptvSettings(
         Spacer(modifier = Modifier.height(16.dp))
 
         val refreshSubtitle = when {
-            isLoading -> "Refreshing channels and EPG..."
+            isLoading -> "Refreshing channels..."
             error != null -> error
-            epgUrl.isBlank() -> "Reload playlist now"
-            else -> "Reload playlist and EPG now"
+            else -> "Reload playlist now"
         }
         SettingsRow(
             icon = Icons.Default.Link,

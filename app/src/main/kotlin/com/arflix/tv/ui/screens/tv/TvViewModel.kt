@@ -99,7 +99,6 @@ class TvViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(TvUiState(isLoading = true))
     val uiState: StateFlow<TvUiState> = _uiState.asStateFlow()
     private var refreshJob: Job? = null
-    private var epgRefreshJob: Job? = null
     private var warmVodJob: Job? = null
     private var pendingForcedReload: Boolean = false
 
@@ -123,18 +122,7 @@ class TvViewModel @Inject constructor(
                     loadingPercent = 0
                 )
                 warmXtreamVodCache()
-                val hasPotentialEpg = config.epgUrl.isNotBlank() || config.m3uUrl.contains("get.php", ignoreCase = true) || config.m3uUrl.contains("player_api.php", ignoreCase = true)
                 val needsChannelReload = config.m3uUrl.isNotBlank() && cached.channels.isEmpty()
-                // Only force EPG refresh if cached EPG is older than 2 minutes.
-                // When navigating from Home, EPG was likely just loaded — no need to re-fetch.
-                val epgAgeMs = iptvRepository.cachedEpgAgeMs()
-                val epgIsRecent = epgAgeMs < 120_000L
-                if (hasPotentialEpg && cached.channels.isNotEmpty() && !epgIsRecent) {
-                    System.err.println("[EPG] Startup: forcing EPG refresh (cached EPG age=${epgAgeMs / 1000}s, hasEpg=${hasAnyEpgData(cached)})")
-                    maybeRefreshEpgInBackground(cached, forceRefresh = true)
-                } else if (hasPotentialEpg && cached.channels.isNotEmpty()) {
-                    System.err.println("[EPG] Startup: skipping EPG refresh (EPG is recent, age=${epgAgeMs / 1000}s)")
-                }
                 if (iptvRepository.isSnapshotStale(cached) || needsChannelReload) {
                     refresh(force = needsChannelReload, showLoading = needsChannelReload)
                 }
@@ -172,9 +160,6 @@ class TvViewModel @Inject constructor(
 
     fun refresh(force: Boolean, showLoading: Boolean = true) {
         if (refreshJob?.isActive == true) return
-        if (force) {
-            epgRefreshJob?.cancel()
-        }
 
         refreshJob = viewModelScope.launch {
             if (showLoading) {
@@ -212,7 +197,6 @@ class TvViewModel @Inject constructor(
                     loadingPercent = 0
                 )
                 warmXtreamVodCache()
-                maybeRefreshEpgInBackground(snapshot)
                 if (!force && _uiState.value.isConfigured && snapshot.channels.isEmpty()) {
                     // Soft refresh returned empty even though IPTV is configured:
                     // schedule one forced reload to bypass stale in-memory paths.
@@ -243,61 +227,6 @@ class TvViewModel @Inject constructor(
             runCatching { iptvRepository.warmXtreamVodCachesIfPossible() }
         }.also { job ->
             job.invokeOnCompletion { warmVodJob = null }
-        }
-    }
-
-    private fun maybeRefreshEpgInBackground(snapshot: IptvSnapshot, forceRefresh: Boolean = false) {
-        val config = _uiState.value.config
-        val hasPotentialEpg = config.epgUrl.isNotBlank() || config.m3uUrl.contains("get.php", ignoreCase = true) || config.m3uUrl.contains("player_api.php", ignoreCase = true)
-        if (!hasPotentialEpg) return
-        if (!forceRefresh && (snapshot.channels.isEmpty() || hasAnyEpgData(snapshot))) return
-        if (epgRefreshJob?.isActive == true) return
-
-        epgRefreshJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                loadingMessage = "Loading EPG in background...",
-                loadingPercent = 90
-            )
-            runCatching {
-                iptvRepository.loadSnapshot(
-                    forcePlaylistReload = false,
-                    forceEpgReload = true
-                ) { progress ->
-                    _uiState.value = _uiState.value.copy(
-                        loadingMessage = progress.message,
-                        loadingPercent = progress.percent ?: _uiState.value.loadingPercent
-                    )
-                }
-            }.onSuccess { refreshed ->
-                val lookup = withContext(Dispatchers.Default) {
-                    refreshed.channels.associateBy { it.id }
-                }
-                _uiState.value = _uiState.value.copy(
-                    error = null,
-                    snapshot = refreshed,
-                    channelLookup = lookup,
-                    loadingMessage = null,
-                    loadingPercent = 0
-                )
-            }.onFailure {
-                _uiState.value = _uiState.value.copy(
-                    loadingMessage = null,
-                    loadingPercent = 0
-                )
-            }
-        }.also { job ->
-            job.invokeOnCompletion {
-                if (epgRefreshJob === job) {
-                    epgRefreshJob = null
-                }
-            }
-        }
-    }
-
-    private fun hasAnyEpgData(snapshot: IptvSnapshot): Boolean {
-        if (snapshot.nowNext.isEmpty()) return false
-        return snapshot.nowNext.values.any { item ->
-            item.now != null || item.next != null || item.later != null || item.upcoming.isNotEmpty()
         }
     }
 

@@ -826,121 +826,19 @@ class IptvRepository @Inject constructor(
                         80
                     )
                 )
-                cachedChannels
+                cachedChannels.filter { isAllowedLanguage(it) }
             } else {
-                fetchAndParseM3uWithRetries(buildFetchM3uUrl(config), onProgress).also {
-                    cachedChannels = it
-                    cachedPlaylistAt = System.currentTimeMillis()
-                }
+                fetchAndParseM3uWithRetries(buildFetchM3uUrl(config), onProgress)
+                    .filter { isAllowedLanguage(it) }
+                    .also {
+                        cachedChannels = it
+                        cachedPlaylistAt = System.currentTimeMillis()
+                    }
             }
 
-            val epgCandidates = resolveEpgCandidates(config)
-            var epgUpdated = false
-            val cachedHasPrograms = hasAnyProgramData(cachedNowNext)
-            val shouldUseCachedEpg = !forceEpgReload && (
-                cachedHasPrograms ||
-                    (!cachedHasPrograms && now - cachedEpgAt < epgEmptyRetryMs)
-                )
-            var epgFailureMessage: String? = null
-
-            // Check if this is an Xtream provider (can use fast short EPG API)
-            val xtreamCreds = resolveXtreamCredentialsFromConfig(config, config.epgUrl)
-                ?: resolveXtreamCredentialsFromConfig(config, config.m3uUrl)
-            val hasXtreamChannels = channels.any { it.xtreamStreamId != null || it.id.startsWith("xtream:") }
-            System.err.println("[EPG] loadSnapshot: forceEpgReload=$forceEpgReload shouldUseCachedEpg=$shouldUseCachedEpg cachedHasPrograms=$cachedHasPrograms xtreamCreds=${xtreamCreds != null} hasXtreamChannels=$hasXtreamChannels epgCandidates=${epgCandidates.size}")
-            val nowNext = if (epgCandidates.isEmpty() && xtreamCreds == null) {
-                onProgress(IptvLoadProgress("No EPG URL configured", 90))
-                System.err.println("[EPG] No EPG URL and no Xtream creds - skipping EPG")
-                emptyMap()
-            } else if (shouldUseCachedEpg) {
-                onProgress(IptvLoadProgress("Using cached EPG", 92))
-                System.err.println("[EPG] Using cached EPG (${cachedNowNext.size} channels, age=${(now - cachedEpgAt)/1000}s)")
-                cachedNowNext
-            } else {
-                var resolvedNowNext: Map<String, IptvNowNext> = emptyMap()
-                var resolved = false
-
-                // Collect EPG from multiple sources and merge them all.
-                // Short EPG is fast (~10s) but only covers channels that have data.
-                // XMLTV is slow (~60s) but comprehensive. Both run, results are merged.
-                var shortEpgResult: Map<String, IptvNowNext>? = null
-
-                // ── Fast path: Xtream short EPG API ──
-                if (xtreamCreds != null && hasXtreamChannels) {
-                    System.err.println("[EPG] Attempting Xtream short EPG (baseUrl=${xtreamCreds.baseUrl})")
-                    val shortEpgAttempt = runCatching {
-                        fetchXtreamShortEpg(xtreamCreds, channels, onProgress)
-                    }
-                    if (shortEpgAttempt.isSuccess) {
-                        val parsed = shortEpgAttempt.getOrNull()
-                        val parsedHasData = parsed != null && hasAnyProgramData(parsed)
-                        System.err.println("[EPG] Xtream short EPG result: ${parsed?.size ?: 0} channels, hasData=$parsedHasData")
-                        if (parsed != null && parsedHasData) {
-                            shortEpgResult = parsed
-                            // Provide immediate results: merge short EPG with cached data (no stale removal)
-                            cachedNowNext.putAll(parsed) // Short EPG data takes priority (fresher)
-                            resolvedNowNext = cachedNowNext
-                            cachedEpgAt = System.currentTimeMillis()
-                            epgUpdated = true
-                            resolved = true
-                            System.err.println("[EPG] Xtream short EPG SUCCESS: ${parsed.size} fresh, ${cachedNowNext.size} total cached")
-                        }
-                    } else {
-                        System.err.println("[EPG] Xtream short EPG FAILED: ${shortEpgAttempt.exceptionOrNull()?.message}")
-                    }
-                }
-
-                // ── Slow path: XMLTV download (always runs to fill remaining channels) ──
-                if (epgCandidates.isNotEmpty()) {
-                    val epgCandidatesToTry = epgCandidates
-                    var xmltvResolved = false
-                    epgCandidatesToTry.forEachIndexed { index, epgUrl ->
-                        if (xmltvResolved) return@forEachIndexed
-                        val pct = (90 + ((index * 8) / epgCandidatesToTry.size.coerceAtLeast(1))).coerceIn(90, 98)
-                        onProgress(IptvLoadProgress("Loading full EPG (${index + 1}/${epgCandidatesToTry.size})...", pct))
-                        val attempt = runCatching {
-                            withTimeoutOrNull(90_000L) { fetchAndParseEpg(epgUrl, channels) }
-                                ?: throw java.util.concurrent.TimeoutException("EPG download timed out for ${epgUrl.take(80)}")
-                        }
-                        if (attempt.isSuccess) {
-                            val parsed = attempt.getOrDefault(emptyMap())
-                            val parsedHasPrograms = hasAnyProgramData(parsed)
-                            if (parsedHasPrograms || index == epgCandidatesToTry.lastIndex) {
-                                // Merge: XMLTV as base, then overlay short EPG (fresher per-channel data)
-                                val merged = ConcurrentHashMap(parsed)
-                                shortEpgResult?.let { merged.putAll(it) } // Short EPG wins for channels it covers
-                                resolvedNowNext = merged
-                                cachedNowNext = merged
-                                cachedEpgAt = System.currentTimeMillis()
-                                epgUpdated = true
-                                preferredDerivedEpgUrl = epgUrl
-                                resolved = true
-                                xmltvResolved = true
-                                System.err.println("[EPG] XMLTV SUCCESS: ${parsed.size} from XMLTV + ${shortEpgResult?.size ?: 0} from short EPG = ${merged.size} total")
-                            }
-                        } else {
-                            epgFailureMessage = attempt.exceptionOrNull()?.message
-                            System.err.println("[EPG] XMLTV attempt ${index + 1} failed: ${epgFailureMessage}")
-                        }
-                    }
-                }
-
-                if (!resolved) {
-                    // Throttle repeated failures to avoid refetching every open.
-                    cachedNowNext = ConcurrentHashMap()
-                    cachedEpgAt = System.currentTimeMillis()
-                    epgUpdated = true
-                }
-                resolvedNowNext
-            }
-            val epgFailure = epgFailureMessage
-            val epgWarning = if (epgCandidates.isNotEmpty() && nowNext.isEmpty()) {
-                if (!epgFailure.isNullOrBlank()) {
-                    "EPG unavailable right now (${epgFailure.take(120)})."
-                } else {
-                    "EPG unavailable for this source right now."
-                }
-            } else null
+            // EPG is disabled in lite mode — always return empty program guide.
+            val nowNext = emptyMap<String, IptvNowNext>()
+            val epgWarning: String? = null
 
             val favoriteGroups = observeFavoriteGroups().first()
             val favoriteChannels = observeFavoriteChannels().first()
@@ -959,7 +857,7 @@ class IptvRepository @Inject constructor(
                 epgWarning = epgWarning,
                 loadedAt = loadedAtInstant
             ).also {
-                if (forcePlaylistReload || forceEpgReload || cachedFromDisk == null || epgUpdated) {
+                if (forcePlaylistReload || forceEpgReload || cachedFromDisk == null) {
                     writeCache(
                         config = config,
                         channels = channels,
@@ -971,7 +869,7 @@ class IptvRepository @Inject constructor(
                 // Serving cached channels (cachedFromDisk == null with no force flags) must NOT
                 // inflate this timestamp — doing so would prevent isVodCacheRefreshNeeded() from
                 // correctly detecting stale VOD/series and triggering background warmup.
-                if (forcePlaylistReload || forceEpgReload || epgUpdated) {
+                if (forcePlaylistReload || forceEpgReload) {
                     setLastRefreshTime(System.currentTimeMillis())
                 }
                 
@@ -1184,6 +1082,9 @@ class IptvRepository @Inject constructor(
      * Returns the updated nowNext entries for those channels, or null if not an Xtream provider.
      */
     suspend fun refreshEpgForChannels(channelIds: Set<String>): Map<String, IptvNowNext>? {
+        // EPG is disabled in lite mode.
+        return null
+        @Suppress("UNREACHABLE_CODE")
         if (channelIds.isEmpty()) return null
         return withContext(Dispatchers.IO) {
             val config = observeConfig().first()
@@ -5569,6 +5470,29 @@ class IptvRepository @Inject constructor(
             }
             return mapped
         }
+    }
+
+    /**
+     * Lite-mode language filter: keep only English, Telugu, and Hindi channels.
+     * Checks tvg-language attribute first, then falls back to group/channel name keywords.
+     */
+    private fun isAllowedLanguage(channel: IptvChannel): Boolean {
+        val tvgLang = extractAttr(channel.rawTitle, "tvg-language")?.lowercase().orEmpty()
+        if (tvgLang.isNotBlank()) {
+            return tvgLang.contains("english") || tvgLang.contains("telugu") || tvgLang.contains("hindi")
+        }
+        val group = channel.group.lowercase()
+        val name = channel.name.lowercase()
+        if (group.contains("telugu") || name.contains("telugu")) return true
+        if (group.contains("hindi") || name.contains("hindi")) return true
+        if (group.contains("india") || name.contains("india")) return true
+        if (group.contains("english")) return true
+        if (group.contains("united states") || group.contains("united kingdom")) return true
+        if (group.contains("australia") || group.contains("canada") || group.contains("ireland")) return true
+        if (group.contains("international") || group.contains("america")) return true
+        if (Regex("\\b(us|usa|uk|gb)\\b").containsMatchIn(group)) return true
+        if (Regex("^(te|hi|en|us|uk|gb|au|ca|ie)\\s*[:|]", RegexOption.IGNORE_CASE).containsMatchIn(name)) return true
+        return false
     }
 
     private fun parseM3u(
