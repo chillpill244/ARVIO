@@ -21,10 +21,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.IOException
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPInputStream
+import okhttp3.ResponseBody.Companion.toResponseBody
 
 /**
  * Provides a configured OkHttpClient instance.
@@ -174,6 +177,46 @@ object OkHttpProvider {
             playbackSharedClient ?: buildPlaybackClient().also { playbackSharedClient = it }
         }
 
+    // OkHttp's GzipSource throws when the server leaves extra bytes after the gzip trailer
+    // (observed with TMDB via Supabase proxy). GZIPInputStream silently ignores trailing bytes,
+    // so we use it here instead. Raw bytes are buffered first so that a partially-consumed
+    // stream is never returned to callers if decompression fails.
+    // Scoped to JSON/text responses to avoid buffering large binary gzip payloads into memory.
+    private val lenientGzipInterceptor = Interceptor { chain ->
+        val response = chain.proceed(chain.request())
+
+        val contentEncoding = response.header("Content-Encoding") ?: ""
+        if (!contentEncoding.equals("gzip", ignoreCase = true)) {
+            return@Interceptor response
+        }
+
+        val contentType = response.header("Content-Type") ?: ""
+        if (!contentType.contains("application/json", ignoreCase = true) &&
+            !contentType.contains("text/", ignoreCase = true)
+        ) {
+            return@Interceptor response
+        }
+
+        val body = response.body ?: return@Interceptor response
+
+        val rawBytes = body.bytes()
+
+        val decompressedBytes = try {
+            GZIPInputStream(rawBytes.inputStream()).readBytes()
+        } catch (_: IOException) {
+            return@Interceptor response.newBuilder()
+                .body(rawBytes.toResponseBody(body.contentType()))
+                .build()
+        }
+
+        response.newBuilder()
+            .removeHeader("Content-Encoding")
+            .removeHeader("Content-Length")
+            .header("Content-Length", decompressedBytes.size.toString())
+            .body(decompressedBytes.toResponseBody(body.contentType()))
+            .build()
+    }
+
     private fun buildAppClient(): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) {
@@ -188,6 +231,7 @@ object OkHttpProvider {
             // Contributors can still use direct calls with their own local keys.
             .addInterceptor(ApiProxyInterceptor())
             .addInterceptor(loggingInterceptor)
+            .addNetworkInterceptor(lenientGzipInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
