@@ -2511,7 +2511,7 @@ class PlayerViewModel @Inject constructor(
             val shouldPersistWatchHistory = !isPlaying ||
                 currentTime - lastWatchHistorySaveTime >= WATCH_HISTORY_UPDATE_INTERVAL_MS ||
                 hasSeekJump
-            if (shouldPersistWatchHistory && !isAtWatchedThreshold) {
+            if (currentMediaId != 0 && shouldPersistWatchHistory && !isAtWatchedThreshold) {
                 lastWatchHistorySaveTime = currentTime
                 lastWatchHistorySavedPositionSeconds = positionSeconds
                 val selectedStream = _uiState.value.selectedStream
@@ -2573,7 +2573,7 @@ class PlayerViewModel @Inject constructor(
             }
 
             // Mark as watched when playback ends or crosses threshold
-            if (!hasMarkedWatched && (playbackState == Player.STATE_ENDED || progressPercent >= Constants.WATCHED_THRESHOLD)) {
+            if (currentMediaId != 0 && !hasMarkedWatched && (playbackState == Player.STATE_ENDED || progressPercent >= Constants.WATCHED_THRESHOLD)) {
                 hasMarkedWatched = true
                 try {
                     traktRepository.scrobbleStop(
