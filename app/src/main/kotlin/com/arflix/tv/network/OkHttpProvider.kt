@@ -259,6 +259,25 @@ object OkHttpProvider {
             .build()
     }
 
+    private val domainRewriteInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        val host = request.url.host.lowercase()
+        val rewrittenHost = when (host) {
+            "webhop.live", "www.webhop.live", "starshare.org", "www.starshare.org", "starshare.live"-> "ott1.co"
+            else -> null
+        }
+
+        if (rewrittenHost == null) {
+            chain.proceed(request)
+        } else {
+            val newUrl = request.url.newBuilder()
+                .host(rewrittenHost)
+                .build()
+            val newRequest = request.newBuilder().url(newUrl).build()
+            chain.proceed(newRequest)
+        }
+    }
+
     private fun selectedDns(provider: AppDnsProvider): Dns {
         return when (provider) {
             AppDnsProvider.SYSTEM -> systemDns
@@ -315,6 +334,7 @@ object OkHttpProvider {
     private fun buildPlaybackClient(): OkHttpClient {
         return OkHttpClient.Builder()
             .addInterceptor(customUserAgentInterceptor)
+            .addInterceptor(domainRewriteInterceptor)
             .connectionPool(playbackConnectionPool)
             .followRedirects(true)
             .followSslRedirects(true)
@@ -457,6 +477,8 @@ object OkHttpProvider {
         //    per card — on a home screen with 20+ cards, the entire grid appeared frozen.
         // The image CDN (image.tmdb.org) is a fast static-asset CDN that should respond
         // in <500ms; anything longer is a network issue that retrying later will fix.
+        // User-Agent is injected so IPTV servers that reject OkHttp's default UA can
+        // serve stream icon images correctly.
         return OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
@@ -464,6 +486,14 @@ object OkHttpProvider {
             .connectionPool(ConnectionPool(8, 30, TimeUnit.SECONDS))
             .dns(dns)
             .retryOnConnectionFailure(true)
+            .addInterceptor { chain ->
+                chain.proceed(
+                    chain.request().newBuilder()
+                        .header("User-Agent", _customUserAgent)
+                        .build()
+                )
+            }
+            .addInterceptor(domainRewriteInterceptor)
             .build()
     }
 
