@@ -2361,7 +2361,7 @@ class PlayerViewModel @Inject constructor(
             // the next-episode CW entry, and saving the finished episode's full position here
             // would contaminate the next episode's resume time via show-level history fallback.
             val isAtWatchedThreshold = progressPercent >= Constants.WATCHED_THRESHOLD
-            if ((!isPlaying || currentTime - lastWatchHistorySaveTime >= WATCH_HISTORY_UPDATE_INTERVAL_MS) && !isAtWatchedThreshold) {
+            if (currentMediaId != 0 && (!isPlaying || currentTime - lastWatchHistorySaveTime >= WATCH_HISTORY_UPDATE_INTERVAL_MS) && !isAtWatchedThreshold) {
                 lastWatchHistorySaveTime = currentTime
                 val durationSeconds = (duration / 1000L).coerceAtLeast(1L)
                 val positionSeconds = (position / 1000L).coerceAtLeast(0L)
@@ -2424,7 +2424,7 @@ class PlayerViewModel @Inject constructor(
             }
 
             // Mark as watched when playback ends or crosses threshold
-            if (!hasMarkedWatched && (playbackState == Player.STATE_ENDED || progressPercent >= Constants.WATCHED_THRESHOLD)) {
+            if (currentMediaId != 0 && !hasMarkedWatched && (playbackState == Player.STATE_ENDED || progressPercent >= Constants.WATCHED_THRESHOLD)) {
                 hasMarkedWatched = true
                 try {
                     traktRepository.scrobbleStop(
