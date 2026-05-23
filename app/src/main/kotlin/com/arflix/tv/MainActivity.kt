@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -53,8 +54,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.arflix.tv.ui.components.AppBottomBar
 import androidx.core.view.WindowCompat
@@ -87,11 +86,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.OutOfQuotaPolicy
-import androidx.work.WorkManager
-import androidx.work.workDataOf
 import com.arflix.tv.data.repository.AuthRepository
 import com.arflix.tv.data.repository.AuthState
 import com.arflix.tv.data.repository.LauncherContinueWatchingRepository
@@ -336,6 +330,7 @@ class MainActivity : ComponentActivity() {
                         watchlistRepository = watchlistRepository.get(),
                         iptvRepository = iptvRepository.get(),
                         launcherContinueWatchingRepository = launcherContinueWatchingRepository.get(),
+                        mediaRepository = mediaRepository.get(),
                         oledBlackBackground = oledBlackBackground,
                         skipProfileSelection = skipProfileSelection,
                         pendingLauncherRequest = pendingLauncherRequest,
@@ -353,7 +348,6 @@ class MainActivity : ComponentActivity() {
         if (BuildConfig.DEBUG) {
             jankStats = JankStats.createAndTrack(window) { frameData ->
                 if (frameData.isJank) {
-                    val durationMs = frameData.frameDurationUiNanos / 1_000_000
                 }
             }
             PerformanceMetricsState.getHolderForHierarchy(window.decorView)
@@ -520,6 +514,7 @@ fun ArflixApp(
     watchlistRepository: WatchlistRepository,
     iptvRepository: com.arflix.tv.data.repository.IptvRepository,
     launcherContinueWatchingRepository: LauncherContinueWatchingRepository,
+    mediaRepository: com.arflix.tv.data.repository.MediaRepository,
     oledBlackBackground: Boolean = false,
     skipProfileSelection: Boolean? = null,
     pendingLauncherRequest: LauncherContinueWatchingRequest? = null,
@@ -640,7 +635,7 @@ fun ArflixApp(
                 onTvFullscreenChanged = { fullscreen ->
                     iptvFullscreen = fullscreen
                 },
-                onExitApp = onExitApp
+                onExitApp = onExitApp,
             )
         }
         if (showBottomBar) {
@@ -675,18 +670,3 @@ fun ArflixApp(
     }
 }
 
-private fun enqueueFullTraktSync(context: android.content.Context) {
-    val request = OneTimeWorkRequestBuilder<TraktSyncWorker>()
-        .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-        .setInputData(
-            workDataOf(TraktSyncWorker.INPUT_SYNC_MODE to TraktSyncWorker.SYNC_MODE_FULL)
-        )
-        .addTag(TraktSyncWorker.TAG)
-        .build()
-
-    WorkManager.getInstance(context).enqueueUniqueWork(
-        "trakt_sync_after_auth",
-        ExistingWorkPolicy.REPLACE,
-        request
-    )
-}

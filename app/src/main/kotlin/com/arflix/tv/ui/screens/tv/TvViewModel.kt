@@ -127,36 +127,16 @@ class TvViewModel @Inject constructor(
                         loadingPercent = 0
                     )
                 )
-                maybeWarmStartupGuide()
-                startFullEpgWarmup()
-                startCompleteEpgBackfill()
                 warmXtreamVodCache()
-                val hasPotentialEpg = config.epgUrl.isNotBlank() || config.m3uUrl.contains("get.php", ignoreCase = true) || config.m3uUrl.contains("player_api.php", ignoreCase = true)
                 val needsChannelReload = config.m3uUrl.isNotBlank() && cached.channels.isEmpty()
-                // Only force EPG refresh if cached EPG is older than 2 minutes.
-                // When navigating from Home, EPG was likely just loaded — no need to re-fetch.
-                val epgAgeMs = iptvRepository.cachedEpgAgeMs()
-                val epgIsRecent = epgAgeMs < 120_000L
-                val epgCoverage = epgCoverageRatio(cached)
                 if (needsChannelReload) {
-                    // Only situation that still requires a blocking refresh:
-                    // there are literally no channels to show.
                     refresh(force = true, showLoading = false, forceEpg = false)
-                } else {
-                    // In every other case render the warm cache instantly —
-                    // never block the TV page on EPG. The active category
-                    // will request guide data on demand once the user lands
-                    // there, instead of broad startup sweeps.
-                    if (iptvRepository.isSnapshotStale(cached)) {
-                        refresh(force = false, showLoading = false, forceEpg = false)
-                    } else {
-                        System.err.println("[EPG] Startup: using warm cached EPG (age=${epgAgeMs / 1000}s)")
-                    }
+                } else if (iptvRepository.isSnapshotStale(cached)) {
+                    refresh(force = false, showLoading = false, forceEpg = false)
                 }
             } else {
                 refresh(force = false, showLoading = false, forceEpg = false)
             }
-            startPeriodicEpgRefresh()
         }
     }
 
@@ -169,7 +149,6 @@ class TvViewModel @Inject constructor(
                         tvSession = session,
                         tvSessionLoaded = true,
                     )
-                    maybeWarmStartupGuide()
                 }
         }
     }
@@ -203,8 +182,6 @@ class TvViewModel @Inject constructor(
                         iptvPreferencesLoaded = true,
                     )
                 )
-                maybeWarmStartupGuide()
-                startFullEpgWarmup()
 
                 val hasAnyIptvConfig = config.m3uUrl.isNotBlank() ||
                     config.stalkerPortalUrl.isNotBlank() ||
@@ -283,8 +260,6 @@ class TvViewModel @Inject constructor(
                                     loadingPercent = 0
                                 )
                             )
-                            startFullEpgWarmup()
-                            startCompleteEpgBackfill()
                         }
                     )
                 } ?: throw IllegalStateException("IPTV load timed out")
@@ -300,9 +275,6 @@ class TvViewModel @Inject constructor(
                         loadingPercent = 0
                     )
                 )
-                maybeWarmStartupGuide()
-                startFullEpgWarmup()
-                startCompleteEpgBackfill()
                 warmXtreamVodCache()
                 if (!force && _uiState.value.isConfigured && snapshot.channels.isEmpty()) {
                     // Soft refresh returned empty even though IPTV is configured:
@@ -333,8 +305,6 @@ class TvViewModel @Inject constructor(
                             loadingPercent = 0
                         )
                     )
-                    maybeWarmStartupGuide()
-                    startFullEpgWarmup()
                 } else {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -782,7 +752,6 @@ class TvViewModel @Inject constructor(
         if (next == current) return
 
         _uiState.value = _uiState.value.copy(tvSession = next)
-        maybeWarmStartupGuide()
         tvSessionSaveJob?.cancel()
         tvSessionSaveJob = viewModelScope.launch(Dispatchers.IO) {
             kotlinx.coroutines.delay(if (markOpened || channelChanged) 0L else 220L)
