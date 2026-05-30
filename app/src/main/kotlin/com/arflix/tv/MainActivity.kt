@@ -50,9 +50,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -86,7 +84,6 @@ import androidx.metrics.performance.PerformanceMetricsState
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
@@ -418,7 +415,7 @@ private fun ComponentActivity.runAfterFirstDraw(block: () -> Unit) {
 }
 
 /**
- * Simple ARVIO loading screen - app logo + spinner
+ * Simple MUVIO loading screen - app logo + spinner
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -490,8 +487,9 @@ fun ArvioLoadingScreen() {
         }
 
         Image(
-            painter = painterResource(id = R.drawable.arvio_loading_logo),
-            contentDescription = "ARVIO",
+            painter = painterResource(id = R.drawable.app_banner),
+            contentDescription = "MUVIO",
+            contentScale = ContentScale.Fit,
             modifier = Modifier
                 .padding(horizontal = 24.dp)
                 .fillMaxWidth(0.52f)
@@ -502,8 +500,7 @@ fun ArvioLoadingScreen() {
                     scaleX = scale
                     scaleY = scale
                     translationY = (1f - reveal.value) * 18.dp.toPx()
-                },
-            contentScale = ContentScale.Fit,
+                }
         )
     }
 }
