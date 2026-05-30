@@ -167,7 +167,7 @@ fun LoginScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = "ARVIO",
+                    text = "MUVIO",
                     fontSize = 64.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 8.sp,

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ARVIO</string>
+    <string name="app_name">MUVIO</string>
     <string name="now_playing">NOW PLAYING</string>
 
     <!-- Navigation -->
@@ -133,7 +133,7 @@
     <string name="volume_boost">Volume Boost</string>
     <string name="dns_provider">DNS Provider</string>
     <string name="custom_user_agent">Custom User-Agent</string>
-    <string name="custom_user_agent_desc">Leave blank to use ARVIO defaults. Custom values apply when a source does not provide its own User-Agent.</string>
+    <string name="custom_user_agent_desc">Leave blank to use MUVIO defaults. Custom values apply when a source does not provide its own User-Agent.</string>
     <string name="add_playlist">Add Playlist</string>
     <string name="refresh_iptv">Refresh TV Data</string>
     <string name="delete_iptv">Delete TV Playlists</string>
@@ -216,7 +216,7 @@
     <string name="set_profile_pin">Set Profile PIN</string>
     <string name="done">Done</string>
     <string name="save">Save</string>
-    <string name="connect_to_cloud">Connect to ARVIO Cloud</string>
+    <string name="connect_to_cloud">Connect to MUVIO Cloud</string>
     <string name="view_collection">View Collection</string>
 
     <!-- In-player subtitle settings panel -->

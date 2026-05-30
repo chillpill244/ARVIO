@@ -1,4 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:gravity="center"
-    android:src="@drawable/arvio_loading_logo" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="60dp"
+    android:viewportWidth="200"
+    android:viewportHeight="60">
+
+    <!-- M -->
+    <path
+        android:fillColor="#A855F7"
+        android:pathData="M10,45 L10,15 L14,15 L28.5,33 L43,15 L47,15 L47,45 L42,45 L42,21 L28.5,38 L15,21 L15,45 Z" />
+
+    <!-- U -->
+    <path
+        android:fillColor="#C084FC"
+        android:pathData="M52,15 L52,38 C52,44 59,49 69.5,49 C80,49 87,44 87,38 L87,15 L82,15 L82,38 C82,42 76,46 69.5,46 C63,46 57,42 57,38 L57,15 Z" />
+
+    <!-- V -->
+    <path
+        android:fillColor="#E879F9"
+        android:pathData="M92,15 L98,15 L112,38 L126,15 L132,15 L114,45 L110,45 Z" />
+
+    <!-- I -->
+    <path
+        android:fillColor="#F0ABFC"
+        android:pathData="M137,45 L137,15 L143,15 L143,45 Z" />
+
+    <!-- O with cyan accent -->
+    <path
+        android:fillColor="#22D3EE"
+        android:pathData="M152,30 C152,20 160,13 172,13 C184,13 192,20 192,30 C192,40 184,47 172,47 C160,47 152,40 152,30 Z M158,30 C158,37 164,42 172,42 C180,42 186,37 186,30 C186,23 180,18 172,18 C164,18 158,23 158,30 Z" />
+</vector>
