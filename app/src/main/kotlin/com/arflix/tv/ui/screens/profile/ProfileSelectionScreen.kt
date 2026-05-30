@@ -151,7 +151,7 @@ fun ProfileSelectionScreen(
         ) {
             // Title
             Text(
-                text = "ARVIO",
+                text = "MUVIO",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
@@ -268,6 +268,7 @@ fun ProfileSelectionScreen(
                 }
             )
 
+            /*
             if (!isCloudConnected) {
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -280,6 +281,7 @@ fun ProfileSelectionScreen(
                     }
                 )
             }
+            */
 
             if (uiState.isSwitchingProfile) {
                 Spacer(modifier = Modifier.height(18.dp))
@@ -576,6 +578,7 @@ private fun ManageProfilesButton(
     }
 }
 
+/*
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun CloudConnectButton(
@@ -656,3 +659,4 @@ private fun CloudConnectButton(
         }
     }
 }
+*/
