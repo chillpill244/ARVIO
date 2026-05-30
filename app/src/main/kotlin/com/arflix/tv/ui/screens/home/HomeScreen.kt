@@ -2003,20 +2003,20 @@ private fun MobileHeroCarousel(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         // Profile avatar + search icon row — above the pager, respects status bar
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(start = 26.dp, end = 26.dp, top = 12.dp, bottom = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(start = 26.dp, end = 26.dp, top = 12.dp, bottom = 10.dp)
         ) {
+            // Profile icon pinned to start
             if (currentProfile != null) {
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
                         .clickable { onSwitchProfile() }
+                        .align(Alignment.CenterStart)
                 ) {
                     ProfileAvatarVisual(
                         profile = currentProfile,
@@ -2024,15 +2024,24 @@ private fun MobileHeroCarousel(
                         iconPadding = 5.dp
                     )
                 }
-            } else {
-                Spacer(modifier = Modifier.size(38.dp))
             }
+            // Banner absolutely centered
+            Image(
+                painter = painterResource(id = R.drawable.app_banner),
+                contentDescription = "MUVIO",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .height(36.dp)
+                    .align(Alignment.Center)
+            )
+            // Search icon pinned to end
             Icon(
                 imageVector = Icons.Filled.Search,
                 contentDescription = "Search",
                 tint = Color.White,
                 modifier = Modifier
-                    .size(26.dp)
+                    .size(28.dp)
+                    .align(Alignment.CenterEnd)
                     .clickable { onNavigateToSearch() }
             )
         }

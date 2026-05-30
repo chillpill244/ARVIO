@@ -281,6 +281,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    /*
     // Auto-start cloud auth if requested (e.g. from profile selection page)
     LaunchedEffect(autoStartCloudAuth) {
         if (autoStartCloudAuth && !uiState.isLoggedIn) {
@@ -291,6 +292,7 @@ fun SettingsScreen(
             }
         }
     }
+    */
 
     var isSidebarFocused by remember { mutableStateOf(false) }
     val hasProfile = currentProfile != null
@@ -591,6 +593,7 @@ fun SettingsScreen(
         }
     }
 
+    /*
     var cloudDialogEmail by remember { mutableStateOf("") }
     var cloudDialogPassword by remember { mutableStateOf("") }
 
@@ -600,6 +603,7 @@ fun SettingsScreen(
             cloudDialogPassword = ""
         }
     }
+    */
 
     LaunchedEffect(uiState.shouldSwitchProfile) {
         if (uiState.shouldSwitchProfile) {
@@ -625,8 +629,10 @@ fun SettingsScreen(
         showAiApiKeyDialog ||
         showCustomUserAgentDialog ||
         uiState.aiKeyServerState.isActive ||
+        /*
         uiState.showCloudPairDialog ||
         uiState.showCloudEmailPasswordDialog ||
+        */
         uiState.traktCode != null ||
         uiState.plexHomeServerAuth != null ||
         uiState.showAppUpdateDialog ||
@@ -1885,6 +1891,7 @@ fun SettingsScreen(
             )
         }
 
+        /*
         if (uiState.showCloudEmailPasswordDialog) {
             CloudEmailPasswordModal(
                 email = cloudDialogEmail,
@@ -1906,6 +1913,7 @@ fun SettingsScreen(
                 onUseEmailPassword = { viewModel.openCloudEmailPasswordDialog() }
             )
         }
+        */
 
         uiState.traktCode?.let { traktCode ->
             TraktActivationModal(
@@ -3182,6 +3190,7 @@ private fun MobileSettingsLayout(
                     color = TextPrimary,
                     modifier = Modifier.weight(1f)
                 )
+                /*
                 if (uiState.isLoggedIn) {
                     Text(
                         text = stringResource(R.string.log_out),
@@ -3190,6 +3199,7 @@ private fun MobileSettingsLayout(
                         modifier = Modifier.clickable { viewModel.logout() }.padding(8.dp)
                     )
                 }
+                */
             }
             MobileSettingsMainPage(
                 uiState = uiState,
@@ -3341,6 +3351,7 @@ private fun MobileSettingsMainPage(
 
         item {
             MobileSettingsCategory(title = "USER INFO & ACCOUNT") {
+                /*
                 if (uiState.isLoggedIn) {
                     MobileSettingsRow(
                         icon = Icons.Default.Person,
@@ -3366,6 +3377,7 @@ private fun MobileSettingsMainPage(
                         onClick = { viewModel.openCloudEmailPasswordDialog() }
                     )
                 }
+                */
                 MobileSettingsRow(
                     icon = Icons.Default.Movie,
                     title = stringResource(R.string.trakt_account),
@@ -7235,6 +7247,7 @@ private fun AccountsSettings(
             )
         }
 
+        /*
         AccountRow(
             name = "ARVIO Cloud",
             description = cloudEmail ?: "Optional account for syncing profiles, addons, catalogs and IPTV settings",
@@ -7252,6 +7265,7 @@ private fun AccountsSettings(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+        */
 
         // Trakt.tv
         AccountRow(
@@ -7270,6 +7284,7 @@ private fun AccountsSettings(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        /*
         SettingsActionRow(
             title = stringResource(R.string.force_cloud_sync),
             description = if (isForceCloudSyncing) {
@@ -7286,6 +7301,7 @@ private fun AccountsSettings(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+        */
 
         SettingsActionRow(
             title = stringResource(R.string.app_update),
