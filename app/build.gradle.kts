@@ -372,9 +372,7 @@ val validateReleaseSupabaseSecrets = tasks.register("validateReleaseSupabaseSecr
 tasks.configureEach {
     if (name in setOf(
             "prePlayReleaseBuild",
-            "preSideloadReleaseBuild",
-            "prePlayStagingBuild",
-            "preSideloadStagingBuild"
+            "prePlayStagingBuild"
         )
     ) {
         dependsOn(validateReleaseSupabaseSecrets)
