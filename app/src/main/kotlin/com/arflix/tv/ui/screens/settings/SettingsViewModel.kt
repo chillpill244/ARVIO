@@ -2335,7 +2335,7 @@ class SettingsViewModel @Inject constructor(
             )
             val result = homeServerRepository.connect(serverUrl, username, password, displayName)
             result.onSuccess { connection ->
-                syncHomeServerCatalogsFromConnections()
+                // syncHomeServerCatalogsFromConnections()
                 val connections = homeServerRepository.currentConnections()
                 _uiState.value = _uiState.value.copy(
                     isHomeServerConnecting = false,
@@ -2426,7 +2426,7 @@ class SettingsViewModel @Inject constructor(
                     displayName = plexHomeServerDisplayName.orEmpty()
                 )
                 connectionResult.onSuccess { connection ->
-                    syncHomeServerCatalogsFromConnections()
+                    // syncHomeServerCatalogsFromConnections()
                     val connections = homeServerRepository.currentConnections()
                     plexHomeServerUrl = null
                     plexHomeServerDisplayName = null
@@ -2493,7 +2493,7 @@ class SettingsViewModel @Inject constructor(
             )
             val result = homeServerRepository.testConnections()
             result.onSuccess { connections ->
-                syncHomeServerCatalogsFromConnections()
+                // syncHomeServerCatalogsFromConnections()
                 _uiState.value = _uiState.value.copy(
                     isHomeServerConnecting = false,
                     homeServerConnection = connections.firstOrNull(),
