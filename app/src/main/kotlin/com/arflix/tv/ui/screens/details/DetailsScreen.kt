@@ -1,8 +1,6 @@
 package com.arflix.tv.ui.screens.details
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
 import androidx.compose.animation.animateColorAsState
@@ -1110,7 +1108,7 @@ fun DetailsScreen(
     }
 }
 
-private enum class FocusSection {
+internal enum class FocusSection {
     BUTTONS, EPISODES, SEASONS, CAST, REVIEWS, SIMILAR, COLLECTION
 }
 
@@ -1175,7 +1173,7 @@ private fun isPendingDebridStream(stream: com.arflix.tv.data.model.StreamSource)
     ).any { text.contains(it) }
 }
 
-private fun handleLeft(
+internal fun handleLeft(
     section: FocusSection,
     buttonIdx: Int, episodeIdx: Int, seasonIdx: Int, castIdx: Int, reviewIdx: Int, similarIdx: Int,
     collectionIdx: Int,
@@ -1195,7 +1193,7 @@ private fun handleLeft(
     return true
 }
 
-private fun handleRight(
+internal fun handleRight(
     section: FocusSection,
     buttonIdx: Int, episodeIdx: Int, seasonIdx: Int, castIdx: Int, reviewIdx: Int, similarIdx: Int,
     collectionIdx: Int,
@@ -1237,7 +1235,7 @@ private fun rememberMetadataLogoImageLoader(context: Context): ImageLoader {
 }
 
 @Composable
-private fun DetailsContent(
+internal fun DetailsContent(
     item: MediaItem,
     logoUrl: String?,
     episodes: List<Episode>,
@@ -1267,6 +1265,8 @@ private fun DetailsContent(
     contentHasFocus: Boolean = true,
     usePosterCards: Boolean = false,
     isMobile: Boolean = false,
+    showWatchlistAndWatched: Boolean = true,
+    showSources: Boolean = true,
     // Persistent back callback used by the phone-layout back button overlay
     // (issue #43). No-op by default so tablet/TV callers don't need to pass it.
     onBack: () -> Unit = {},
@@ -1491,6 +1491,20 @@ private fun DetailsContent(
                                         .fillMaxWidth(0.78f)
                                         .height(86.dp)
                                 )
+                            } else if (item.title.isNotBlank()) {
+                                Text(
+                                    text = item.title,
+                                    style = ArflixTypography.body.copy(
+                                        fontSize = 26.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        shadow = textShadow
+                                    ),
+                                    color = Color.White,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.fillMaxWidth(0.9f)
+                                )
                             }
                         }
 
@@ -1633,14 +1647,16 @@ private fun DetailsContent(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        MobileIconActionButton(
-                            icon = Icons.Default.List,
-                            contentDescription = stringResource(R.string.sources),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(54.dp),
-                            onClick = { onButtonClick(1) }
-                        )
+                        if (showSources) {
+                            MobileIconActionButton(
+                                icon = Icons.Default.List,
+                                contentDescription = stringResource(R.string.sources),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(54.dp),
+                                onClick = { onButtonClick(1) }
+                            )
+                        }
                         MobileIconActionButton(
                             icon = Icons.Default.Movie,
                             contentDescription = stringResource(R.string.trailer),
@@ -1650,24 +1666,26 @@ private fun DetailsContent(
                                 .height(54.dp),
                             onClick = { onButtonClick(2) }
                         )
-                        MobileIconActionButton(
-                            icon = if (buttonWatched) Icons.Default.Check else Icons.Default.Visibility,
-                            contentDescription = if (buttonWatched) "Watched" else "Mark watched",
-                            isActive = buttonWatched,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(54.dp),
-                            onClick = { onButtonClick(3) }
-                        )
-                        MobileIconActionButton(
-                            icon = if (isInWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                            contentDescription = if (isInWatchlist) "In watchlist" else "Add to watchlist",
-                            isActive = isInWatchlist,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(54.dp),
-                            onClick = { onButtonClick(4) }
-                        )
+                        if (showWatchlistAndWatched) {
+                            MobileIconActionButton(
+                                icon = if (buttonWatched) Icons.Default.Check else Icons.Default.Visibility,
+                                contentDescription = if (buttonWatched) "Watched" else "Mark watched",
+                                isActive = buttonWatched,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(54.dp),
+                                onClick = { onButtonClick(3) }
+                            )
+                            MobileIconActionButton(
+                                icon = if (isInWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = if (isInWatchlist) "In watchlist" else "Add to watchlist",
+                                isActive = isInWatchlist,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(54.dp),
+                                onClick = { onButtonClick(4) }
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(18.dp))
@@ -2029,6 +2047,18 @@ private fun DetailsContent(
                                     .height(72.dp)
                                     .width(320.dp)
                             )
+                        } else if (item.title.isNotBlank()) {
+                            Text(
+                                text = item.title,
+                                style = ArflixTypography.body.copy(
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    shadow = textShadow
+                                ),
+                                color = Color.White,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
 
@@ -2206,13 +2236,15 @@ private fun DetailsContent(
                         isFocused = focusSectionForUi == FocusSection.BUTTONS && buttonIndex == 0
                     )
                 }
-                Box(modifier = Modifier.clickable { onButtonClick(1) }) {
-                    PremiumActionButton(
-                        icon = Icons.Default.List,
-                        text = stringResource(R.string.sources),
-                        isFocused = focusSectionForUi == FocusSection.BUTTONS && buttonIndex == 1,
-                        isIconOnly = true
-                    )
+                if (showSources) {
+                    Box(modifier = Modifier.clickable { onButtonClick(1) }) {
+                        PremiumActionButton(
+                            icon = Icons.Default.List,
+                            text = stringResource(R.string.sources),
+                            isFocused = focusSectionForUi == FocusSection.BUTTONS && buttonIndex == 1,
+                            isIconOnly = true
+                        )
+                    }
                 }
                 Box(modifier = Modifier
                     .clickable(enabled = hasTrailer) { onButtonClick(2) }
@@ -2225,23 +2257,25 @@ private fun DetailsContent(
                         isIconOnly = true
                     )
                 }
-                Box(modifier = Modifier.clickable { onButtonClick(3) }) {
-                    PremiumActionButton(
-                        icon = if (buttonWatched) Icons.Default.Check else Icons.Default.Visibility,
-                        text = if (buttonWatched) "Watched" else "Mark Watched",
-                        isFocused = focusSectionForUi == FocusSection.BUTTONS && buttonIndex == 3,
-                        isActive = buttonWatched,
-                        isIconOnly = true
-                    )
-                }
-                Box(modifier = Modifier.clickable { onButtonClick(4) }) {
-                    PremiumActionButton(
-                        icon = if (isInWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                        text = stringResource(R.string.watchlist),
-                        isFocused = focusSectionForUi == FocusSection.BUTTONS && buttonIndex == 4,
-                        isIconOnly = true,
-                        isActive = isInWatchlist
-                    )
+                if (showWatchlistAndWatched) {
+                    Box(modifier = Modifier.clickable { onButtonClick(3) }) {
+                        PremiumActionButton(
+                            icon = if (buttonWatched) Icons.Default.Check else Icons.Default.Visibility,
+                            text = if (buttonWatched) "Watched" else "Mark Watched",
+                            isFocused = focusSectionForUi == FocusSection.BUTTONS && buttonIndex == 3,
+                            isActive = buttonWatched,
+                            isIconOnly = true
+                        )
+                    }
+                    Box(modifier = Modifier.clickable { onButtonClick(4) }) {
+                        PremiumActionButton(
+                            icon = if (isInWatchlist) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            text = stringResource(R.string.watchlist),
+                            isFocused = focusSectionForUi == FocusSection.BUTTONS && buttonIndex == 4,
+                            isIconOnly = true,
+                            isActive = isInWatchlist
+                        )
+                    }
                 }
 
                 // "View Collection" button — only shown when this movie belongs to a TMDB collection
