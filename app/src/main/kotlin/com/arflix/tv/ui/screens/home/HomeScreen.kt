@@ -3135,7 +3135,7 @@ private fun ImdbSvgRatingBadge(
     logoHeight: Dp,
     textShadow: Shadow
 ) {
-    val imdbLogoUri = remember { "android.resource://com.arvio.tv/${R.raw.logo_imdb_rectangle}" }
+    val imdbLogoUri = remember { "android.resource://com.muvio.tv/${R.raw.logo_imdb_rectangle}" }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp)

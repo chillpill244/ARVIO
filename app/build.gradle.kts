@@ -25,13 +25,13 @@ android {
     flavorDimensions += "distribution"
 
     defaultConfig {
-        applicationId = "com.arvio.tv"
+        applicationId = "com.muvio.tv"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Fire TV devices can be as low as Android 7.1 (API 25) or lower depending on model/OS.
         minSdk = 23
         targetSdk = 35
-        versionCode = 281
-        versionName = "1.9.94"
+        versionCode = 282
+        versionName = "2.1.0"
         buildConfigField("String", "GITHUB_OWNER", "\"chillpill244\"")
         buildConfigField("String", "GITHUB_REPO", "\"ARVIO\"")
 
