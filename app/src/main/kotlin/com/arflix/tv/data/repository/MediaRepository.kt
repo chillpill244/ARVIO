@@ -3018,6 +3018,19 @@ class MediaRepository @Inject constructor(
         }
     }
 
+    suspend fun getTmdbFullDetails(mediaType: MediaType, tmdbId: Int): Pair<MediaItem, List<String>> {
+        return when (mediaType) {
+            MediaType.MOVIE -> {
+                val details = tmdbApi.getMovieDetails(tmdbId, apiKey, language = contentLanguage)
+                Pair(details.toMediaItem(), details.genres.map { it.name })
+            }
+            MediaType.TV -> {
+                val details = tmdbApi.getTvDetails(tmdbId, apiKey, language = contentLanguage)
+                Pair(details.toMediaItem(), details.genres.map { it.name })
+            }
+        }
+    }
+
     /**
      * Get person details
      */
@@ -3025,6 +3038,9 @@ class MediaRepository @Inject constructor(
         val person = tmdbApi.getPersonDetails(personId, apiKey, language = contentLanguage)
         return person.toPersonDetails()
     }
+
+    suspend fun resolveTitleToTmdbId(title: String, mediaType: MediaType): Int? =
+        resolveTitleToTmdbRef(title, mediaType)?.second
 
     /**
      * Search media

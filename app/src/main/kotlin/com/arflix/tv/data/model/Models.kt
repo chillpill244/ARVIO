@@ -55,6 +55,10 @@ data class MediaItem(
     val timeRemainingLabel: String? = null,
     // Continue Watching: true only when progress represents current movie/episode playback.
     val showPlaybackProgress: Boolean = true,
+    // IPTV Xtream stream ID for VOD movies (used to resolve direct stream URL)
+    val iptvMovieId: String? = null,
+    // IPTV Xtream series ID for VOD series (used to resolve episode URLs)
+    val iptvSeriesId: String? = null,
 ) : Serializable
 
 enum class MediaType {
@@ -310,4 +314,45 @@ data class QualityFilterConfig(
     val regexPattern: String = "", // Regex pattern to EXCLUDE matching qualities (e.g., "4K|2160p")
     val enabled: Boolean = true, // Enable/disable filter without deleting
     val createdAt: Long = System.currentTimeMillis()
+) : Serializable
+
+@Immutable
+data class IptvSeriesFullInfo(
+    val seriesId: Int,
+    val name: String,
+    val plot: String?,
+    val cast: String?,
+    val genre: String?,
+    val releaseDate: String?,
+    val rating: String?,
+    val coverUrl: String?,
+    val backdropUrl: String?,
+    val youtubeTrailer: String?,
+    val seasons: List<IptvSeasonInfo>,
+    val episodes: List<IptvEpisodeInfo>,
+    val tmdbId: Int = 0
+) : Serializable
+
+@Immutable
+data class IptvSeasonInfo(
+    val seasonNumber: Int,
+    val name: String,
+    val overview: String?,
+    val episodeCount: Int,
+    val coverUrl: String?,
+    val airDate: String?
+) : Serializable
+
+@Immutable
+data class IptvEpisodeInfo(
+    val streamId: Int,
+    val seasonNumber: Int,
+    val episodeNumber: Int,
+    val title: String,
+    val plot: String?,
+    val releaseDate: String?,
+    val duration: String?,
+    val stillPath: String?,
+    val containerExtension: String?,
+    val rating: Float = 0f
 ) : Serializable
