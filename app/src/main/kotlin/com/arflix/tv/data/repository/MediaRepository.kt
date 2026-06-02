@@ -3370,7 +3370,7 @@ class MediaRepository @Inject constructor(
             "apple tv+" -> R.drawable.apple_tv_plus_logo
             else -> null
         } ?: return null
-        return "android.resource://com.arvio.tv/$resId"
+        return "android.resource://com.muvio.tv/$resId"
     }
 
     private fun normalizeWatchRegion(region: String?): String {

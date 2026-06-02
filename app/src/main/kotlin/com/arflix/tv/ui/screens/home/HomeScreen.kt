@@ -3146,7 +3146,7 @@ private fun ImdbSvgRatingBadge(
     textShadow: Shadow
 ) {
     val context = LocalContext.current
-    val imdbLogoUri = remember { "android.resource://com.arvio.tv/${R.raw.logo_imdb_rectangle}" }
+    val imdbLogoUri = remember { "android.resource://com.muvio.tv/${R.raw.logo_imdb_rectangle}" }
     val request = remember(imdbLogoUri, context) {
         ImageRequest.Builder(context)
             .data(imdbLogoUri)
