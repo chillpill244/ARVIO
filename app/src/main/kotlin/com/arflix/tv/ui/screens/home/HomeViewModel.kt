@@ -1888,7 +1888,7 @@ class HomeViewModel @Inject constructor(
                         )
                         val addons = streamRepository.installedAddons.first()
                         catalogRepository.syncAddonCatalogs(addons)
-                        catalogRepository.syncHomeServerCatalogs(homeServerRepository.getCatalogCandidates())
+                        // catalogRepository.syncHomeServerCatalogs(homeServerRepository.getCatalogCandidates())
                         // Ensure built-in preinstalled catalogs exist, then re-read
                         // the persisted catalog list so the returned value includes
                         // BOTH built-ins AND the addon catalogs just synced above.
