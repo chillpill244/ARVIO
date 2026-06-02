@@ -4022,7 +4022,7 @@ private fun UnknownSourcesModal(
                 Text("Allow Unknown Sources", style = ArflixTypography.sectionTitle, color = TextPrimary)
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    "Allow installs from unknown sources for ARVIO so the downloaded update APK can be installed.",
+                    "Allow installs from unknown sources for MUVIO so the downloaded update APK can be installed.",
                     style = ArflixTypography.body,
                     color = TextSecondary
                 )
