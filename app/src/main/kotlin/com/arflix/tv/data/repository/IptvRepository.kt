@@ -10,6 +10,7 @@ import com.arflix.tv.data.model.IptvChannel
 import com.arflix.tv.data.model.IptvNowNext
 import com.arflix.tv.data.model.IptvProgram
 import com.arflix.tv.data.model.IptvSnapshot
+import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.StreamSource
 import com.arflix.tv.util.settingsDataStore
 import com.google.gson.Gson
@@ -2687,7 +2688,10 @@ class IptvRepository @Inject constructor(
         @SerializedName("container_extension") val containerExtension: String? = null,
         @SerializedName(value = "imdb", alternate = ["imdb_id", "imdbid"]) val imdb: String? = null,
         @SerializedName(value = "tmdb", alternate = ["tmdb_id", "tmdbid"]) val tmdb: String? = null,
-        @SerializedName("category_id") val categoryId: String? = null
+        @SerializedName("category_id") val categoryId: String? = null,
+        @SerializedName("stream_icon") val streamIcon: String? = null,
+        val added: String? = null,
+        val genre: String? = null
     )
 
     private data class XtreamSeriesItem(
@@ -2695,7 +2699,10 @@ class IptvRepository @Inject constructor(
         val name: String? = null,
         @SerializedName(value = "imdb", alternate = ["imdb_id", "imdbid"]) val imdb: String? = null,
         @SerializedName(value = "tmdb", alternate = ["tmdb_id", "tmdbid"]) val tmdb: String? = null,
-        @SerializedName("category_id") val categoryId: String? = null
+        @SerializedName("category_id") val categoryId: String? = null,
+        val cover: String? = null,
+        val backdrop: String? = null,
+        val genre: String? = null
     )
 
     private data class XtreamSeriesEpisode(
@@ -7236,6 +7243,261 @@ class IptvRepository @Inject constructor(
             ?: return emptyList()
         return loadXtreamSeriesCategoriesInternal(creds, allowNetwork = false)
             .mapNotNull { it.toInfoOrNull() }
+    }
+
+    fun getCachedVodItem(streamId: Int): com.arflix.tv.data.model.MediaItem? {
+        val stream = cachedXtreamVodStreams.firstOrNull { it.streamId == streamId } ?: return null
+        val name = stream.name?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return com.arflix.tv.data.model.MediaItem(
+            id = stream.tmdb?.toIntOrNull() ?: 0,
+            title = name,
+            mediaType = com.arflix.tv.data.model.MediaType.MOVIE,
+            image = stream.streamIcon.orEmpty(),
+            year = stream.year.orEmpty(),
+            iptvMovieId = streamId.toString()
+        )
+    }
+
+    fun getCachedVodContainerExtension(streamId: Int): String? =
+        cachedXtreamVodStreams.firstOrNull { it.streamId == streamId }?.containerExtension
+
+    fun getCachedSeriesItem(seriesId: Int): com.arflix.tv.data.model.MediaItem? {
+        val series = cachedXtreamSeries.firstOrNull { it.seriesId == seriesId } ?: return null
+        val name = series.name?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return com.arflix.tv.data.model.MediaItem(
+            id = series.tmdb?.toIntOrNull() ?: 0,
+            title = name,
+            mediaType = com.arflix.tv.data.model.MediaType.TV,
+            image = series.cover ?: series.backdrop.orEmpty(),
+            iptvSeriesId = seriesId.toString()
+        )
+    }
+
+    fun getCachedSeriesGenres(seriesId: Int): List<String> =
+        cachedXtreamSeries.firstOrNull { it.seriesId == seriesId }
+            ?.genre?.split(",")?.map { it.trim() }.orEmpty()
+
+    /**
+     * Returns VOD streams grouped by category name, ready to display in the Movies catalog.
+     * Reuses the existing cached VOD stream list and category list. Each item is a MediaItem
+     * with iptvMovieId set for IPTV-specific stream resolution.
+     */
+    suspend fun getVodCatalog(): Map<String, List<MediaItem>> {
+        val config = observeConfig().first()
+        val creds = resolveXtreamCredentials(config.epgUrl)
+            ?: resolveXtreamCredentials(config.m3uUrl)
+            ?: return emptyMap()
+        val categories = loadXtreamVodCategoriesInternal(creds, allowNetwork = true)
+            .mapNotNull { it.toInfoOrNull() }
+        if (categories.isEmpty()) return emptyMap()
+        val vodStreams = getXtreamVodStreams(creds, allowNetwork = true)
+        val byCategory = vodStreams.groupBy { it.categoryId.orEmpty() }
+        return categories.mapNotNull { cat ->
+            val streams = byCategory[cat.categoryId] ?: return@mapNotNull null
+            val items = streams.mapNotNull { stream ->
+                val streamId = stream.streamId ?: return@mapNotNull null
+                val name = stream.name?.trim().orEmpty().ifBlank { return@mapNotNull null }
+                MediaItem(
+                    id = stream.tmdb?.toIntOrNull() ?: 0,
+                    title = name,
+                    mediaType = com.arflix.tv.data.model.MediaType.MOVIE,
+                    image = stream.streamIcon.orEmpty(),
+                    year = stream.year.orEmpty(),
+                    iptvMovieId = streamId.toString()
+                )
+            }
+            if (items.isEmpty()) null else cat.categoryName to items
+        }.toMap()
+    }
+
+    /**
+     * Returns series grouped by category name, ready to display in the Series catalog.
+     * Reuses the existing cached series list and category list.
+     */
+    suspend fun getSeriesCatalog(): Map<String, List<MediaItem>> {
+        val config = observeConfig().first()
+        val creds = resolveXtreamCredentials(config.epgUrl)
+            ?: resolveXtreamCredentials(config.m3uUrl)
+            ?: return emptyMap()
+        val categories = loadXtreamSeriesCategoriesInternal(creds, allowNetwork = true)
+            .mapNotNull { it.toInfoOrNull() }
+        if (categories.isEmpty()) return emptyMap()
+        val seriesList = getXtreamSeriesList(creds, allowNetwork = true)
+        val byCategory = seriesList.groupBy { it.categoryId.orEmpty() }
+        return categories.mapNotNull { cat ->
+            val items = (byCategory[cat.categoryId] ?: return@mapNotNull null).mapNotNull { series ->
+                val seriesId = series.seriesId ?: return@mapNotNull null
+                val name = series.name?.trim().orEmpty().ifBlank { return@mapNotNull null }
+                MediaItem(
+                    id = series.tmdb?.toIntOrNull() ?: 0,
+                    title = name,
+                    subtitle = series.genre.orEmpty(),
+                    mediaType = com.arflix.tv.data.model.MediaType.TV,
+                    image = series.cover ?: series.backdrop.orEmpty(),
+                    iptvSeriesId = seriesId.toString()
+                )
+            }
+            if (items.isEmpty()) null else cat.categoryName to items
+        }.toMap()
+    }
+
+    data class XtreamVodInfo(
+        val info: VodInfoDetails? = null,
+        @SerializedName("movie_data") val movieData: VodMovieData? = null
+    )
+
+    data class VodInfoDetails(
+        @SerializedName("tmdb_id") val tmdbId: String? = null,
+        val name: String? = null,
+        val description: String? = null,
+        @SerializedName("cover_big") val coverBig: String? = null,
+        val genre: String? = null,
+        val director: String? = null,
+        val cast: String? = null,
+        val releasedate: String? = null
+    )
+
+    data class VodMovieData(
+        @SerializedName("stream_id") val streamId: Int? = null,
+        val name: String? = null,
+        @SerializedName("container_extension") val extension: String = "mp4"
+    )
+
+    suspend fun getVodInfo(vodId: Int): XtreamVodInfo? = withContext(Dispatchers.IO) {
+        val config = observeConfig().first()
+        val creds = resolveXtreamCredentials(config.epgUrl)
+            ?: resolveXtreamCredentials(config.m3uUrl)
+            ?: return@withContext null
+        val url = "${creds.baseUrl}/player_api.php?username=${creds.username}&password=${creds.password}&action=get_vod_info&vod_id=$vodId"
+        requestJson(url, XtreamVodInfo::class.java)
+    }
+
+    suspend fun getVodStreamUrl(streamId: Int, extension: String): String? = withContext(Dispatchers.IO) {
+        val config = observeConfig().first()
+        val creds = resolveXtreamCredentials(config.epgUrl)
+            ?: resolveXtreamCredentials(config.m3uUrl)
+            ?: return@withContext null
+        "${creds.baseUrl}/movie/${creds.username}/${creds.password}/$streamId.$extension"
+    }
+
+    suspend fun getEpisodeStreamUrl(streamId: Int, extension: String): String? = withContext(Dispatchers.IO) {
+        val config = observeConfig().first()
+        val creds = resolveXtreamCredentials(config.epgUrl)
+            ?: resolveXtreamCredentials(config.m3uUrl)
+            ?: return@withContext null
+        "${creds.baseUrl}/series/${creds.username}/${creds.password}/$streamId.$extension"
+    }
+
+    suspend fun getSeriesFullInfo(seriesId: Int): com.arflix.tv.data.model.IptvSeriesFullInfo? =
+        withContext(Dispatchers.IO) {
+            val config = observeConfig().first()
+            val creds = resolveXtreamCredentials(config.epgUrl)
+                ?: resolveXtreamCredentials(config.m3uUrl)
+                ?: return@withContext null
+
+            val url = "${creds.baseUrl}/player_api.php?username=${creds.username}&password=${creds.password}&action=get_series_info&series_id=$seriesId"
+            val json: JsonObject = requestJson(url, JsonObject::class.java)
+                ?: return@withContext null
+
+            parseSeriesFullInfo(seriesId, json)
+        }
+
+    private fun parseSeriesFullInfo(
+        seriesId: Int,
+        json: JsonObject
+    ): com.arflix.tv.data.model.IptvSeriesFullInfo? {
+        return runCatching {
+            val info = json.get("info")?.takeIf { it.isJsonObject }?.asJsonObject ?: return null
+            val name = info.get("name")?.asString ?: return null
+
+            val plot = info.get("plot")?.asString ?: info.get("description")?.asString
+            val cast = info.get("cast")?.asString
+            val genre = info.get("genre")?.asString
+            val releaseDate = info.get("releaseDate")?.asString ?: info.get("release_date")?.asString
+            val rating = info.get("rating")?.asString ?: info.get("rating_5based")?.asString
+            val coverUrl = info.get("cover")?.asString
+            val youtubeTrailer = info.get("youtube_trailer")?.asString
+            val tmdbId = info.get("tmdb_id")?.asString?.toIntOrNull()
+                ?: info.get("tmdb")?.asString?.toIntOrNull()
+                ?: 0
+
+            val backdropUrl = when {
+                info.has("backdrop_path") -> {
+                    val backdrop = info.get("backdrop_path")
+                    when {
+                        backdrop?.isJsonArray == true -> backdrop.asJsonArray.firstOrNull()?.asString
+                        else -> backdrop?.asString
+                    }
+                }
+                else -> null
+            }
+
+            val seasonsArray = json.getAsJsonArray("seasons")
+            val seasons = seasonsArray?.mapNotNull { seasonElement ->
+                val season = seasonElement?.asJsonObject ?: return@mapNotNull null
+                val seasonNumber = parseFlexibleInt(season.get("season_number")) ?: return@mapNotNull null
+                com.arflix.tv.data.model.IptvSeasonInfo(
+                    seasonNumber = seasonNumber,
+                    name = season.get("name")?.asString ?: "Season $seasonNumber",
+                    overview = season.get("overview")?.asString,
+                    episodeCount = parseFlexibleInt(season.get("episode_count")) ?: 0,
+                    coverUrl = season.get("cover")?.asString ?: season.get("cover_big")?.asString,
+                    airDate = season.get("air_date")?.asString
+                )
+            } ?: emptyList()
+
+            val episodesElement = json.get("episodes")
+            val episodeObjects = mutableListOf<Pair<JsonObject, Int?>>()
+            collectXtreamEpisodeObjects(episodesElement, seasonHint = null, out = episodeObjects)
+
+            val allEpisodes = episodeObjects.mapNotNull { (epObj, seasonHint) ->
+                val streamId = parseFlexibleInt(epObj.get("id")) ?: return@mapNotNull null
+                val episodeNum = parseFlexibleInt(epObj.get("episode_num"))
+                    ?: parseFlexibleInt(epObj.get("episode_number"))
+                    ?: return@mapNotNull null
+                val seasonNum = seasonHint
+                    ?: parseFlexibleInt(epObj.get("season"))
+                    ?: parseFlexibleInt(epObj.get("season_number"))
+                    ?: 1
+                val epInfo = epObj.get("info")?.takeIf { it.isJsonObject }?.asJsonObject
+                val epTitle = epObj.get("title")?.asString ?: "Episode $episodeNum"
+                val epPlot = epInfo?.get("plot")?.asString ?: epInfo?.get("description")?.asString
+                val epReleaseDate = epInfo?.get("releasedate")?.asString ?: epInfo?.get("release_date")?.asString
+                val epDuration = epInfo?.get("duration")?.asString
+                val epRating = epInfo?.get("rating")?.asFloat ?: 0f
+                val containerExt = epObj.get("container_extension")?.asString
+                val stillPath = epInfo?.get("movie_image")?.asString?.takeIf { it.isNotBlank() }
+
+                com.arflix.tv.data.model.IptvEpisodeInfo(
+                    streamId = streamId,
+                    seasonNumber = seasonNum,
+                    episodeNumber = episodeNum,
+                    title = epTitle,
+                    plot = epPlot,
+                    releaseDate = epReleaseDate,
+                    duration = epDuration,
+                    stillPath = stillPath,
+                    containerExtension = containerExt,
+                    rating = epRating
+                )
+            }
+
+            com.arflix.tv.data.model.IptvSeriesFullInfo(
+                seriesId = seriesId,
+                name = name,
+                plot = plot,
+                cast = cast,
+                genre = genre,
+                releaseDate = releaseDate,
+                rating = rating,
+                coverUrl = coverUrl,
+                backdropUrl = backdropUrl,
+                youtubeTrailer = youtubeTrailer,
+                seasons = seasons,
+                episodes = allEpisodes,
+                tmdbId = tmdbId
+            )
+        }.getOrNull()
     }
 
     private fun XtreamVodCategoryWire.toInfoOrNull(): XtreamVodCategoryInfo? {
