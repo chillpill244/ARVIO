@@ -310,7 +310,7 @@ object OkHttpProvider {
             .addInterceptor(customUserAgentInterceptor)
             // TMDB/Trakt calls are proxied when Supabase proxy config is present.
             // Contributors can still use direct calls with their own local keys.
-            .addInterceptor(ApiProxyInterceptor())
+            // .addInterceptor(ApiProxyInterceptor())
             .addInterceptor(loggingInterceptor)
             .addNetworkInterceptor(lenientJsonGzipInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
