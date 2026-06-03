@@ -410,7 +410,7 @@ fun SettingsScreen(
             "home_server" -> uiState.homeServerConnections.size + 3
             "catalogs" -> uiState.catalogs.size // Add + rows
             "stremio" -> stremioAddons.size // rows + add button
-            "accounts" -> 5 // Cloud + Trakt + Telegram + Force Sync + App Update + Privacy/Data
+            "accounts" -> 4 // Cloud + Trakt + Telegram + App Update
             else -> 0
         }
     }
@@ -7394,16 +7394,8 @@ private fun AccountsSettings(
             modifier = Modifier.settingsFocusSlot(4)
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        // Spacer(modifier = Modifier.height(16.dp))
 
-        SettingsActionRow(
-            title = "Privacy and data deletion",
-            description = "Open privacy and ARVIO Cloud account deletion instructions",
-            actionLabel = "OPEN",
-            isFocused = focusedIndex == 5,
-            onClick = onOpenDataDeletion,
-            modifier = Modifier.settingsFocusSlot(5)
-        )
     }
 }
 
