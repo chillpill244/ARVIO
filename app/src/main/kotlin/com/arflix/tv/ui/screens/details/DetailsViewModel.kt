@@ -104,8 +104,7 @@ data class DetailsUiState(
     val collectionPosterPath: String? = null,
     // Downloads (mobile only)
     val episodeDownloads: Map<String, DownloadEntity> = emptyMap(),
-    val movieDownload: DownloadEntity? = null,
-    val hasHomeServer: Boolean = false
+    val movieDownload: DownloadEntity? = null
 )
 
 data class StreamingServiceUi(
@@ -189,8 +188,7 @@ class DetailsViewModel @Inject constructor(
     private val watchlistRepository: WatchlistRepository,
     private val cloudSyncRepository: CloudSyncRepository,
     private val launcherContinueWatchingRepository: LauncherContinueWatchingRepository,
-    private val downloadsRepository: DownloadsRepository,
-    private val homeServerRepository: HomeServerRepository
+    private val downloadsRepository: DownloadsRepository
 ) : ViewModel() {
 
     companion object {
@@ -2539,18 +2537,6 @@ class DetailsViewModel @Inject constructor(
     // ── Downloads ─────────────────────────────────────────────────────────────
 
     private var downloadObserveJob: kotlinx.coroutines.Job? = null
-    private var homeServerObserveJob: kotlinx.coroutines.Job? = null
-
-    fun startObservingHomeServer() {
-        if (homeServerObserveJob?.isActive == true) return
-        homeServerObserveJob = viewModelScope.launch {
-            homeServerRepository.connections.collect { connections ->
-                _uiState.value = _uiState.value.copy(
-                    hasHomeServer = connections.any { it.isUsable }
-                )
-            }
-        }
-    }
 
     fun startObservingDownloads(tmdbId: Int, mediaType: MediaType) {
         downloadObserveJob?.cancel()

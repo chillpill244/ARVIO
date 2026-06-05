@@ -52,7 +52,6 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.arflix.tv.data.model.StreamSource
 import com.arflix.tv.data.model.Subtitle
-import com.arflix.tv.data.repository.HomeServerRepository
 import com.arflix.tv.ui.theme.ArflixTypography
 import com.arflix.tv.ui.theme.TextSecondary
 import com.arflix.tv.util.filterSubtitlesByLanguage
@@ -67,11 +66,6 @@ private fun StreamSource.isDirectDownloadable(): Boolean {
     if (u.contains(".mpd", ignoreCase = true)) return false
     return u.startsWith("http://", ignoreCase = true) || u.startsWith("https://", ignoreCase = true)
 }
-
-// Play Store policy: restrict downloads to user-controlled local servers only.
-// To expand to other sources, remove the isLocalServerStream() condition here.
-private fun StreamSource.isLocalServerStream(): Boolean =
-    addonId == HomeServerRepository.ADDON_ID
 
 private fun StreamSource.displayTitle(): String =
     behaviorHints?.filename?.takeIf { it.isNotBlank() } ?: source
@@ -101,7 +95,7 @@ fun DownloadSheet(
     onConfirm: (stream: StreamSource, subtitle: Subtitle?) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val downloadable = streams.filter { it.isDirectDownloadable() && it.isLocalServerStream() }
+    val downloadable = streams.filter { it.isDirectDownloadable() }
     var selectedStream by remember(isVisible) { mutableStateOf<StreamSource?>(null) }
 
     // Auto-select the first subtitle matching preferred language when a stream is picked
@@ -269,7 +263,7 @@ fun DownloadSheet(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Downloads are only available for your local server (Jellyfin, Emby, or Plex)",
+                                text = "No direct download sources available",
                                 style = ArflixTypography.body,
                                 color = TextSecondary
                             )
