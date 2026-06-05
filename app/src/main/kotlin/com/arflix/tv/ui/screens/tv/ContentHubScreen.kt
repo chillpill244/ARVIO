@@ -200,7 +200,10 @@ fun ContentHubScreen(
                     focusTopBar = focusTopBar,
                     onTopBarFocused = { focusTopBar = false },
                     onSwitchProfile = onSwitchProfile,
-                    onFullscreenChanged = onFullscreenChanged,
+                    onFullscreenChanged = { immersive ->
+                        isTvImmersive = immersive
+                        onFullscreenChanged(immersive)
+                    },
                     onBack = onBack,
                 )
                 else -> SeriesScreen(
@@ -221,14 +224,16 @@ fun ContentHubScreen(
                 )
             }
 
-            ContentMenuPanel(
-                focusedIndex = contentMenuIndex,
-                isFocused = isContentMenuFocused,
-                activeIndex = selectedTab,
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .padding(top = (AppTopBarContentTopInset - 14.dp)),
-            )
+            if (!isTvImmersive) {
+                ContentMenuPanel(
+                    focusedIndex = contentMenuIndex,
+                    isFocused = isContentMenuFocused,
+                    activeIndex = selectedTab,
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .padding(top = (AppTopBarContentTopInset - 14.dp)),
+                )
+            }
         }
     }
 }
