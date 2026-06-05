@@ -809,7 +809,7 @@ fun TvScreen(
                 }
             }
     ) {
-        if (!LocalDeviceType.current.isTouchDevice()) {
+        if (!LocalDeviceType.current.isTouchDevice() && !isFullScreen) {
             AppTopBar(
                 selectedItem = SidebarItem.TV,
                 isFocused = focusZone == TvFocusZone.SIDEBAR,

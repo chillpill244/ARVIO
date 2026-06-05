@@ -63,8 +63,8 @@ fun ContentMenuPanel(
             val isItemFocused = isFocused && index == focusedIndex
             val isActive = index == activeIndex
             val alpha = when {
-                isItemFocused -> 0.7f
-                isActive -> 1f
+                isItemFocused -> 1f
+                isActive -> 0.55f
                 else -> 0.38f
             }
             Column(
@@ -92,7 +92,13 @@ fun ContentMenuPanel(
                     modifier = Modifier
                         .size(width = 16.dp, height = 2.dp)
                         .clip(RoundedCornerShape(1.dp))
-                        .background(if (isActive) Color.White else Color.Transparent),
+                        .background(
+                    when {
+                        isItemFocused && isActive -> Color.White
+                        isActive -> Color.White.copy(alpha = 0.55f)
+                        else -> Color.Transparent
+                    }
+                ),
                 )
             }
             if (index < TABS.size - 1) {
