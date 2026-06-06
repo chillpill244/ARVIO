@@ -1772,18 +1772,18 @@ fun PlayerScreen(
                 }
             }
 
-            // Dolby Vision black-screen recovery:
-            // Some TVs select an incompatible DV path (audio plays, no video). Detect sustained
-            // READY+playing with selected audio but zero video size, then force non-DV codecs.
-            val hasSelectedAudioTrack = exoPlayer.currentTracks.groups.any { group ->
-                group.type == C.TRACK_TYPE_AUDIO && group.isSelected && group.length > 0
+            // Black-screen recovery:
+            // Some TV/device/container combinations can enter READY and advance the clock
+            // before any video frame is actually rendered. Do not treat that as started.
+            val hasVideoTrack = exoPlayer.currentTracks.groups.any { group ->
+                group.type == C.TRACK_TYPE_VIDEO && group.length > 0
             }
             val hasVideoOutput = exoPlayer.videoSize.width > 0 && exoPlayer.videoSize.height > 0
             val blackVideoState =
                 uiState.selectedStreamUrl != null &&
                     exoPlayer.playbackState == Player.STATE_READY &&
                     exoPlayer.playWhenReady &&
-                    hasSelectedAudioTrack &&
+                    hasVideoTrack &&
                     !hasVideoOutput
             if (blackVideoState) {
                 if (blackVideoReadySinceMs == null) {
@@ -1821,7 +1821,8 @@ fun PlayerScreen(
             // Mark playback as started as soon as the player is actually playing.
             if (!hasPlaybackStarted &&
                 exoPlayer.playbackState == Player.STATE_READY &&
-                exoPlayer.isPlaying
+                exoPlayer.isPlaying &&
+                (!hasVideoTrack || hasVideoOutput)
             ) {
                 markPlaybackStarted("ready_playing_poll")
             }
