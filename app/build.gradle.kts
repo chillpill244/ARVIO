@@ -33,15 +33,16 @@ android {
         // Fire TV devices can be as low as Android 7.1 (API 25) or lower depending on model/OS.
         minSdk = 23
         targetSdk = 35
-        versionCode = 282
-        versionName = "2.1.0"
+        versionCode = 287
+        versionName = "2.15"
         buildConfigField("String", "GITHUB_OWNER", "\"chillpill244\"")
         buildConfigField("String", "GITHUB_REPO", "\"ARVIO\"")
 
 
-        // Support both 32-bit and 64-bit devices (required for Google Play since 2019)
+        // ARM only — covers all real Android TV/Fire TV hardware.
+        // x86/x86_64 are emulator-only; Play builds use AAB so the store handles splitting.
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
 
         vectorDrawables {
@@ -171,15 +172,15 @@ android {
         }
     }
 
-    // Per-ABI APKs for sideload distribution only.
-    // Play builds are distributed via AAB (Google Play handles splitting) so splits are not needed.
-    // x86/x86_64 splits are emulator/debug use only.
+    // Per-ABI APKs for sideload distribution only (ARM devices).
+    // Play builds use AAB so the store handles ABI splitting.
+    // Universal APK bundles both ARM ABIs for devices that don't match a specific split.
     val isSideloadBuild = gradle.startParameter.taskNames.any { it.contains("sideload", ignoreCase = true) }
     splits {
         abi {
             isEnable = isSideloadBuild
             reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            include("armeabi-v7a", "arm64-v8a")
             isUniversalApk = true
         }
     }
