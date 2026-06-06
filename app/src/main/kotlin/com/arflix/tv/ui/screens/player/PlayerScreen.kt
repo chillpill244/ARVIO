@@ -2492,6 +2492,7 @@ fun PlayerScreen(
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
+                        keepScreenOn = true
                         player = exoPlayer
                         useController = false
                         setKeepContentOnPlayerReset(true)
@@ -2558,6 +2559,7 @@ fun PlayerScreen(
                     }
                 },
                 update = { playerView ->
+                    playerView.keepScreenOn = true
                     playerView.player = exoPlayer
                     playerView.resizeMode = playerResizeMode
                     playerView.subtitleView?.apply {

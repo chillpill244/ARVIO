@@ -1,4 +1,4 @@
-
+﻿
 @file:Suppress("UnsafeOptInUsageError")
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 
@@ -1050,6 +1050,7 @@ fun TvScreen(
                                     AndroidView(
                                         factory = { ctx ->
                                             PlayerView(ctx).apply {
+                                                keepScreenOn = true
                                                 miniPlayerView = this
                                                 player = null
                                                 useController = false
@@ -1236,6 +1237,7 @@ fun TvScreen(
                                     AndroidView(
                                         factory = { ctx ->
                                             PlayerView(ctx).apply {
+                                                keepScreenOn = true
                                                 miniPlayerView = this
                                                 player = null
                                                 useController = false
@@ -1320,6 +1322,7 @@ fun TvScreen(
                     AndroidView(
                         factory = { ctx ->
                             PlayerView(ctx).apply {
+                                keepScreenOn = true
                                 fullPlayerView = this
                                 player = null
                                 useController = false
