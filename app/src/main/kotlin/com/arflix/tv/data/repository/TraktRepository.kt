@@ -215,12 +215,13 @@ class TraktRepository @Inject constructor(
         payload: JSONObject,
         directFallback: suspend () -> TraktToken
     ): TraktToken {
-        return if (clientSecret.isBlank()) {
-            requestTraktTokenViaProxy(path, payload)
-        } else {
-            runCatching { directFallback() }
-                .getOrElse { requestTraktTokenViaProxy(path, payload) }
-        }
+        return directFallback()
+//        return if (clientSecret.isBlank()) {
+//            requestTraktTokenViaProxy(path, payload)
+//        } else {
+//            runCatching { directFallback() }
+//                .getOrElse { requestTraktTokenViaProxy(path, payload) }
+//        }
     }
 
     private fun isPermanentTokenRefreshFailure(e: Throwable): Boolean {
@@ -242,46 +243,46 @@ class TraktRepository @Inject constructor(
         clearProfileScopedMemoryCaches(clearPreloaded = false)
     }
 
-    private suspend fun requestTraktTokenViaProxy(path: String, payload: JSONObject): TraktToken = withContext(Dispatchers.IO) {
-        val url = Constants.TRAKT_PROXY_URL.toHttpUrl().newBuilder()
-            .addQueryParameter("path", path)
-            .addQueryParameter("method", "POST")
-            .build()
-        val request = Request.Builder()
-            .url(url)
-            .header("apikey", Constants.SUPABASE_ANON_KEY)
-            .header("Authorization", "Bearer ${Constants.SUPABASE_ANON_KEY}")
-            .post(payload.toString().toRequestBody(jsonMediaType))
-            .build()
+//    private suspend fun requestTraktTokenViaProxy(path: String, payload: JSONObject): TraktToken = withContext(Dispatchers.IO) {
+//        val url = Constants.TRAKT_PROXY_URL.toHttpUrl().newBuilder()
+//            .addQueryParameter("path", path)
+//            .addQueryParameter("method", "POST")
+//            .build()
+//        val request = Request.Builder()
+//            .url(url)
+//            .header("apikey", Constants.SUPABASE_ANON_KEY)
+//            .header("Authorization", "Bearer ${Constants.SUPABASE_ANON_KEY}")
+//            .post(payload.toString().toRequestBody(jsonMediaType))
+//            .build()
+//
+//        watchlistHttpClient.newCall(request).execute().use { response ->
+//            val responseBody = response.body?.string().orEmpty()
+//            if (!response.isSuccessful) {
+//                val error = parseTraktProxyError(responseBody, "Trakt token request failed")
+//                if (
+//                    path == "/oauth/device/token" &&
+//                    response.code == 400 &&
+//                    (error == "Trakt token request failed" || responseBody.contains("\"status\":400"))
+//                ) {
+//                    throw IllegalStateException("authorization_pending")
+//                }
+//                throw IllegalStateException(error)
+//            }
+//            gson.fromJson(responseBody, TraktToken::class.java)
+//                ?: throw IllegalStateException("Trakt token response was empty")
+//        }
+//    }
 
-        watchlistHttpClient.newCall(request).execute().use { response ->
-            val responseBody = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                val error = parseTraktProxyError(responseBody, "Trakt token request failed")
-                if (
-                    path == "/oauth/device/token" &&
-                    response.code == 400 &&
-                    (error == "Trakt token request failed" || responseBody.contains("\"status\":400"))
-                ) {
-                    throw IllegalStateException("authorization_pending")
-                }
-                throw IllegalStateException(error)
-            }
-            gson.fromJson(responseBody, TraktToken::class.java)
-                ?: throw IllegalStateException("Trakt token response was empty")
-        }
-    }
-
-    private fun parseTraktProxyError(body: String, fallback: String): String {
-        return runCatching {
-            val json = JSONObject(body)
-            json.optString("error_description").ifBlank {
-                json.optString("error").ifBlank {
-                    json.optString("message").ifBlank { fallback }
-                }
-            }
-        }.getOrDefault(fallback)
-    }
+//    private fun parseTraktProxyError(body: String, fallback: String): String {
+//        return runCatching {
+//            val json = JSONObject(body)
+//            json.optString("error_description").ifBlank {
+//                json.optString("error").ifBlank {
+//                    json.optString("message").ifBlank { fallback }
+//                }
+//            }
+//        }.getOrDefault(fallback)
+//    }
 
     private suspend fun refreshTraktToken(refreshToken: String): TraktToken {
         return requestTraktToken(
