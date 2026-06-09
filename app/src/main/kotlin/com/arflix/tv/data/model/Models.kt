@@ -59,6 +59,9 @@ data class MediaItem(
     val iptvMovieId: String? = null,
     // IPTV Xtream series ID for VOD series (used to resolve episode URLs)
     val iptvSeriesId: String? = null,
+    // MDBList-sourced scores (only populated for items loaded from MDBList catalogs)
+    val rtScore: String? = null,
+    val popcornScore: String? = null,
 ) : Serializable
 
 enum class MediaType {

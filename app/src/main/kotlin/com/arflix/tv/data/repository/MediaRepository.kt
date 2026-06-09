@@ -53,7 +53,9 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import android.content.Context
 import com.arflix.tv.util.ParsedCatalogUrl
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -81,6 +83,7 @@ data class PersonMediaSearchResult(
  */
 @Singleton
 class MediaRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val tmdbApi: TmdbApi,
     private val traktRepository: TraktRepository,
     private val traktApi: TraktApi,
@@ -124,6 +127,9 @@ class MediaRepository @Inject constructor(
     private val imdbRatingsByIdCache = ConcurrentHashMap<String, CacheEntry<String>>()
     private val episodeImdbIdCache = ConcurrentHashMap<String, CacheEntry<String>>()
     private val imdbIdCache = ConcurrentHashMap<String, String>()
+    private val mdblistItemRatingsCache = ConcurrentHashMap<String, CacheEntry<Pair<String?, String?>>>()
+    private val MDBLIST_RATINGS_CACHE_TTL_MS = 24 * 60 * 60 * 1000L // 24 hours
+    @Volatile private var mdblistDiskCacheLoaded = false
     private val addonImdbToTmdbCache = ConcurrentHashMap<String, CacheEntry<Pair<MediaType, Int>?>>()
     private val addonTitleToTmdbCache = ConcurrentHashMap<String, CacheEntry<Pair<MediaType, Int>?>>()
     private val collectionRefsCache = ConcurrentHashMap<String, CacheEntry<List<Pair<MediaType, Int>>>>()
@@ -1735,14 +1741,28 @@ class MediaRepository @Inject constructor(
         if (mediaRefs.isEmpty()) return@coroutineScope null
 
         val semaphore = Semaphore(6)
+        val isMdblistCatalog = catalog.sourceType == CatalogSourceType.MDBLIST && Constants.MDBLIST_API_KEY.isNotBlank()
         val jobs = mediaRefs.distinct().take(effectiveMaxItems).map { (type, tmdbId) ->
             async {
                 semaphore.withPermit {
                     runCatching {
-                        when (type) {
+                        var item = when (type) {
                             MediaType.MOVIE -> getMovieDetails(tmdbId)
                             MediaType.TV -> getTvDetails(tmdbId)
                         }
+                        if (isMdblistCatalog) {
+                            val imdbId = getCachedImdbId(type, tmdbId)
+                            if (!imdbId.isNullOrBlank()) {
+                                val ratings = fetchMdblistItemRatings(imdbId)
+                                if (ratings != null) {
+                                    item = item.copy(
+                                        rtScore = ratings.first,
+                                        popcornScore = ratings.second
+                                    )
+                                }
+                            }
+                        }
+                        item
                     }.getOrNull()
                 }
             }
@@ -1783,9 +1803,7 @@ class MediaRepository @Inject constructor(
             val mediaRefs = when (catalog.sourceType) {
                 CatalogSourceType.TRAKT -> loadTraktCatalogRefs(catalog.sourceUrl, catalog.sourceRef)
                 CatalogSourceType.MDBLIST -> loadMdblistCatalogRefs(catalog.sourceUrl, catalog.sourceRef)
-                CatalogSourceType.ADDON -> emptyList()
-                CatalogSourceType.PREINSTALLED -> emptyList()
-                CatalogSourceType.HOME_SERVER -> emptyList()
+                else -> emptyList()
             }.distinct()
 
             if (mediaRefs.isEmpty()) return@coroutineScope CategoryPageResult(emptyList(), hasMore = false)
@@ -1799,14 +1817,28 @@ class MediaRepository @Inject constructor(
         }
 
         val semaphore = Semaphore(6)
+        val isMdblistCatalog = catalog.sourceType == CatalogSourceType.MDBLIST && Constants.MDBLIST_API_KEY.isNotBlank()
         val jobs = pageRefs.map { (type, tmdbId) ->
             async {
                 semaphore.withPermit {
                     runCatching {
-                        when (type) {
+                        var item = when (type) {
                             MediaType.MOVIE -> getMovieDetails(tmdbId)
                             MediaType.TV -> getTvDetails(tmdbId)
                         }
+                        if (isMdblistCatalog) {
+                            val imdbId = getCachedImdbId(type, tmdbId)
+                            if (!imdbId.isNullOrBlank()) {
+                                val ratings = fetchMdblistItemRatings(imdbId)
+                                if (ratings != null) {
+                                    item = item.copy(
+                                        rtScore = ratings.first,
+                                        popcornScore = ratings.second
+                                    )
+                                }
+                            }
+                        }
+                        item
                     }.getOrNull()
                 }
             }
@@ -3559,7 +3591,6 @@ class MediaRepository @Inject constructor(
                 .mapNotNull { key -> row[key]?.toString()?.lowercase() }
                 .firstOrNull()
                 ?: "movie"
-
             val mediaType = if (mediaTypeRaw.contains("tv") || mediaTypeRaw.contains("show") || mediaTypeRaw.contains("series")) {
                 MediaType.TV
             } else {
@@ -3567,6 +3598,81 @@ class MediaRepository @Inject constructor(
             }
             mediaType to tmdbId
         }
+    }
+
+    private fun mdblistRatingsDiskFile(): java.io.File =
+        java.io.File(context.filesDir, "mdblist_ratings_cache.json")
+
+    private fun loadMdblistDiskCacheIfNeeded() {
+        if (mdblistDiskCacheLoaded) return
+        mdblistDiskCacheLoaded = true
+        runCatching {
+            val file = mdblistRatingsDiskFile()
+            if (!file.exists()) return
+            val root = JSONObject(file.readText(Charsets.UTF_8))
+            val now = System.currentTimeMillis()
+            for (key in root.keys()) {
+                val entry = root.optJSONObject(key) ?: continue
+                val savedAt = entry.optLong("savedAt", 0L)
+                if (now - savedAt >= MDBLIST_RATINGS_CACHE_TTL_MS) continue
+                val rt = entry.optString("rt").takeIf { it.isNotEmpty() }
+                val popcorn = entry.optString("popcorn").takeIf { it.isNotEmpty() }
+                mdblistItemRatingsCache[key] = CacheEntry(rt to popcorn, savedAt)
+            }
+        }
+    }
+
+    private fun persistMdblistRatingsToDisk() {
+        runCatching {
+            val root = JSONObject()
+            val now = System.currentTimeMillis()
+            for ((imdbId, entry) in mdblistItemRatingsCache) {
+                if (now - entry.timestamp >= MDBLIST_RATINGS_CACHE_TTL_MS) continue
+                val obj = JSONObject()
+                obj.put("savedAt", entry.timestamp)
+                entry.data.first?.let { obj.put("rt", it) }
+                entry.data.second?.let { obj.put("popcorn", it) }
+                root.put(imdbId, obj)
+            }
+            val file = mdblistRatingsDiskFile()
+            val tmp = java.io.File(file.parent, "${file.name}.tmp")
+            tmp.writeText(root.toString(), Charsets.UTF_8)
+            if (!tmp.renameTo(file)) {
+                tmp.copyTo(file, overwrite = true)
+                tmp.delete()
+            }
+        }
+    }
+
+    fun fetchMdblistItemRatings(imdbId: String): Pair<String?, String?>? {
+        val apiKey = Constants.MDBLIST_API_KEY
+        if (apiKey.isBlank() || imdbId.isBlank()) return null
+        loadMdblistDiskCacheIfNeeded()
+        val cached = mdblistItemRatingsCache[imdbId]
+        if (cached != null && System.currentTimeMillis() - cached.timestamp < MDBLIST_RATINGS_CACHE_TTL_MS) {
+            return cached.data
+        }
+        val payload = fetchUrl("https://mdblist.com/api/?apikey=$apiKey&i=$imdbId") ?: return null
+        val root = runCatching { JSONObject(payload) }.getOrNull() ?: return null
+        if (root.optInt("response", 1) == 0) return null
+        var rtScore: String? = null
+        var popcornScore: String? = null
+        val ratingsArr = runCatching { root.getJSONArray("ratings") }.getOrNull()
+        if (ratingsArr != null) {
+            for (i in 0 until ratingsArr.length()) {
+                val r = ratingsArr.optJSONObject(i) ?: continue
+                val src = r.optString("source").lowercase(Locale.US)
+                val score = r.optInt("score", -1).takeIf { it in 1..100 } ?: continue
+                when (src) {
+                    "tomatoes" -> if (rtScore == null) rtScore = "$score%"
+                    "tomatoesaudience", "popcorn" -> if (popcornScore == null) popcornScore = "$score%"
+                }
+            }
+        }
+        val result = rtScore to popcornScore
+        mdblistItemRatingsCache[imdbId] = CacheEntry(result, System.currentTimeMillis())
+        persistMdblistRatingsToDisk()
+        return result
     }
 
     private fun fetchUrl(url: String): String? {

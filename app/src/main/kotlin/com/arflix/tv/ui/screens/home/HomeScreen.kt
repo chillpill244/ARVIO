@@ -1570,17 +1570,35 @@ private fun HeroSection(
                                         logoHeight = 15.dp,
                                         textShadow = textShadow
                                     )
+                                }
 
-                                    if (hasBudgetMetadata) {
-                                        Text(
-                                            text = "|",
-                                            style = ArflixTypography.caption.copy(
-                                                fontSize = 12.sp,
-                                                shadow = textShadow
-                                            ),
-                                            color = Color.White.copy(alpha = 0.58f)
-                                        )
-                                    }
+                                if (!currentItem.rtScore.isNullOrEmpty()) {
+                                    Text(
+                                        text = "|",
+                                        style = ArflixTypography.caption.copy(fontSize = 12.sp, shadow = textShadow),
+                                        color = Color.White.copy(alpha = 0.58f)
+                                    )
+                                    RtScoreBadge(currentItem.rtScore.orEmpty(), textShadow)
+                                }
+
+                                if (!currentItem.popcornScore.isNullOrEmpty()) {
+                                    Text(
+                                        text = "|",
+                                        style = ArflixTypography.caption.copy(fontSize = 12.sp, shadow = textShadow),
+                                        color = Color.White.copy(alpha = 0.58f)
+                                    )
+                                    PopcornScoreBadge(currentItem.popcornScore.orEmpty(), textShadow)
+                                }
+
+                                if ((hasRatingMetadata || !currentItem.rtScore.isNullOrEmpty() || !currentItem.popcornScore.isNullOrEmpty()) && hasBudgetMetadata) {
+                                    Text(
+                                        text = "|",
+                                        style = ArflixTypography.caption.copy(
+                                            fontSize = 12.sp,
+                                            shadow = textShadow
+                                        ),
+                                        color = Color.White.copy(alpha = 0.58f)
+                                    )
                                 }
 
                                 if (hasBudgetMetadata) {
@@ -1868,6 +1886,22 @@ private fun MobileHeroOverlay(
                             logoHeight = 13.dp,
                             textShadow = textShadow
                         )
+                    }
+                    if (!item.rtScore.isNullOrEmpty()) {
+                        Text(
+                            text = "|",
+                            style = ArflixTypography.caption.copy(fontSize = 12.sp, shadow = textShadow),
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                        RtScoreBadge(item.rtScore.orEmpty(), textShadow)
+                    }
+                    if (!item.popcornScore.isNullOrEmpty()) {
+                        Text(
+                            text = "|",
+                            style = ArflixTypography.caption.copy(fontSize = 12.sp, shadow = textShadow),
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                        PopcornScoreBadge(item.popcornScore.orEmpty(), textShadow)
                     }
                 }
             }
@@ -3193,6 +3227,56 @@ private fun ImdbBadge(rating: String) {
                 )
             )
         }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun RtScoreBadge(score: String, textShadow: Shadow) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text(
+            text = "🍅",
+            style = ArflixTypography.caption.copy(fontSize = 11.sp),
+            maxLines = 1
+        )
+        Text(
+            text = score,
+            style = ArflixTypography.caption.copy(
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                shadow = textShadow
+            ),
+            color = Color.White,
+            maxLines = 1
+        )
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun PopcornScoreBadge(score: String, textShadow: Shadow) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text(
+            text = "🍿",
+            style = ArflixTypography.caption.copy(fontSize = 11.sp),
+            maxLines = 1
+        )
+        Text(
+            text = score,
+            style = ArflixTypography.caption.copy(
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                shadow = textShadow
+            ),
+            color = Color.White,
+            maxLines = 1
+        )
     }
 }
 

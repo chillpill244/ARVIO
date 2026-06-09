@@ -30,8 +30,10 @@ import com.arflix.tv.util.settingsDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -256,7 +258,9 @@ class DetailsViewModel @Inject constructor(
             watchedEpisodes = primary.watchedEpisodes ?: fallback.watchedEpisodes,
             budget = primary.budget ?: fallback.budget,
             revenue = primary.revenue ?: fallback.revenue,
-            status = primary.status ?: fallback.status
+            status = primary.status ?: fallback.status,
+            rtScore = primary.rtScore ?: fallback.rtScore,
+            popcornScore = primary.popcornScore ?: fallback.popcornScore
         )
     }
 
@@ -494,6 +498,24 @@ class DetailsViewModel @Inject constructor(
                             if (!imdbRating.isNullOrBlank()) {
                                 updateState { state ->
                                     state.copy(item = state.item?.copy(imdbRating = imdbRating))
+                                }
+                            }
+                        }
+
+                        if (Constants.MDBLIST_API_KEY.isNotBlank()) {
+                            launch {
+                                val ratings = runCatching {
+                                    withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        mediaRepository.fetchMdblistItemRatings(imdbId)
+                                    }
+                                }.getOrNull()
+                                if (ratings != null && (ratings.first != null || ratings.second != null)) {
+                                    updateState { state ->
+                                        state.copy(item = state.item?.copy(
+                                            rtScore = ratings.first ?: state.item.rtScore,
+                                            popcornScore = ratings.second ?: state.item.popcornScore
+                                        ))
+                                    }
                                 }
                             }
                         }
