@@ -2544,17 +2544,8 @@ fun PlayerScreen(
                             }
                             setBottomPaddingFraction(bottomPaddingFraction)
 
-                            if (subtitleStylizedPref) {
-                                // Stylized mode: let Media3 render embedded ASS/SSA styles
-                                // (colors, fonts, positioning, z-order). User prefs are
-                                // only used as a fallback CaptionStyle for plain SRT/VTT.
-                                setApplyEmbeddedStyles(true)
-                                setApplyEmbeddedFontSizes(true)
-                            } else {
-                                // Uniform mode: override everything with user preferences
-                                setApplyEmbeddedStyles(false)
-                                setApplyEmbeddedFontSizes(false)
-                            }
+                            setApplyEmbeddedStyles(subtitleStylizedPref)
+                            setApplyEmbeddedFontSizes(subtitleStylizedPref)
                         }
                     }
                 },
@@ -2569,6 +2560,8 @@ fun PlayerScreen(
                         val pipSubScale = if (isInPipMode) 0.4f else 1f
                         setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, baseSizeSp * (subtitleSizePct / 100f) * pipSubScale)
                         setBottomPaddingFraction((subtitleVerticalPct / 100f).coerceIn(0f, 0.5f))
+                        setApplyEmbeddedStyles(subtitleStylizedPref)
+                        setApplyEmbeddedFontSizes(subtitleStylizedPref)
                     }
                 },
                 modifier = Modifier.fillMaxSize()
