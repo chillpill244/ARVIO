@@ -62,6 +62,9 @@ private fun playbackDiag(message: String) {
     }
 }
 
+@androidx.compose.runtime.Immutable
+data class NextEpisodeTarget(val season: Int, val episode: Int)
+
 data class PlayerUiState(
     val isLoading: Boolean = true,
     val isLoadingStreams: Boolean = false,
@@ -100,6 +103,11 @@ data class PlayerUiState(
     // Skip intro/recap
     val activeSkipInterval: SkipInterval? = null,
     val skipIntervalDismissed: Boolean = false,
+    // Where "next episode" actually goes: handles season rollover (last episode of a
+    // season advances to the next season's first episode) and is null at the series
+    // end so next-episode buttons can hide. Starts as a naive episode+1 guess and is
+    // refined in the background from TMDB season data.
+    val nextEpisodeTarget: NextEpisodeTarget? = null,
     // Source-loading progress surfaced to the loading UI. When streams are
     // being resolved progressively, this fills from 0f→1f as addons complete.
     // Null when progress is not meaningful (e.g. trailer loads, cached hits).
@@ -232,6 +240,7 @@ class PlayerViewModel @Inject constructor(
     private var skipIntervals: List<SkipInterval> = emptyList()
     private var lastActiveSkipType: String? = null
     private var skipIntervalsJob: kotlinx.coroutines.Job? = null
+    private var nextEpisodeJob: kotlinx.coroutines.Job? = null
     private var activeSkipRequestKey: String? = null
 
     private val SKIP_INTERVAL_SHOW_EARLY_MS = 1_200L
@@ -358,6 +367,7 @@ class PlayerViewModel @Inject constructor(
         )
         lastTopPrewarmKey = ""
         skipIntervalsJob?.cancel()
+        nextEpisodeJob?.cancel()
         currentImdbId = providedImdbId
         skipIntervals = emptyList()
         lastActiveSkipType = null
@@ -416,8 +426,16 @@ class PlayerViewModel @Inject constructor(
                 subtitleOffset = subOffset,
                 autoPlayNext = autoPlayNext,
                 showLoadingStats = showLoadingStats,
-                volumeBoostDb = volumeBoostDb
+                volumeBoostDb = volumeBoostDb,
+                // Naive guess until resolveNextEpisodeTarget refines it from TMDB data.
+                nextEpisodeTarget = if (mediaType == MediaType.TV && seasonNumber != null && episodeNumber != null) {
+                    NextEpisodeTarget(seasonNumber, episodeNumber + 1)
+                } else null
             )
+
+            if (mediaType == MediaType.TV && seasonNumber != null && episodeNumber != null) {
+                resolveNextEpisodeTarget(mediaId, seasonNumber, episodeNumber)
+            }
 
             // Check for a completed local download before hitting the network.
             val localDownload = downloadsRepository.getDownloadForEpisode(
@@ -1069,6 +1087,32 @@ class PlayerViewModel @Inject constructor(
             // Force a recompute on the next position tick.
             lastActiveSkipType = null
             _uiState.value = _uiState.value.copy(activeSkipInterval = null, skipIntervalDismissed = false)
+        }
+    }
+
+    /**
+     * Refines [PlayerUiState.nextEpisodeTarget] from TMDB season data. On the last
+     * episode of a season the target rolls over to the next season's first episode;
+     * past the series end it becomes null. If TMDB data is missing or the lookup
+     * fails, the naive episode+1 target set in loadMedia is kept.
+     */
+    private fun resolveNextEpisodeTarget(tvId: Int, season: Int, episode: Int) {
+        nextEpisodeJob?.cancel()
+        nextEpisodeJob = viewModelScope.launch {
+            val resolved = runCatching {
+                val lastEpisode = mediaRepository.getSeasonEpisodes(tvId, season)
+                    .maxOfOrNull { it.episodeNumber }
+                when {
+                    // No/stale season data — keep the naive same-season guess.
+                    lastEpisode == null || episode > lastEpisode -> NextEpisodeTarget(season, episode + 1)
+                    episode < lastEpisode -> NextEpisodeTarget(season, episode + 1)
+                    // Season finale: advance to the next season, or null at series end.
+                    else -> mediaRepository.getSeasonEpisodes(tvId, season + 1)
+                        .minOfOrNull { it.episodeNumber }
+                        ?.let { NextEpisodeTarget(season + 1, it) }
+                }
+            }.getOrDefault(NextEpisodeTarget(season, episode + 1))
+            _uiState.value = _uiState.value.copy(nextEpisodeTarget = resolved)
         }
     }
 

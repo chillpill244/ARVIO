@@ -13,7 +13,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -43,9 +45,14 @@ import com.arflix.tv.data.repository.SkipInterval
 import com.arflix.tv.ui.theme.ArflixTypography
 import kotlinx.coroutines.delay
 
+/** Interval types that mark end credits / outro / ED segments. */
+fun SkipInterval.isOutro(): Boolean = type in setOf("outro", "ed", "mixed-ed")
+
 /**
  * In-player skip button (TV remote friendly).
  * Appears during active skip intervals (intro/recap/outro/OP/ED).
+ * During outro intervals a "Next Episode" button is shown alongside when
+ * [showNextEpisode] is set.
  */
 @Composable
 fun SkipIntroButton(
@@ -54,11 +61,13 @@ fun SkipIntroButton(
     controlsVisible: Boolean,
     onSkip: () -> Unit,
     focusRequester: FocusRequester,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showNextEpisode: Boolean = false,
+    onNextEpisode: () -> Unit = {}
 ) {
     val shouldShow = interval != null && !dismissed
     var autoHidden by remember { mutableStateOf(false) }
-    var isFocused by remember { mutableStateOf(false) }
+    val nextEpisodeFocusRequester = remember { FocusRequester() }
 
     // Reset auto-hide when interval changes
     LaunchedEffect(interval?.startMs, interval?.endMs, interval?.type) {
@@ -90,66 +99,104 @@ fun SkipIntroButton(
         }
     }
 
-    val shape = RoundedCornerShape(20.dp) // match PlayerTextButtonFocusable
-    val scale by animateFloatAsState(if (isFocused) 1.08f else 1f, label = "skip_scale")
-
     AnimatedVisibility(
         visible = isVisible,
         enter = fadeIn(tween(240)) + scaleIn(tween(240), initialScale = 0.88f),
         exit = fadeOut(tween(160)) + scaleOut(tween(160), targetScale = 0.92f),
         modifier = modifier
     ) {
-        Box(
-            modifier = Modifier
-                .focusRequester(focusRequester)
-                .onFocusChanged { isFocused = it.isFocused }
-                .onKeyEvent { event ->
-                    if (event.type == KeyEventType.KeyDown) {
-                        when (event.key) {
-                            Key.Enter, Key.DirectionCenter -> {
-                                onSkip()
-                                true
-                            }
-                            else -> false
-                        }
-                    } else false
-                }
-                .focusable()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { onSkip() }
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                }
-                .background(
-                    if (isFocused) Color.White else Color.White.copy(alpha = 0.1f),
-                    shape
-                )
-                .border(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.2f),
-                    shape = shape
-                )
-                .padding(horizontal = 20.dp, vertical = 10.dp),
-            contentAlignment = Alignment.Center
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
+            SkipPillButton(
                 text = skipLabel(interval?.type),
-                style = ArflixTypography.body.copy(
-                    fontSize = 14.sp,
-                    fontWeight = if (isFocused) FontWeight.SemiBold else FontWeight.Normal
-                ),
-                color = if (isFocused) Color.Black else Color.White
+                focusRequester = focusRequester,
+                onClick = onSkip,
+                onRightKey = if (showNextEpisode) {
+                    { runCatching { nextEpisodeFocusRequester.requestFocus() } }
+                } else null
             )
+            if (showNextEpisode) {
+                SkipPillButton(
+                    text = "Next Episode",
+                    focusRequester = nextEpisodeFocusRequester,
+                    onClick = onNextEpisode,
+                    onLeftKey = { runCatching { focusRequester.requestFocus() } }
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun SkipPillButton(
+    text: String,
+    focusRequester: FocusRequester,
+    onClick: () -> Unit,
+    onLeftKey: (() -> Unit)? = null,
+    onRightKey: (() -> Unit)? = null
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(20.dp) // match PlayerTextButtonFocusable
+    val scale by animateFloatAsState(if (isFocused) 1.08f else 1f, label = "skip_scale")
+
+    Box(
+        modifier = Modifier
+            .focusRequester(focusRequester)
+            .onFocusChanged { isFocused = it.isFocused }
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    when (event.key) {
+                        Key.Enter, Key.DirectionCenter -> {
+                            onClick()
+                            true
+                        }
+                        Key.DirectionLeft -> {
+                            if (onLeftKey != null) { onLeftKey(); true } else false
+                        }
+                        Key.DirectionRight -> {
+                            if (onRightKey != null) { onRightKey(); true } else false
+                        }
+                        else -> false
+                    }
+                } else false
+            }
+            .focusable()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) { onClick() }
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .background(
+                if (isFocused) Color.White else Color.White.copy(alpha = 0.1f),
+                shape
+            )
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.2f),
+                shape = shape
+            )
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = ArflixTypography.body.copy(
+                fontSize = 14.sp,
+                fontWeight = if (isFocused) FontWeight.SemiBold else FontWeight.Normal
+            ),
+            color = if (isFocused) Color.Black else Color.White
+        )
     }
 }
 
 private fun skipLabel(type: String?): String = when (type) {
     "op", "mixed-op", "intro" -> "Skip Intro"
     "recap" -> "Skip Recap"
-    "ed", "mixed-ed", "outro" -> "Skip Ending"
+    "ed", "mixed-ed", "outro" -> "Skip Outro"
     else -> "Skip"
 }
