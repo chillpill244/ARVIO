@@ -97,6 +97,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
@@ -311,6 +312,12 @@ fun PlayerScreen(
     var isBuffering by remember { mutableStateOf(true) }
     var hasPlaybackStarted by remember { mutableStateOf(false) }  // Track if playback has actually started
     var showControls by remember { mutableStateOf(true) }
+    // Bumped on every key press while controls are visible so the auto-hide
+    // countdown restarts on each D-pad interaction instead of hiding mid-use.
+    var controlsInteractionTick by remember { mutableIntStateOf(0) }
+    // When controls are revealed by D-pad Down, initial focus goes to the
+    // first pill in the options row instead of the play/pause button.
+    var focusPillRowOnShow by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
     var progress by remember { mutableFloatStateOf(0f) }
@@ -358,6 +365,10 @@ fun PlayerScreen(
     // advance to the next episode. Gated on the existing autoPlayNext profile setting —
     // when disabled we simply stay on the ended frame rather than advancing silently.
     var showNextEpisodePrompt by remember { mutableStateOf(false) }
+    // Set when the user cancels the prompt so the ENDED-state tick loop doesn't
+    // immediately re-show it. Cleared when playback leaves STATE_ENDED (e.g. the
+    // user seeks back), so replaying the ending can surface the prompt again.
+    var nextEpisodePromptDismissed by remember { mutableStateOf(false) }
     var pendingNextSeason by remember { mutableIntStateOf(0) }
     var pendingNextEpisode by remember { mutableIntStateOf(0) }
     var pendingNextAddonId by remember { mutableStateOf<String?>(null) }
@@ -1596,8 +1607,11 @@ fun PlayerScreen(
         }
     }
 
-    // Auto-hide controls and return focus to container
-    LaunchedEffect(showControls, isPlaying, isCasting) {
+    // Auto-hide controls and return focus to container.
+    // controlsInteractionTick restarts the countdown on every key press while
+    // the controls are visible (D-pad navigation/clicks are consumed by the
+    // focused buttons and never reach the container's onKeyEvent).
+    LaunchedEffect(showControls, isPlaying, isCasting, controlsInteractionTick) {
         if (showControls && isPlaying && !isCasting && !showSubtitleMenu && !showSourceMenu && !showSubtitleSettings) {
             delay(5000)
             showControls = false
@@ -1619,16 +1633,28 @@ fun PlayerScreen(
         if (isCasting) showControls = true
     }
 
-    // Request focus on play button when controls are shown.
+    // Request focus on play button when controls are shown — unless they were
+    // revealed via D-pad Down, which targets the first pill in the options row.
     // hasPlaybackStarted is also a key because the controls are inside
     // AnimatedVisibility(visible = hasPlaybackStarted && showControls),
     // so the play button isn't in composition until playback begins.
-    LaunchedEffect(showControls, hasPlaybackStarted) {
-        if (showControls && hasPlaybackStarted && !showSubtitleMenu && !showSourceMenu && uiState.error == null) {
+    // isBuffering is a key because the transport row (and its play button) is
+    // only composed while not buffering — on first load the request would
+    // otherwise fire too early, fail silently, and never retry, leaving the
+    // controls visible with no focus anywhere.
+    LaunchedEffect(showControls, hasPlaybackStarted, isBuffering) {
+        if (showControls && hasPlaybackStarted && !isBuffering &&
+            !showSubtitleMenu && !showSourceMenu && uiState.error == null
+        ) {
             delay(300)
-            try {
-                playButtonFocusRequester.requestFocus()
-            } catch (e: Exception) {}
+            val target = if (focusPillRowOnShow) subtitleButtonFocusRequester else playButtonFocusRequester
+            focusPillRowOnShow = false
+            // Retry briefly: the focus node may not be attached yet right
+            // after the AnimatedVisibility enter, making requestFocus() throw.
+            repeat(4) {
+                if (runCatching { target.requestFocus() }.isSuccess) return@LaunchedEffect
+                delay(150)
+            }
         }
     }
 
@@ -1851,17 +1877,22 @@ fun PlayerScreen(
             // immediately). Gated on the profile's autoPlayNext setting — when disabled we
             // stay on the ended frame rather than silently advancing. Only trigger once per
             // session (showNextEpisodePrompt guard) to avoid re-triggering on tick loops.
+            if (exoPlayer.playbackState != Player.STATE_ENDED && nextEpisodePromptDismissed) {
+                nextEpisodePromptDismissed = false
+            }
             if (exoPlayer.playbackState == Player.STATE_ENDED &&
                 mediaType == MediaType.TV &&
                 !showNextEpisodePrompt &&
+                !nextEpisodePromptDismissed &&
                 !showSourceMenu &&
                 !showSubtitleMenu &&
                 uiState.error == null
             ) {
-                if (seasonNumber != null && episodeNumber != null && uiState.autoPlayNext) {
+                val endedNextTarget = uiState.nextEpisodeTarget
+                if (endedNextTarget != null && uiState.autoPlayNext) {
                     val selected = uiState.selectedStream
-                    pendingNextSeason = seasonNumber
-                    pendingNextEpisode = episodeNumber + 1
+                    pendingNextSeason = endedNextTarget.season
+                    pendingNextEpisode = endedNextTarget.episode
                     pendingNextAddonId = selected?.addonId?.takeIf { it.isNotBlank() }
                     pendingNextSourceName = selected?.source?.takeIf { it.isNotBlank() }
                     pendingNextBingeGroup = selected?.behaviorHints?.bingeGroup?.takeIf { it.isNotBlank() }
@@ -2011,8 +2042,6 @@ fun PlayerScreen(
 
     val playerDeviceType = LocalDeviceType.current
     val isTouchDevice = playerDeviceType.isTouchDevice()
-    val isTablet = playerDeviceType == com.arflix.tv.util.DeviceType.TABLET
-    val isPhone = playerDeviceType == com.arflix.tv.util.DeviceType.PHONE
     // Read subtitle appearance prefs
     val subtitleSizePref = uiState.subtitleSize
     val subtitleColorPref = uiState.subtitleColor
@@ -2067,6 +2096,14 @@ fun PlayerScreen(
                     Modifier
                 }
             )
+            .onPreviewKeyEvent { event ->
+                // Preview phase sees every key before the focused control button
+                // consumes it — restart the auto-hide countdown on each press.
+                if (event.type == KeyEventType.KeyDown && showControls) {
+                    controlsInteractionTick++
+                }
+                false
+            }
             .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
                     // Fire TV / Bluetooth media remote keys. These must be handled at the
@@ -2107,13 +2144,14 @@ fun PlayerScreen(
                             return@onKeyEvent true
                         }
                         Key.MediaNext -> {
-                            // Jump to next episode if this is a TV series and we have a
-                            // current episode. No-op for movies (there is no next).
-                            if (mediaType == MediaType.TV && seasonNumber != null && episodeNumber != null) {
+                            // Jump to next episode if this is a TV series and there is one
+                            // (handles season rollover). No-op for movies and at series end.
+                            val nextTarget = uiState.nextEpisodeTarget
+                            if (mediaType == MediaType.TV && nextTarget != null) {
                                 val selected = uiState.selectedStream
                                 onPlayNext(
-                                    seasonNumber,
-                                    episodeNumber + 1,
+                                    nextTarget.season,
+                                    nextTarget.episode,
                                     selected?.addonId?.takeIf { it.isNotBlank() },
                                     selected?.source?.takeIf { it.isNotBlank() },
                                     selected?.behaviorHints?.bingeGroup?.takeIf { it.isNotBlank() }
@@ -2158,11 +2196,14 @@ fun PlayerScreen(
                                         pendingNextSourceName,
                                         pendingNextBingeGroup
                                     )
+                                } else {
+                                    nextEpisodePromptDismissed = true
                                 }
                                 true
                             }
                             Key.Back, Key.Escape -> {
                                 showNextEpisodePrompt = false
+                                nextEpisodePromptDismissed = true
                                 true
                             }
                             else -> true
@@ -2449,6 +2490,7 @@ fun PlayerScreen(
                                         runCatching { skipIntroFocusRequester.requestFocus() }
                                     }
                                 } else {
+                                    focusPillRowOnShow = event.key == Key.DirectionDown
                                     showControls = true
                                 }
                                 true
@@ -2621,11 +2663,18 @@ fun PlayerScreen(
                     exoPlayer.seekTo((end + 500L).coerceAtLeast(0L))
                     viewModel.dismissSkipInterval()
                 },
+                showNextEpisode = mediaType == MediaType.TV && activeSkip?.isOutro() == true &&
+                    uiState.nextEpisodeTarget != null,
+                onNextEpisode = {
+                    val target = uiState.nextEpisodeTarget ?: return@SkipIntroButton
+                    val selected = uiState.selectedStream
+                    onPlayNext(target.season, target.episode, selected?.addonId?.takeIf { it.isNotBlank() }, selected?.source?.takeIf { it.isNotBlank() }, selected?.behaviorHints?.bingeGroup?.takeIf { it.isNotBlank() })
+                },
                 focusRequester = skipIntroFocusRequester,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .zIndex(5f) // Ensure it's above the controls overlay scrim.
-                    .padding(end = if (isTouchDevice) 24.dp else 48.dp, bottom = if (showControls) 90.dp else 32.dp)
+                    .padding(end = if (isTouchDevice) 24.dp else 48.dp, bottom = if (showControls) 150.dp else 32.dp)
             )
         }
 
@@ -2792,6 +2841,55 @@ fun PlayerScreen(
                     }
                 }
 
+                // Center transport controls — rewind / play-pause / forward.
+                // Hidden while buffering so they don't overlap the pulsing logo.
+                if (!isBuffering) {
+                    Row(
+                        modifier = Modifier.align(Alignment.Center),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(if (isTouchDevice) 76.dp else 92.dp)
+                    ) {
+                        val seekBtn = if (isTouchDevice) 52.dp else 56.dp
+                        val seekIcon = if (isTouchDevice) 38.dp else 42.dp
+                        val playBtn = if (isTouchDevice) 68.dp else 76.dp
+                        val playIcon = if (isTouchDevice) 54.dp else 60.dp
+
+                        PlayerIconButton(icon = Icons.Default.Replay10, contentDescription = "Rewind 10s",
+                            focusRequester = rewindButtonFocusRequester, size = seekBtn, iconSize = seekIcon,
+                            tintUnfocused = Color.White,
+                            onFocusChanged = {},
+                            onClick = { queueControlsSeek(-10_000L) },
+                            onRightKey = { playButtonFocusRequester.requestFocus() },
+                            onDownKey = { trackbarFocusRequester.requestFocus() })
+
+                        PlayerIconButton(icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            focusRequester = playButtonFocusRequester, size = playBtn, iconSize = playIcon,
+                            tintUnfocused = Color.White,
+                            onFocusChanged = { if (it) focusedButton = 0 },
+                            onClick = {
+                                if (isCasting) {
+                                    if (castManager.isRemotePlaying()) castManager.pause()
+                                    else castManager.play()
+                                } else {
+                                    if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                                }
+                            },
+                            onLeftKey = { rewindButtonFocusRequester.requestFocus() },
+                            onRightKey = { forwardButtonFocusRequester.requestFocus() },
+                            onDownKey = { trackbarFocusRequester.requestFocus() },
+                            onUpKey = { val sv = uiState.activeSkipInterval != null && !uiState.skipIntervalDismissed; if (sv) skipIntroFocusRequester.requestFocus() })
+
+                        PlayerIconButton(icon = Icons.Default.Forward10, contentDescription = "Forward 10s",
+                            focusRequester = forwardButtonFocusRequester, size = seekBtn, iconSize = seekIcon,
+                            tintUnfocused = Color.White,
+                            onFocusChanged = {},
+                            onClick = { queueControlsSeek(10_000L) },
+                            onLeftKey = { playButtonFocusRequester.requestFocus() },
+                            onDownKey = { trackbarFocusRequester.requestFocus() })
+                    }
+                }
+
                 // Bottom controls - positioned at very bottom.
                 // Gradient made stronger on touch devices so the icon row stays readable
                 // against bright content. Issue #97.
@@ -2815,62 +2913,109 @@ fun PlayerScreen(
                         .padding(horizontal = if (isTouchDevice) 24.dp else 48.dp)
                         .padding(top = if (isTouchDevice) 16.dp else 24.dp, bottom = if (isTouchDevice) 32.dp else 24.dp)
                 ) {
-                    // Icon buttons row. On tablet we center the row and use slightly
-                    // larger buttons than TV to match the shorter viewing distance and
-                    // the Material minimum touch-target of 48dp. Phone keeps the compact
-                    // left-aligned layout to fit vertical orientation. Issue #97.
+                    // Current/total time pills above the bar ends (Nuvio-style)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = if (isTablet) Arrangement.Center else Arrangement.Start,
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Three-way sizing: phone (compact) < TV (medium) < tablet (largest).
-                        // The old logic made touch devices SMALLER than TV which was
-                        // backwards for tablet finger targets.
-                        val smallBtn = when {
-                            isTablet -> 36.dp
-                            isPhone -> 24.dp
-                            else -> 28.dp
-                        }
-                        val smallIcon = when {
-                            isTablet -> 22.dp
-                            isPhone -> 17.dp
-                            else -> 19.dp
-                        }
-                        val midBtn = when {
-                            isTablet -> 40.dp
-                            isPhone -> 28.dp
-                            else -> 30.dp
-                        }
-                        val midIcon = when {
-                            isTablet -> 24.dp
-                            isPhone -> 20.dp
-                            else -> 22.dp
-                        }
-                        val bigBtn = when {
-                            isTablet -> 48.dp
-                            isPhone -> 34.dp
-                            else -> 38.dp
-                        }
-                        val bigIcon = when {
-                            isTablet -> 30.dp
-                            isPhone -> 26.dp
-                            else -> 28.dp
-                        }
-                        val gap = when {
-                            isTablet -> 16.dp
-                            isPhone -> 10.dp
-                            else -> 14.dp
-                        }
-                        val wideGap = when {
-                            isTablet -> 20.dp
-                            isPhone -> 14.dp
-                            else -> 18.dp
-                        }
+                        Text(
+                            text = formatTime(if (isControlScrubbing) scrubPreviewPosition else currentPosition),
+                            style = ArflixTypography.label.copy(fontSize = if (isTouchDevice) 12.sp else 13.sp),
+                            color = Color.White.copy(alpha = 0.9f),
+                            maxLines = 1,
+                            modifier = Modifier
+                                .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+                                .padding(horizontal = 12.dp, vertical = 5.dp)
+                        )
+                        Text(
+                            text = formatTime(duration),
+                            style = ArflixTypography.label.copy(fontSize = if (isTouchDevice) 12.sp else 13.sp),
+                            color = Color.White.copy(alpha = 0.7f),
+                            maxLines = 1,
+                            modifier = Modifier
+                                .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+                                .padding(horizontal = 12.dp, vertical = 5.dp)
+                        )
+                    }
 
-                        // Subtitles
-                        PlayerIconButton(icon = Icons.Default.ClosedCaption, contentDescription = "${stringResource(R.string.subtitles)} / ${stringResource(R.string.audio)}",
-                            focusRequester = subtitleButtonFocusRequester, size = smallBtn, iconSize = smallIcon,
+                    Spacer(modifier = Modifier.height(if (isTouchDevice) 2.dp else 4.dp))
+
+                    // Full-width trackbar
+                    var trackbarFocused by remember { mutableStateOf(false) }
+                    var trackbarWidthPx by remember { mutableIntStateOf(0) }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(if (isTouchDevice) 28.dp else 20.dp)
+                            .onSizeChanged { trackbarWidthPx = it.width }
+                            .focusRequester(trackbarFocusRequester)
+                            .onFocusChanged { state ->
+                                trackbarFocused = state.isFocused
+                                if (!state.isFocused && isControlScrubbing) commitControlsSeekNow()
+                            }
+                            .focusable()
+                            .pointerInput(duration, isCasting) {
+                                detectHorizontalDragGestures(
+                                    onDragStart = { offset -> if (duration > 0L && trackbarWidthPx > 0) { scrubPreviewPosition = ((offset.x / trackbarWidthPx).coerceIn(0f, 1f) * duration).toLong(); isControlScrubbing = true } },
+                                    onDragEnd = { if (isControlScrubbing) { if (isCasting) castManager.seekTo(scrubPreviewPosition) else if (!playerReleased) exoPlayer.seekTo(scrubPreviewPosition); isControlScrubbing = false } },
+                                    onDragCancel = { if (isControlScrubbing) { if (isCasting) castManager.seekTo(scrubPreviewPosition) else if (!playerReleased) exoPlayer.seekTo(scrubPreviewPosition); isControlScrubbing = false } },
+                                    onHorizontalDrag = { _, dragAmount -> if (duration > 0L && trackbarWidthPx > 0) { val delta = (dragAmount / trackbarWidthPx * duration).toLong(); scrubPreviewPosition = (scrubPreviewPosition + delta).coerceIn(0L, duration); isControlScrubbing = true } }
+                                )
+                            }
+                            .pointerInput(duration, isCasting) {
+                                detectTapGestures { offset -> if (duration > 0L && trackbarWidthPx > 0) { val pos = ((offset.x / trackbarWidthPx).coerceIn(0f, 1f) * duration).toLong(); if (isCasting) castManager.seekTo(pos) else if (!playerReleased) exoPlayer.seekTo(pos) } }
+                            }
+                            .onKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown && trackbarFocused) {
+                                    when (event.key) {
+                                        Key.DirectionLeft -> { queueControlsSeek(-10_000L); true }
+                                        Key.DirectionRight -> { queueControlsSeek(10_000L); true }
+                                        Key.Enter, Key.DirectionCenter -> { commitControlsSeekNow(); true }
+                                        Key.DirectionUp -> { playButtonFocusRequester.requestFocus(); true }
+                                        Key.DirectionDown -> { subtitleButtonFocusRequester.requestFocus(); true }
+                                        else -> false
+                                    }
+                                } else false
+                            }
+                            .background(Color.Transparent),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Visible thin bar centered in the larger touch target
+                        val barHeight = if (trackbarFocused) 8.dp else if (isTouchDevice) 6.dp else 4.dp
+                        Box(modifier = Modifier.fillMaxWidth().height(barHeight).background(Color.White.copy(alpha = if (trackbarFocused) 0.25f else 0.15f), RoundedCornerShape(3.dp)))
+                        val frac = if (duration > 0) ((if (isControlScrubbing) scrubPreviewPosition else currentPosition).toFloat() / duration.toFloat()).coerceIn(0f, 1f) else progress
+                        Box(modifier = Modifier.fillMaxWidth().height(barHeight).align(Alignment.Center), contentAlignment = Alignment.CenterStart) {
+                        Box(modifier = Modifier.fillMaxWidth(frac).fillMaxHeight().background(
+                            if (trackbarFocused) playerAccent else playerAccent.copy(alpha = 0.8f), RoundedCornerShape(3.dp)
+                        ))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(if (isTouchDevice) 10.dp else 12.dp))
+
+                    // Pill-shaped options bar (Nuvio-style), centered below the trackbar:
+                    // Subs · Sources · Settings · Fit (+ Next Episode on shows, PiP on touch).
+                    val hasPipButton = isTouchDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    val hasNextEpisode = mediaType == MediaType.TV && uiState.nextEpisodeTarget != null
+                    val lastPillFocusRequester = when {
+                        hasPipButton -> pipButtonFocusRequester
+                        hasNextEpisode -> nextEpisodeButtonFocusRequester
+                        else -> aspectButtonFocusRequester
+                    }
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(28.dp))
+                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(28.dp))
+                            .padding(horizontal = if (isTouchDevice) 8.dp else 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(if (isTouchDevice) 2.dp else 4.dp)
+                    ) {
+                        // Subtitles / audio menu
+                        PlayerPillButton(icon = Icons.Default.ClosedCaption, label = "Subs",
+                            compact = isTouchDevice,
+                            focusRequester = subtitleButtonFocusRequester,
                             onFocusChanged = { if (it) focusedButton = 1 },
                             onClick = {
                                 subtitleMenuIndex = 0
@@ -2901,16 +3046,23 @@ fun PlayerScreen(
                                     try { containerFocusRequester.requestFocus() } catch (_: Exception) {}
                                 }
                             },
-                            onLeftKey = { if (mediaType == MediaType.TV) nextEpisodeButtonFocusRequester.requestFocus() else aspectButtonFocusRequester.requestFocus() },
-                            onRightKey = { subtitleSettingsBtnFocusRequester.requestFocus() },
-                            onDownKey = { trackbarFocusRequester.requestFocus() })
+                            onLeftKey = { lastPillFocusRequester.requestFocus() },
+                            onRightKey = { sourceButtonFocusRequester.requestFocus() },
+                            onUpKey = { trackbarFocusRequester.requestFocus() })
 
-                        Spacer(modifier = Modifier.width(gap))
+                        // Sources
+                        PlayerPillButton(icon = Icons.Default.Folder, label = stringResource(R.string.sources),
+                            compact = isTouchDevice,
+                            focusRequester = sourceButtonFocusRequester,
+                            onClick = { showSourceMenu = true; showControls = true },
+                            onLeftKey = { subtitleButtonFocusRequester.requestFocus() },
+                            onRightKey = { subtitleSettingsBtnFocusRequester.requestFocus() },
+                            onUpKey = { trackbarFocusRequester.requestFocus() })
 
                         // Subtitle settings (delay, size, vertical position)
-                        PlayerIconButton(icon = Icons.Default.Tune, contentDescription = "Subtitle Settings",
-                            focusRequester = subtitleSettingsBtnFocusRequester, size = smallBtn, iconSize = smallIcon,
-                            onFocusChanged = {},
+                        PlayerPillButton(icon = Icons.Default.Tune, label = "Settings",
+                            compact = isTouchDevice,
+                            focusRequester = subtitleSettingsBtnFocusRequester,
                             onClick = {
                                 showSubtitleSettings = !showSubtitleSettings
                                 if (showSubtitleSettings) {
@@ -2921,198 +3073,51 @@ fun PlayerScreen(
                                     }
                                 }
                             },
-                            onLeftKey = { subtitleButtonFocusRequester.requestFocus() },
-                            onRightKey = { sourceButtonFocusRequester.requestFocus() },
-                            onDownKey = { trackbarFocusRequester.requestFocus() })
+                            onLeftKey = { sourceButtonFocusRequester.requestFocus() },
+                            onRightKey = { aspectButtonFocusRequester.requestFocus() },
+                            onUpKey = { trackbarFocusRequester.requestFocus() })
 
-                        Spacer(modifier = Modifier.width(gap))
-
-                        // Sources
-                        PlayerIconButton(icon = Icons.Default.Folder, contentDescription = stringResource(R.string.sources),
-                            focusRequester = sourceButtonFocusRequester, size = smallBtn, iconSize = smallIcon,
-                            onFocusChanged = {},
-                            onClick = { showSourceMenu = true; showControls = true },
-                            onLeftKey = { subtitleSettingsBtnFocusRequester.requestFocus() },
-                            onRightKey = { if (isTouchDevice) playButtonFocusRequester.requestFocus() else rewindButtonFocusRequester.requestFocus() },
-                            onDownKey = { trackbarFocusRequester.requestFocus() })
-
-                        if (!isTouchDevice) {
-                            Spacer(modifier = Modifier.width(wideGap))
-
-                            // Rewind 10s
-                            PlayerIconButton(icon = Icons.Default.Replay10, contentDescription = "Rewind 10s",
-                                focusRequester = rewindButtonFocusRequester, size = midBtn, iconSize = midIcon,
-                                onFocusChanged = {},
-                                onClick = { queueControlsSeek(-10_000L) },
-                                onLeftKey = { sourceButtonFocusRequester.requestFocus() },
-                                onRightKey = { playButtonFocusRequester.requestFocus() },
-                                onDownKey = { trackbarFocusRequester.requestFocus() })
-
-                            Spacer(modifier = Modifier.width(gap))
-                        } else {
-                            Spacer(modifier = Modifier.width(wideGap))
-                        }
-
-                        // Play/Pause - center, largest
-                        PlayerIconButton(icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play",
-                            focusRequester = playButtonFocusRequester, size = bigBtn, iconSize = bigIcon,
-                            onFocusChanged = { if (it) focusedButton = 0 },
-                            onClick = {
-                                if (isCasting) {
-                                    if (castManager.isRemotePlaying()) castManager.pause()
-                                    else castManager.play()
-                                } else {
-                                    if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
-                                }
-                            },
-                            onLeftKey = { if (isTouchDevice) sourceButtonFocusRequester.requestFocus() else rewindButtonFocusRequester.requestFocus() },
-                            onRightKey = { if (isTouchDevice) aspectButtonFocusRequester.requestFocus() else forwardButtonFocusRequester.requestFocus() },
-                            onDownKey = { trackbarFocusRequester.requestFocus() },
-                            onUpKey = { val sv = uiState.activeSkipInterval != null && !uiState.skipIntervalDismissed; if (sv) skipIntroFocusRequester.requestFocus() })
-
-                        if (!isTouchDevice) {
-                            Spacer(modifier = Modifier.width(gap))
-
-                            // Forward 10s - own focus requester
-                            PlayerIconButton(icon = Icons.Default.Forward10, contentDescription = "Forward 10s",
-                                focusRequester = forwardButtonFocusRequester, size = midBtn, iconSize = midIcon,
-                                onFocusChanged = {},
-                                onClick = { queueControlsSeek(10_000L) },
-                                onLeftKey = { playButtonFocusRequester.requestFocus() },
-                                onRightKey = { aspectButtonFocusRequester.requestFocus() },
-                                onDownKey = { trackbarFocusRequester.requestFocus() })
-
-                            Spacer(modifier = Modifier.width(wideGap))
-                        } else {
-                            Spacer(modifier = Modifier.width(wideGap))
-                        }
-
-                        // Aspect Ratio
-                        PlayerIconButton(icon = Icons.Default.AspectRatio, contentDescription = "Aspect: $aspectModeLabel",
-                            focusRequester = aspectButtonFocusRequester, size = smallBtn, iconSize = smallIcon,
-                            onFocusChanged = {},
+                        // Aspect ratio (Fit / Zoom / Fill)
+                        PlayerPillButton(icon = Icons.Default.AspectRatio, label = aspectModeLabel,
+                            compact = isTouchDevice,
+                            focusRequester = aspectButtonFocusRequester,
                             onClick = cycleAspectRatio,
-                            onLeftKey = { if (isTouchDevice) playButtonFocusRequester.requestFocus() else forwardButtonFocusRequester.requestFocus() },
+                            onLeftKey = { subtitleSettingsBtnFocusRequester.requestFocus() },
                             onRightKey = {
                                 when {
-                                    mediaType == MediaType.TV -> nextEpisodeButtonFocusRequester.requestFocus()
-                                    isTouchDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> pipButtonFocusRequester.requestFocus()
+                                    hasNextEpisode -> nextEpisodeButtonFocusRequester.requestFocus()
+                                    hasPipButton -> pipButtonFocusRequester.requestFocus()
                                     else -> subtitleButtonFocusRequester.requestFocus()
                                 }
                             },
-                            onDownKey = { trackbarFocusRequester.requestFocus() })
+                            onUpKey = { trackbarFocusRequester.requestFocus() })
 
-                        if (mediaType == MediaType.TV) {
-                            Spacer(modifier = Modifier.width(gap))
-                            PlayerIconButton(icon = Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_episode),
-                                focusRequester = nextEpisodeButtonFocusRequester, size = smallBtn, iconSize = smallIcon,
-                                onFocusChanged = {},
+                        if (hasNextEpisode) {
+                            PlayerPillButton(icon = Icons.Default.SkipNext, label = stringResource(R.string.next_episode),
+                                compact = isTouchDevice,
+                                focusRequester = nextEpisodeButtonFocusRequester,
                                 onClick = {
-                                    val season = seasonNumber ?: return@PlayerIconButton
-                                    val episode = episodeNumber ?: return@PlayerIconButton
+                                    val target = uiState.nextEpisodeTarget ?: return@PlayerPillButton
                                     val selected = uiState.selectedStream
-                                    onPlayNext(season, episode + 1, selected?.addonId?.takeIf { it.isNotBlank() }, selected?.source?.takeIf { it.isNotBlank() }, selected?.behaviorHints?.bingeGroup?.takeIf { it.isNotBlank() })
+                                    onPlayNext(target.season, target.episode, selected?.addonId?.takeIf { it.isNotBlank() }, selected?.source?.takeIf { it.isNotBlank() }, selected?.behaviorHints?.bingeGroup?.takeIf { it.isNotBlank() })
                                 },
                                 onLeftKey = { aspectButtonFocusRequester.requestFocus() },
-                                onRightKey = { subtitleButtonFocusRequester.requestFocus() },
-                                onDownKey = { trackbarFocusRequester.requestFocus() })
+                                onRightKey = { if (hasPipButton) pipButtonFocusRequester.requestFocus() else subtitleButtonFocusRequester.requestFocus() },
+                                onUpKey = { trackbarFocusRequester.requestFocus() })
                         }
 
-                        // PiP button — touch devices only, just right of other buttons, Android 8+
-                        if (isTouchDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            Spacer(modifier = Modifier.width(gap))
-                            PlayerIconButton(
-                                icon = Icons.Default.PictureInPicture,
-                                contentDescription = "Picture in Picture",
+                        // PiP — touch devices only, Android 8+
+                        if (hasPipButton) {
+                            PlayerPillButton(icon = Icons.Default.PictureInPicture, label = "PiP",
+                                compact = isTouchDevice,
                                 focusRequester = pipButtonFocusRequester,
-                                size = smallBtn, iconSize = smallIcon,
-                                onFocusChanged = {},
                                 onClick = { enterPipMode() },
-                                onLeftKey = { if (mediaType == MediaType.TV) nextEpisodeButtonFocusRequester.requestFocus() else aspectButtonFocusRequester.requestFocus() },
+                                onLeftKey = { if (hasNextEpisode) nextEpisodeButtonFocusRequester.requestFocus() else aspectButtonFocusRequester.requestFocus() },
                                 onRightKey = { subtitleButtonFocusRequester.requestFocus() },
-                                onDownKey = { trackbarFocusRequester.requestFocus() }
-                            )
+                                onUpKey = { trackbarFocusRequester.requestFocus() })
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(if (isTouchDevice) 4.dp else 6.dp))
-
-                    // Trackbar at the very bottom with time labels
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = formatTime(if (isControlScrubbing) scrubPreviewPosition else currentPosition),
-                            style = ArflixTypography.label.copy(fontSize = if (isTouchDevice) 12.sp else 13.sp),
-                            color = Color.White.copy(alpha = 0.9f),
-                            maxLines = 1,
-                            modifier = Modifier.width(if (isTouchDevice) 48.dp else 55.dp)
-                        )
-
-                        // Trackbar
-                        var trackbarFocused by remember { mutableStateOf(false) }
-                        val trackbarHeight by animateFloatAsState(if (trackbarFocused) 8f else if (isTouchDevice) 6f else 4f, label = "trackbarHeight")
-                        var trackbarWidthPx by remember { mutableIntStateOf(0) }
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(if (isTouchDevice) 28.dp else 20.dp)
-                                .onSizeChanged { trackbarWidthPx = it.width }
-                                .focusRequester(trackbarFocusRequester)
-                                .onFocusChanged { state ->
-                                    trackbarFocused = state.isFocused
-                                    if (!state.isFocused && isControlScrubbing) commitControlsSeekNow()
-                                }
-                                .focusable()
-                                .pointerInput(duration, isCasting) {
-                                    detectHorizontalDragGestures(
-                                        onDragStart = { offset -> if (duration > 0L && trackbarWidthPx > 0) { scrubPreviewPosition = ((offset.x / trackbarWidthPx).coerceIn(0f, 1f) * duration).toLong(); isControlScrubbing = true } },
-                                        onDragEnd = { if (isControlScrubbing) { if (isCasting) castManager.seekTo(scrubPreviewPosition) else if (!playerReleased) exoPlayer.seekTo(scrubPreviewPosition); isControlScrubbing = false } },
-                                        onDragCancel = { if (isControlScrubbing) { if (isCasting) castManager.seekTo(scrubPreviewPosition) else if (!playerReleased) exoPlayer.seekTo(scrubPreviewPosition); isControlScrubbing = false } },
-                                        onHorizontalDrag = { _, dragAmount -> if (duration > 0L && trackbarWidthPx > 0) { val delta = (dragAmount / trackbarWidthPx * duration).toLong(); scrubPreviewPosition = (scrubPreviewPosition + delta).coerceIn(0L, duration); isControlScrubbing = true } }
-                                    )
-                                }
-                                .pointerInput(duration, isCasting) {
-                                    detectTapGestures { offset -> if (duration > 0L && trackbarWidthPx > 0) { val pos = ((offset.x / trackbarWidthPx).coerceIn(0f, 1f) * duration).toLong(); if (isCasting) castManager.seekTo(pos) else if (!playerReleased) exoPlayer.seekTo(pos) } }
-                                }
-                                .onKeyEvent { event ->
-                                    if (event.type == KeyEventType.KeyDown && trackbarFocused) {
-                                        when (event.key) {
-                                            Key.DirectionLeft -> { queueControlsSeek(-10_000L); true }
-                                            Key.DirectionRight -> { queueControlsSeek(10_000L); true }
-                                            Key.Enter, Key.DirectionCenter -> { commitControlsSeekNow(); true }
-                                            Key.DirectionUp -> { playButtonFocusRequester.requestFocus(); true }
-                                            Key.DirectionDown -> true
-                                            else -> false
-                                        }
-                                    } else false
-                                }
-                                .background(Color.Transparent),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            // Visible thin bar centered in the larger touch target
-                            val barHeight = if (trackbarFocused) 8.dp else if (isTouchDevice) 6.dp else 4.dp
-                            Box(modifier = Modifier.fillMaxWidth().height(barHeight).background(Color.White.copy(alpha = if (trackbarFocused) 0.25f else 0.15f), RoundedCornerShape(3.dp)))
-                            val frac = if (duration > 0) ((if (isControlScrubbing) scrubPreviewPosition else currentPosition).toFloat() / duration.toFloat()).coerceIn(0f, 1f) else progress
-                            Box(modifier = Modifier.fillMaxWidth().height(barHeight).align(Alignment.Center), contentAlignment = Alignment.CenterStart) {
-                            Box(modifier = Modifier.fillMaxWidth(frac).fillMaxHeight().background(
-                                if (trackbarFocused) playerAccent else playerAccent.copy(alpha = 0.8f), RoundedCornerShape(3.dp)
-                            ))
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Text(
-                            text = formatTime(duration),
-                            style = ArflixTypography.label.copy(fontSize = if (isTouchDevice) 12.sp else 13.sp),
-                            color = Color.White.copy(alpha = 0.5f),
-                            maxLines = 1,
-                            modifier = Modifier.width(if (isTouchDevice) 48.dp else 55.dp)
-                        )
-                    }
                 }
             }
         }
@@ -3275,6 +3280,7 @@ fun PlayerScreen(
             },
             onCancel = {
                 showNextEpisodePrompt = false
+                nextEpisodePromptDismissed = true
                 // Stay on the ended frame — user can hit Back to leave the player.
             }
         )
@@ -3525,6 +3531,7 @@ private fun PlayerIconButton(
     focusRequester: FocusRequester,
     size: Dp = 32.dp,
     iconSize: Dp = 22.dp,
+    tintUnfocused: Color = Color.White.copy(alpha = 0.6f),
     onFocusChanged: (Boolean) -> Unit,
     onClick: () -> Unit,
     onLeftKey: () -> Unit = {},
@@ -3565,8 +3572,70 @@ private fun PlayerIconButton(
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = if (focused) Color.Black else Color.White.copy(alpha = 0.6f),
+            tint = if (focused) Color.Black else tintUnfocused,
             modifier = Modifier.size(iconSize)
+        )
+    }
+}
+
+/**
+ * Icon + text label button used in the bottom pill-shaped options bar.
+ * Focus highlights the whole pill with the accent color (TV D-pad).
+ */
+@Composable
+private fun PlayerPillButton(
+    icon: ImageVector,
+    label: String,
+    focusRequester: FocusRequester,
+    compact: Boolean = false,
+    onFocusChanged: (Boolean) -> Unit = {},
+    onClick: () -> Unit,
+    onLeftKey: () -> Unit = {},
+    onRightKey: () -> Unit = {},
+    onUpKey: () -> Unit = {},
+    onDownKey: () -> Unit = {}
+) {
+    val btnAccent = LocalAccentColorOverride.current ?: Color.White
+    var focused by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(22.dp))
+            .focusRequester(focusRequester)
+            .onFocusChanged { state -> focused = state.isFocused; onFocusChanged(state.isFocused) }
+            .focusable()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) {
+                    when (event.key) {
+                        Key.Enter, Key.DirectionCenter -> { onClick(); true }
+                        Key.DirectionLeft -> { onLeftKey(); true }
+                        Key.DirectionRight -> { onRightKey(); true }
+                        Key.DirectionUp -> { onUpKey(); true }
+                        Key.DirectionDown -> { onDownKey(); true }
+                        else -> false
+                    }
+                } else false
+            }
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClick() }
+            .background(if (focused) btnAccent else Color.Transparent, RoundedCornerShape(22.dp))
+            .padding(horizontal = if (compact) 12.dp else 14.dp, vertical = if (compact) 8.dp else 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 7.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (focused) Color.Black else Color.White,
+            modifier = Modifier.size(if (compact) 18.dp else 20.dp)
+        )
+        Text(
+            text = label,
+            style = ArflixTypography.label.copy(
+                fontSize = if (compact) 13.sp else 14.sp,
+                fontWeight = FontWeight.SemiBold
+            ),
+            color = if (focused) Color.Black else Color.White,
+            maxLines = 1
         )
     }
 }
