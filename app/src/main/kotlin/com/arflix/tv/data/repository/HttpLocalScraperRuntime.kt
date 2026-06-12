@@ -46,6 +46,7 @@ class HttpLocalScraperRuntime @Inject constructor(
     private val gson = Gson()
     private val manifestCache = mutableMapOf<String, HttpScraperManifest>()
     private val tmdbIdCache = mutableMapOf<String, Int?>()
+    @Volatile private var newTvApiUrl: String = ""
     private val noRedirectClient: OkHttpClient by lazy {
         okHttpClient.newBuilder()
             .followRedirects(false)
@@ -497,20 +498,54 @@ class HttpLocalScraperRuntime @Inject constructor(
         fallbackYear: Int?
     ): List<HttpResolvedStream> = runCatching {
         val details = fetchTmdbDetails(tmdbId, mediaType, fallbackTitle, fallbackYear)
-        val cookie = netMirrorCookie() ?: return@runCatching emptyList<HttpResolvedStream>()
-        val cookies = "t_hash_t=$cookie; hd=on"
+        val apiBase = resolveNewTvApiUrl()
         val platforms = listOf(
-            NetMirrorPlatform("netflix", "nf", "/mobile/search.php", "/mobile/post.php", "/mobile/episodes.php", "/mobile/playlist.php"),
-            NetMirrorPlatform("primevideo", "pv", "/mobile/pv/search.php", "/mobile/pv/post.php", "/mobile/pv/episodes.php", "/mobile/pv/playlist.php"),
-            NetMirrorPlatform("hotstar", "hs", "/mobile/hs/search.php", "/mobile/hs/post.php", "/mobile/hs/episodes.php", "/mobile/hs/playlist.php"),
-            NetMirrorPlatform("disney", "hs", "/mobile/hs/search.php", "/mobile/hs/post.php", "/mobile/hs/episodes.php", "/mobile/hs/playlist.php")
+            NetMirrorPlatform("Netflix", "nf", "/newtv/search.php", "/newtv/post.php", "/newtv/episodes.php", "/newtv/player.php"),
+            NetMirrorPlatform("PrimeVideo", "pv", "/newtv/search.php", "/newtv/post.php", "/newtv/episodes.php", "/newtv/player.php"),
+            NetMirrorPlatform("Hotstar", "hs", "/newtv/search.php", "/newtv/post.php", "/newtv/episodes.php", "/newtv/player.php")
         )
-        for (platform in platforms) {
-            val streams = fetchNetMirrorPlatform(platform, details.title, mediaType, season, episode, cookies)
-            if (streams.isNotEmpty()) return@runCatching streams
+        coroutineScope {
+            platforms.map { platform ->
+                async(Dispatchers.IO) {
+                    runCatching { fetchNewTvPlatform(platform, details.title, mediaType, season, episode, apiBase) }
+                        .getOrDefault(emptyList())
+                }
+            }.awaitAll().flatten()
         }
-        emptyList()
     }.getOrDefault(emptyList())
+
+    private suspend fun resolveNewTvApiUrl(): String {
+        if (newTvApiUrl.isNotEmpty()) return newTvApiUrl
+        for (encoded in NEW_TV_DOMAINS) {
+            val base = runCatching {
+                android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
+                    .toString(Charsets.UTF_8).trimEnd('/')
+            }.getOrNull() ?: continue
+            runCatching {
+                val data = getJson(
+                    "$base/checknewtv.php",
+                    mapOf("User-Agent" to USER_AGENT, "X-Requested-With" to "NetmirrorNewTV v1.0")
+                ) ?: return@runCatching
+                val tokenHash = data.string("token_hash") ?: return@runCatching
+                val resolved = android.util.Base64.decode(tokenHash, android.util.Base64.DEFAULT)
+                    .toString(Charsets.UTF_8).trimEnd('/')
+                newTvApiUrl = resolved
+                return resolved
+            }
+        }
+        error("Failed to resolve NetMirror API URL")
+    }
+
+    private fun buildNewTvHeaders(ott: String, extra: Map<String, String> = emptyMap()): Map<String, String> =
+        mapOf(
+            "Cache-Control" to "no-cache, no-store, must-revalidate",
+            "Pragma" to "no-cache",
+            "Expires" to "0",
+            "X-Requested-With" to "NetmirrorNewTV v1.0",
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0 /OS.GatuNewTV v1.0",
+            "Accept" to "application/json, text/plain, */*",
+            "Ott" to ott
+        ) + extra
 
     private suspend fun resolveVidSrc(
         tmdbId: Int,
@@ -590,109 +625,115 @@ class HttpLocalScraperRuntime @Inject constructor(
         }
     }
 
-    private suspend fun netMirrorCookie(): String? = runCatching {
-        val uuid = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".map { c ->
-            when (c) {
-                'x' -> (0..15).random().toString(16)
-                'y' -> ((0..15).random() and 3 or 8).toString(16)
-                else -> c.toString()
-            }
-        }.joinToString("")
-        val request = Request.Builder()
-            .url("https://net52.cc/verify.php")
-            .post("g-recaptcha-response=$uuid".toRequestBody("application/x-www-form-urlencoded".toMediaType()))
-            .headers(okhttp3.Headers.headersOf(
-                "Origin", "https://net22.cc",
-                "Referer", "https://net22.cc/verify2",
-                "User-Agent", USER_AGENT
-            ))
-            .build()
-        withContext(Dispatchers.IO) {
-            okHttpClient.newCall(request).execute().use { response ->
-                response.header("set-cookie")
-                    ?.let { T_HASH_T_REGEX.find(it)?.groupValues?.getOrNull(1) }
-            }
-        }
-    }.getOrNull()
 
-    private suspend fun fetchNetMirrorPlatform(
+    private suspend fun fetchNewTvPlatform(
         platform: NetMirrorPlatform,
         title: String,
         mediaType: String,
         season: Int?,
         episode: Int?,
-        cookies: String
+        apiBase: String
     ): List<HttpResolvedStream> {
-        val base = "https://net52.cc"
-        val headers = mapOf(
-            "Cookie" to "$cookies; ott=${platform.ott}",
-            "User-Agent" to USER_AGENT,
-            "X-Requested-With" to "XMLHttpRequest"
-        )
-        val time = (System.currentTimeMillis() / 1000L).toString()
-        val search = getJson("$base${platform.search}?s=${title.urlEncode()}&t=$time", headers)
+        val searchHeaders = buildNewTvHeaders(platform.ott)
+        val firstResult = getJson("$apiBase${platform.search}?s=${title.urlEncode()}", searchHeaders)
             ?.getArray("searchResult")
             ?.firstOrNull()
             ?.asJsonObjectOrNull()
             ?: return emptyList()
-        val contentId = search.string("id") ?: return emptyList()
-        val post = getJson("$base${platform.post}?id=$contentId&t=$time", headers) ?: return emptyList()
-        var targetId = contentId
-        if (mediaType == "tv") {
-            val episodes = mutableListOf<JsonObject>()
-            post.getArray("episodes")?.toList().orEmpty().mapNotNullTo(episodes) { it.asJsonObjectOrNull() }
-            post.getArray("season")?.toList().orEmpty().mapNotNull { it.asJsonObjectOrNull()?.string("id") }.forEach { seasonId ->
-                fetchNetMirrorEpisodes(base, platform, contentId, seasonId, headers).mapTo(episodes) { it }
-            }
-            val target = episodes.firstOrNull { ep ->
-                ep.string("s")?.removePrefix("S")?.toIntOrNull() == (season ?: 1) &&
-                    ep.string("ep")?.removePrefix("E")?.toIntOrNull() == (episode ?: 1)
-            } ?: return emptyList()
-            targetId = target.string("id") ?: return emptyList()
+        val contentId = firstResult.string("id") ?: return emptyList()
+        val postData = getJson(
+            "$apiBase${platform.post}?id=$contentId",
+            buildNewTvHeaders(platform.ott, mapOf("Lastep" to "", "Usertoken" to ""))
+        ) ?: return emptyList()
+        val targetId: String = if (mediaType == "tv") {
+            val allEpisodes = getAllNewTvEpisodes(postData, platform, apiBase)
+            allEpisodes.firstOrNull { it.season == (season ?: 1) && it.episode == (episode ?: 1) }
+                ?.id ?: return emptyList()
+        } else {
+            postData.string("main_id") ?: contentId
         }
-        val playlist = getJsonElement("$base${platform.playlist}?id=$targetId&t=${title.urlEncode()}&tm=$time", headers)
-        val items = when {
-            playlist == null -> emptyList()
-            playlist.isJsonArray -> playlist.asJsonArray.toList()
-            playlist.isJsonObject -> listOf(playlist)
-            else -> emptyList()
+        val playerData = getJson(
+            "$apiBase${platform.playlist}?id=$targetId",
+            buildNewTvHeaders(platform.ott, mapOf("Usertoken" to ""))
+        ) ?: return emptyList()
+        val videoLink = playerData.string("video_link")
+            ?.takeIf { it.startsWith("http", ignoreCase = true) }
+            ?: return emptyList()
+        val streamTitle = if (mediaType == "tv") {
+            val s = (season ?: 1).toString().padStart(2, '0')
+            val e = (episode ?: 1).toString().padStart(2, '0')
+            "$title S${s}E${e} · NetMirror ${platform.name}"
+        } else {
+            "$title · NetMirror ${platform.name}"
         }
-        return items.flatMap { item ->
-            item.asJsonObjectOrNull()
-                ?.getArray("sources")
-                ?.toList()
-                .orEmpty()
-                .mapNotNull { source ->
-                    val obj = source.asJsonObjectOrNull() ?: return@mapNotNull null
-                    val file = obj.string("file") ?: return@mapNotNull null
-                    val streamUrl = if (file.startsWith("http", ignoreCase = true)) file else "$base/${file.trimStart('/')}"
-                    HttpResolvedStream(
-                        provider = "NetMirror ${platform.name}",
-                        title = "NetMirror ${platform.name} ${obj.string("label").orEmpty()}".trim(),
-                        url = streamUrl,
-                        quality = obj.string("label") ?: "Auto",
-                        headers = mapOf("Referer" to "$base/home", "Cookie" to "hd=on")
-                    )
-                }
-        }
+        return listOf(
+            HttpResolvedStream(
+                provider = "NetMirror ${platform.name}",
+                title = streamTitle,
+                url = videoLink,
+                quality = "Auto",
+                headers = mapOf("Referer" to (playerData.string("referer") ?: apiBase))
+            )
+        )
     }
 
-    private suspend fun fetchNetMirrorEpisodes(
-        base: String,
+    private suspend fun getAllNewTvEpisodes(
+        postData: JsonObject,
         platform: NetMirrorPlatform,
-        contentId: String,
+        apiBase: String
+    ): List<NetMirrorEpisode> {
+        val episodes = mutableListOf<NetMirrorEpisode>()
+        val seasonList = postData.getArray("season")?.toList().orEmpty().mapNotNull { it.asJsonObjectOrNull() }
+        val selectedIdx = seasonList.indexOfFirst { it.get("selected")?.asBoolean == true }.takeIf { it >= 0 } ?: 0
+        val selectedSeasonId = seasonList.getOrNull(selectedIdx)?.string("id") ?: postData.string("nextPageSeason")
+        val selectedSeasonNumber = selectedIdx + 1
+
+        postData.getArray("episodes")?.toList().orEmpty().mapNotNull { it.asJsonObjectOrNull() }.forEach { ep ->
+            val id = ep.string("id") ?: return@forEach
+            val epNum = ep.string("ep")?.toIntOrNull()
+                ?: ep.string("epNum")?.removePrefix("E")?.toIntOrNull()
+                ?: return@forEach
+            val sNum = ep.string("sNum")?.removePrefix("S")?.toIntOrNull() ?: selectedSeasonNumber
+            episodes.add(NetMirrorEpisode(id, sNum, epNum))
+        }
+
+        if (postData.string("nextPageShow") == "1" && selectedSeasonId != null) {
+            episodes.addAll(fetchNewTvEpisodesPage(selectedSeasonId, 2, selectedSeasonNumber, platform, apiBase))
+        }
+
+        seasonList.forEachIndexed { index, seasonObj ->
+            val seasonId = seasonObj.string("id") ?: return@forEachIndexed
+            if (seasonId == selectedSeasonId) return@forEachIndexed
+            episodes.addAll(fetchNewTvEpisodesPage(seasonId, 1, index + 1, platform, apiBase))
+        }
+
+        return episodes
+    }
+
+    private suspend fun fetchNewTvEpisodesPage(
         seasonId: String,
-        headers: Map<String, String>
-    ): List<JsonObject> {
-        val episodes = mutableListOf<JsonObject>()
-        var page = 1
-        while (page <= 8) {
-            val time = (System.currentTimeMillis() / 1000L).toString()
-            val payload = getJson("$base${platform.episodes}?s=$seasonId&series=$contentId&t=$time&page=$page", headers)
-                ?: break
-            payload.getArray("episodes")?.toList().orEmpty().mapNotNullTo(episodes) { it.asJsonObjectOrNull() }
-            if (payload.string("nextPageShow") != "1") break
-            page += 1
+        startPage: Int,
+        seasonNumber: Int,
+        platform: NetMirrorPlatform,
+        apiBase: String
+    ): List<NetMirrorEpisode> {
+        val episodes = mutableListOf<NetMirrorEpisode>()
+        var page = startPage
+        while (page <= 10) {
+            val data = getJson(
+                "$apiBase${platform.episodes}?id=$seasonId&page=$page",
+                buildNewTvHeaders(platform.ott)
+            ) ?: break
+            data.getArray("episodes")?.toList().orEmpty().mapNotNull { it.asJsonObjectOrNull() }.forEach { ep ->
+                val id = ep.string("id") ?: return@forEach
+                val epNum = ep.string("ep")?.toIntOrNull()
+                    ?: ep.string("epNum")?.removePrefix("E")?.toIntOrNull()
+                    ?: return@forEach
+                val sNum = ep.string("sNum")?.removePrefix("S")?.toIntOrNull() ?: seasonNumber
+                episodes.add(NetMirrorEpisode(id, sNum, epNum))
+            }
+            if (data.string("nextPageShow") != "1") break
+            page++
         }
         return episodes
     }
@@ -946,11 +987,12 @@ class HttpLocalScraperRuntime @Inject constructor(
         val playlist: String
     )
 
+    private data class NetMirrorEpisode(val id: String, val season: Int, val episode: Int)
+
     companion object {
         private val DIV_EP_REGEX = Regex("""<div[^>]+class=["']ep[^>]*>.*?</div>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
         private val DATA_IFRAME_REGEX = Regex("""data-iframe=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
         private val IFRAME_PLAYER_REGEX = Regex("""iframe\s+id=["']player_iframe["']\s+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-        private val T_HASH_T_REGEX = Regex("""t_hash_t=([^;]+)""")
         private val IFRAME_SRC_REGEX = Regex("""<iframe[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
         private val PRORCP_SRC_REGEX = Regex("""src:\s*['"]([^'"]+)['"]""", RegexOption.IGNORE_CASE)
         private val DIV_MATCH_REGEX = Regex(
@@ -965,6 +1007,32 @@ class HttpLocalScraperRuntime @Inject constructor(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
         private val HTTP_FORMATS = setOf("mp4", "mkv", "m3u8", "hls", "dash")
         private val P2P_FORMATS = setOf("torrent", "magnet", "p2p", "infohash")
+        private val NEW_TV_DOMAINS = listOf(
+            "aHR0cHM6Ly9tb2JpbGVkZXRlY3RzLmNvbQ==",
+            "aHR0cHM6Ly9tb2JpbGVkZXRlY3QuYXBw",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0LmFydA==",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0LmNj",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0LmNsaWNr",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0Lmluaw==",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0LmxpdmU=",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0LnBybw==",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0LnNob3A=",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0LnNpdGU=",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0LnNwYWNl",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0LnN0b3Jl",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0LnZpcA==",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0Lndpa2k=",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0Lnh5eg==",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0cy5hcnQ=",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0cy5jYw==",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0cy5pbmZv",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0cy5pbms=",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0cy5saXZl",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0cy5wcm8=",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0cy5zdG9yZQ==",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0cy50b3A=",
+            "aHR0cHM6Ly9tb2JpZGV0ZWN0cy54eXo="
+        )
         private val VIDEASY_HEADERS = mapOf(
             "User-Agent" to USER_AGENT,
             "Accept" to "application/json, text/plain, */*",
