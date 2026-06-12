@@ -2037,11 +2037,10 @@ internal fun DetailsContent(
         val heroStartPadding = 36.dp
         val heroEndPadding = 400.dp
         val configuration = LocalConfiguration.current
-        val hasPosterDetailRails = usePosterCards && (collectionItems.isNotEmpty() || similar.isNotEmpty())
-        // Poster details rails need extra vertical room for two title lines,
-        // subtitle text, and focus bleed; otherwise the title block clips.
-        val minContentRowHeight = if (hasPosterDetailRails) 322.dp else 260.dp
-        val maxContentRowHeight = if (hasPosterDetailRails) 350.dp else 330.dp
+        val hasPosterDetailRails = usePosterCards
+        // Poster rails: 110dp wide card, 1-line title, no subtitle ≈ 210dp total with focus bleed.
+        val minContentRowHeight = if (hasPosterDetailRails) 250.dp else 260.dp
+        val maxContentRowHeight = if (hasPosterDetailRails) 270.dp else 330.dp
         val contentRowHeight = (configuration.screenHeightDp * 0.34f).dp.coerceIn(
             minimumValue = minContentRowHeight,
             maximumValue = maxContentRowHeight
@@ -2135,6 +2134,7 @@ internal fun DetailsContent(
                     shadow = textShadow
                 )
 
+                // Line 1: genre / date / duration / network
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -2187,60 +2187,74 @@ internal fun DetailsContent(
                                 .width(52.dp)
                         )
                     }
+                }
 
-                    if (ratingValue > 0f) {
-                        Text(text = "|", style = separatorStyle, color = Color.White.copy(alpha = 0.7f))
-                        DetailsImdbSvgRatingBadge(
-                            rating = rating,
-                            imageLoader = metadataLogoImageLoader,
-                            ratingFontSize = 13,
-                            logoWidth = 34.dp,
-                            logoHeight = 14.dp,
-                            textShadow = textShadow
-                        )
-                    }
-
-                    if (!item.rtScore.isNullOrEmpty()) {
-                        Text(text = "|", style = separatorStyle, color = Color.White.copy(alpha = 0.7f))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Text(text = "🍅", style = ArflixTypography.caption.copy(fontSize = 11.sp), maxLines = 1)
-                            Text(
-                                text = item.rtScore.orEmpty(),
-                                style = ArflixTypography.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold, shadow = textShadow),
-                                color = Color.White, maxLines = 1
+                // Line 2: ratings / budget
+                val hasRatingsLine = ratingValue > 0f || !item.rtScore.isNullOrEmpty() ||
+                    !item.popcornScore.isNullOrEmpty() || !budgetText.isNullOrBlank()
+                if (hasRatingsLine) {
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        var firstItem = true
+                        if (ratingValue > 0f) {
+                            firstItem = false
+                            DetailsImdbSvgRatingBadge(
+                                rating = rating,
+                                imageLoader = metadataLogoImageLoader,
+                                ratingFontSize = 13,
+                                logoWidth = 34.dp,
+                                logoHeight = 14.dp,
+                                textShadow = textShadow
                             )
                         }
-                    }
 
-                    if (!item.popcornScore.isNullOrEmpty()) {
-                        Text(text = "|", style = separatorStyle, color = Color.White.copy(alpha = 0.7f))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Text(text = "🍿", style = ArflixTypography.caption.copy(fontSize = 11.sp), maxLines = 1)
+                        if (!item.rtScore.isNullOrEmpty()) {
+                            if (!firstItem) Text(text = "|", style = separatorStyle, color = Color.White.copy(alpha = 0.7f))
+                            firstItem = false
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Text(text = "🍅", style = ArflixTypography.caption.copy(fontSize = 11.sp), maxLines = 1)
+                                Text(
+                                    text = item.rtScore.orEmpty(),
+                                    style = ArflixTypography.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold, shadow = textShadow),
+                                    color = Color.White, maxLines = 1
+                                )
+                            }
+                        }
+
+                        if (!item.popcornScore.isNullOrEmpty()) {
+                            if (!firstItem) Text(text = "|", style = separatorStyle, color = Color.White.copy(alpha = 0.7f))
+                            firstItem = false
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Text(text = "🍿", style = ArflixTypography.caption.copy(fontSize = 11.sp), maxLines = 1)
+                                Text(
+                                    text = item.popcornScore.orEmpty(),
+                                    style = ArflixTypography.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold, shadow = textShadow),
+                                    color = Color.White, maxLines = 1
+                                )
+                            }
+                        }
+
+                        if (!budgetText.isNullOrBlank()) {
+                            if (!firstItem) Text(text = "|", style = separatorStyle, color = Color.White.copy(alpha = 0.7f))
                             Text(
-                                text = item.popcornScore.orEmpty(),
-                                style = ArflixTypography.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold, shadow = textShadow),
-                                color = Color.White, maxLines = 1
+                                text = budgetText,
+                                style = ArflixTypography.caption.copy(
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    shadow = textShadow
+                                ),
+                                color = Color.White
                             )
                         }
-                    }
-
-                    if (!budgetText.isNullOrBlank()) {
-                        Text(text = "|", style = separatorStyle, color = Color.White.copy(alpha = 0.7f))
-                        Text(
-                            text = budgetText,
-                            style = ArflixTypography.caption.copy(
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                shadow = textShadow
-                            ),
-                            color = Color.White
-                        )
                     }
                 }
 
@@ -2861,7 +2875,7 @@ private fun DetailsReviewRail(
                 fontWeight = FontWeight.Bold
             ),
             color = Color.White.copy(alpha = 0.9f),
-            modifier = Modifier.padding(start = contentStartPadding, bottom = 10.dp)
+            modifier = Modifier.padding(start = contentStartPadding, bottom = 4.dp)
         )
 
         TvLazyRow(
@@ -2905,8 +2919,8 @@ private fun DetailsSimilarRail(
     onSimilarClick: (Int) -> Unit
 ) {
     val similarRowState = rememberTvLazyListState()
-    val similarCardWidth = if (usePosterCards) 126.dp else 210.dp
-    val similarFocusBleed = if (usePosterCards) 18.dp else 14.dp
+    val similarCardWidth = if (usePosterCards) 110.dp else 210.dp
+    val similarFocusBleed = if (usePosterCards) 12.dp else 14.dp
     val similarFixedFocus = focusSectionForUi == FocusSection.SIMILAR &&
         detailsRailUsesFixedFirstSlotFocus(
             totalItems = similar.size,
@@ -2929,7 +2943,7 @@ private fun DetailsSimilarRail(
                 fontWeight = FontWeight.Bold
             ),
             color = Color.White.copy(alpha = 0.9f),
-            modifier = Modifier.padding(start = contentStartPadding, bottom = 10.dp)
+            modifier = Modifier.padding(start = contentStartPadding, bottom = 4.dp)
         )
 
         Box(modifier = Modifier.fillMaxWidth()) {
@@ -2989,8 +3003,8 @@ private fun DetailsCollectionRail(
     onCollectionClick: (Int) -> Unit
 ) {
     val collectionRowState = rememberTvLazyListState()
-    val collectionCardWidth = if (usePosterCards) 126.dp else 210.dp
-    val collectionFocusBleed = if (usePosterCards) 18.dp else 14.dp
+    val collectionCardWidth = if (usePosterCards) 110.dp else 210.dp
+    val collectionFocusBleed = if (usePosterCards) 12.dp else 14.dp
     val collectionFixedFocus = focusSectionForUi == FocusSection.COLLECTION &&
         detailsRailUsesFixedFirstSlotFocus(
             totalItems = collectionItems.size,
@@ -3014,7 +3028,7 @@ private fun DetailsCollectionRail(
                 fontWeight = FontWeight.Bold
             ),
             color = Color.White.copy(alpha = 0.9f),
-            modifier = Modifier.padding(start = contentStartPadding, bottom = 10.dp)
+            modifier = Modifier.padding(start = contentStartPadding, bottom = 4.dp)
         )
 
         Box(modifier = Modifier.fillMaxWidth()) {
@@ -4420,11 +4434,12 @@ private fun SimilarMediaCard(
     val yearSuffix = item.year.takeIf { it.isNotBlank() }?.let { " | $it" }.orEmpty()
     MediaCard(
         item = item.copy(subtitle = "$mediaTypeLabel$yearSuffix"),
-        width = if (usePosterCards) 126.dp else 210.dp,
+        width = if (usePosterCards) 110.dp else 210.dp,
         isLandscape = !usePosterCards,
         logoImageUrl = logoImageUrl,
         showProgress = false,
-        titleMaxLines = if (usePosterCards) 2 else 1,
+        showSubtitle = !usePosterCards,
+        titleMaxLines = 1,
         subtitleMaxLines = 1,
         isFocusedOverride = isFocused,
         enableSystemFocus = false,

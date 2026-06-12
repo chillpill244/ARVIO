@@ -81,6 +81,7 @@ fun MediaCard(
     raiseOnFocus: Boolean = true,
     showProgress: Boolean = false,
     showTitle: Boolean = true,
+    showSubtitle: Boolean = true,
     titleMaxLines: Int = 1,
     subtitleMaxLines: Int = 1,
     isFocusedOverride: Boolean = false,
@@ -449,6 +450,7 @@ fun MediaCard(
             Text(
                 text = item.title,
                 style = if (isMobile) ArvioSkin.typography.cardTitle.copy(fontSize = 14.sp)
+                        else if (!isLandscape) ArvioSkin.typography.cardTitle.copy(fontSize = 12.sp)
                         else ArvioSkin.typography.cardTitle,
                 color = if (visualFocused) {
                     ArvioSkin.colors.textPrimary
@@ -459,27 +461,29 @@ fun MediaCard(
                 overflow = TextOverflow.Ellipsis,
             )
 
-            // Prefer release date (or year) under the title. Fall back to the
-            // explicit subtitle or media-type label only when neither is set.
-            val subtitle = remember(item.subtitle, item.releaseDate, item.year, item.mediaType) {
-                val release = item.releaseDate?.takeIf { it.isNotBlank() }
-                    ?: item.year.takeIf { it.isNotBlank() }
-                release
-                    ?: item.subtitle.ifBlank {
-                        when (item.mediaType) {
-                            MediaType.TV -> "TV Series"
-                            MediaType.MOVIE -> "Movie"
-                            else -> "Media"
+            if (showSubtitle) {
+                // Prefer release date (or year) under the title. Fall back to the
+                // explicit subtitle or media-type label only when neither is set.
+                val subtitle = remember(item.subtitle, item.releaseDate, item.year, item.mediaType) {
+                    val release = item.releaseDate?.takeIf { it.isNotBlank() }
+                        ?: item.year.takeIf { it.isNotBlank() }
+                    release
+                        ?: item.subtitle.ifBlank {
+                            when (item.mediaType) {
+                                MediaType.TV -> "TV Series"
+                                MediaType.MOVIE -> "Movie"
+                                else -> "Media"
+                            }
                         }
-                    }
+                }
+                Text(
+                    text = subtitle,
+                    style = ArvioSkin.typography.caption,
+                    color = ArvioSkin.colors.textMuted.copy(alpha = 0.85f),
+                    maxLines = subtitleMaxLines,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Text(
-                text = subtitle,
-                style = ArvioSkin.typography.caption,
-                color = ArvioSkin.colors.textMuted.copy(alpha = 0.85f),
-                maxLines = subtitleMaxLines,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
     }
 }
