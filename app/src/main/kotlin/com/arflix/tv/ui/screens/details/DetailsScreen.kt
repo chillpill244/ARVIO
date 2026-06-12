@@ -1535,6 +1535,34 @@ internal fun DetailsContent(
                                     textShadow = textShadow
                                 )
                             }
+                            if (!item.rtScore.isNullOrEmpty()) {
+                                MobileMetadataSeparator()
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Text(text = "🍅", style = ArflixTypography.caption.copy(fontSize = 11.sp), maxLines = 1)
+                                    Text(
+                                        text = item.rtScore.orEmpty(),
+                                        style = ArflixTypography.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold, shadow = textShadow),
+                                        color = Color.White.copy(alpha = 0.78f), maxLines = 1
+                                    )
+                                }
+                            }
+                            if (!item.popcornScore.isNullOrEmpty()) {
+                                MobileMetadataSeparator()
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Text(text = "🍿", style = ArflixTypography.caption.copy(fontSize = 11.sp), maxLines = 1)
+                                    Text(
+                                        text = item.popcornScore.orEmpty(),
+                                        style = ArflixTypography.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold, shadow = textShadow),
+                                        color = Color.White.copy(alpha = 0.78f), maxLines = 1
+                                    )
+                                }
+                            }
                             if (displayDate.isNotEmpty()) {
                                 MobileMetadataSeparator()
                                 Text(
@@ -2172,10 +2200,40 @@ internal fun DetailsContent(
                         )
                     }
 
+                    if (!item.rtScore.isNullOrEmpty()) {
+                        Text(text = "|", style = separatorStyle, color = Color.White.copy(alpha = 0.7f))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text(text = "🍅", style = ArflixTypography.caption.copy(fontSize = 11.sp), maxLines = 1)
+                            Text(
+                                text = item.rtScore.orEmpty(),
+                                style = ArflixTypography.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold, shadow = textShadow),
+                                color = Color.White, maxLines = 1
+                            )
+                        }
+                    }
+
+                    if (!item.popcornScore.isNullOrEmpty()) {
+                        Text(text = "|", style = separatorStyle, color = Color.White.copy(alpha = 0.7f))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text(text = "🍿", style = ArflixTypography.caption.copy(fontSize = 11.sp), maxLines = 1)
+                            Text(
+                                text = item.popcornScore.orEmpty(),
+                                style = ArflixTypography.caption.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold, shadow = textShadow),
+                                color = Color.White, maxLines = 1
+                            )
+                        }
+                    }
+
                     if (!budgetText.isNullOrBlank()) {
                         Text(text = "|", style = separatorStyle, color = Color.White.copy(alpha = 0.7f))
                         Text(
-                            text = "${stringResource(R.string.budget)} $budgetText",
+                            text = budgetText,
                             style = ArflixTypography.caption.copy(
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,

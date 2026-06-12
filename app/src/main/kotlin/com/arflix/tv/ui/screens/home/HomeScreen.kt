@@ -1458,7 +1458,9 @@ private fun HeroSection(
                     val hasBudgetMetadata = showBudget && !budgetText.isNullOrBlank()
                     val hasSecondaryMetadata = primaryNetworkLogo != null ||
                         hasRatingMetadata ||
-                        hasBudgetMetadata
+                        hasBudgetMetadata ||
+                        !currentItem.rtScore.isNullOrEmpty() ||
+                        !currentItem.popcornScore.isNullOrEmpty()
 
                     Column(
                         modifier = Modifier.width(heroTextWidth),
@@ -1603,7 +1605,7 @@ private fun HeroSection(
 
                                 if (hasBudgetMetadata) {
                                     Text(
-                                        text = "Budget $budgetText",
+                                        text = budgetText.orEmpty(),
                                         style = ArflixTypography.caption.copy(
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Medium,
