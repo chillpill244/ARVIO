@@ -1631,7 +1631,7 @@ fun SettingsScreen(
         if (showIptvInput) {
             InputModal(
                 title = if (editingIptvIndex >= 0) "Edit TV Playlist" else "Add TV Playlist",
-                supportingText = "EPG supports multiple sources for this playlist. Add one URL per line; ARVIO will match them in order.",
+                supportingText = "EPG supports multiple sources for this playlist. Add one URL per line; MUVIO will match them in order.",
                 fields = listOf(
                     InputField(
                         label = "Playlist Name",
@@ -1943,7 +1943,7 @@ fun SettingsScreen(
             TraktActivationModal(
                 title = "Connect with code",
                 instruction = if (LocalDeviceType.current.isTouchDevice()) {
-                    "Open the auth page, sign in, then return to ARVIO. This screen will finish automatically."
+                    "Open the auth page, sign in, then return to MUVIO. This screen will finish automatically."
                 } else {
                     "Scan the QR code or open the auth page and confirm this code"
                 },
@@ -2526,7 +2526,7 @@ private fun CloudEmailPasswordModal(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "ARVIO Cloud Sign-in",
+                    text = "MUVIO Cloud Sign-in",
                     style = ArflixTypography.sectionTitle,
                     color = TextPrimary,
                     modifier = Modifier.padding(bottom = 24.dp)
@@ -2767,7 +2767,7 @@ private fun CloudPairModal(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "ARVIO Cloud Pairing",
+                    text = "MUVIO Cloud Pairing",
                     style = ArflixTypography.sectionTitle,
                     color = TextPrimary,
                     modifier = Modifier.padding(bottom = 10.dp)
@@ -4365,7 +4365,7 @@ private fun tvSettingsSectionDescription(section: String): String {
         "catalogs" -> "Discover, rename, order and remove home rows and list catalogs."
         "stremio" -> "Manage third-party addons used for catalog and source discovery."
         "accounts" -> "Cloud sync, Trakt connection, app updates and account controls."
-        else -> "Configure ARVIO for this profile."
+        else -> "Configure MUVIO for this profile."
     }
 }
 
@@ -4489,7 +4489,7 @@ private fun tvSettingsFocusedHelp(section: String, focusedIndex: Int): TvSetting
     }
     return when (section) {
         "language" -> when (focusedIndex) {
-            0 -> TvSettingsHelp("App language", "Changes the interface and metadata language used by ARVIO.")
+            0 -> TvSettingsHelp("App language", "Changes the interface and metadata language used by MUVIO.")
             else -> TvSettingsHelp("Default audio", "Preferred audio language when multiple tracks exist.")
         }
         "subtitles" -> when (focusedIndex) {
@@ -4523,7 +4523,7 @@ private fun tvSettingsFocusedHelp(section: String, focusedIndex: Int): TvSetting
         }
         "stremio" -> TvSettingsHelp("Addon", "Enable, disable, add or remove third-party addon sources.")
         "accounts" -> when (focusedIndex) {
-            0 -> TvSettingsHelp("Cloud account", "Connect or disconnect ARVIO cloud sync.")
+            0 -> TvSettingsHelp("Cloud account", "Connect or disconnect MUVIO cloud sync.")
             1 -> TvSettingsHelp("Trakt", "Connect or disconnect Trakt watch history and lists.")
             2 -> TvSettingsHelp("Force cloud sync", "Push/pull the latest synced profile data now.")
             3 -> TvSettingsHelp("App updates", "Check for sideload app updates or install a downloaded update.")
@@ -7277,7 +7277,7 @@ private fun AccountsSettings(
 
         /*
         AccountRow(
-            name = "ARVIO Cloud",
+            name = "MUVIO Cloud",
             description = cloudEmail ?: "Optional account for syncing profiles, addons, catalogs and IPTV settings",
             isConnected = isCloudAuthenticated,
             isWorking = false,
@@ -7320,7 +7320,7 @@ private fun AccountsSettings(
             } else if (isCloudAuthenticated) {
                 "Upload local state, then restore from cloud now"
             } else {
-                "Sign in to ARVIO Cloud to force sync"
+                "Sign in to MUVIO Cloud to force sync"
             },
             actionLabel = if (isForceCloudSyncing) "SYNCING" else "SYNC",
             isFocused = focusedIndex == 2,
@@ -7338,8 +7338,8 @@ private fun AccountsSettings(
                 updateStatus is com.arflix.tv.updater.UpdateStatus.ReadyToInstall -> "Latest update downloaded and ready to install"
                 updateStatus is com.arflix.tv.updater.UpdateStatus.Checking -> "Checking GitHub Releases for a newer APK"
                 updateStatus is com.arflix.tv.updater.UpdateStatus.UpdateAvailable -> "Update available: ${updateStatus.update.title.ifBlank { updateStatus.update.tag }}"
-                updateStatus is com.arflix.tv.updater.UpdateStatus.Success -> "You already have the latest ARVIO version"
-                else -> "Check GitHub Releases for the latest ARVIO APK"
+                updateStatus is com.arflix.tv.updater.UpdateStatus.Success -> "You already have the latest MUVIO version"
+                else -> "Check for the latest MUVIO APK"
             },
             actionLabel = when {
                 !isSelfUpdateSupported -> "PLAY"
@@ -7359,7 +7359,7 @@ private fun AccountsSettings(
 
         // SettingsActionRow(
         //     title = "Privacy and data deletion",
-        //     description = "Open privacy and ARVIO Cloud account deletion instructions",
+        //     description = "Open privacy and MUVIO Cloud account deletion instructions",
         //     actionLabel = "OPEN",
         //     isFocused = focusedIndex == 4,
         //     onClick = onOpenDataDeletion,
