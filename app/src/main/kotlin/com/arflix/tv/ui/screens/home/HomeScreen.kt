@@ -1363,11 +1363,10 @@ private fun HeroSection(
                     } else {
                         // Fallback to title text
                         Text(
-                            text = currentItem.title.uppercase(),
+                            text = currentItem.title,
                             style = ArflixTypography.heroTitle.copy(
                                 fontSize = 40.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 2.sp,
+                                letterSpacing = (-1.2).sp,
                                 shadow = textShadow
                             ),
                             color = TextPrimary,
@@ -2061,7 +2060,7 @@ private fun MobileHeroCarousel(
                     )
                 }
             }
-            // Banner absolutely centered
+            // Banner absolutely centered, nudged up for optical balance
             Image(
                 painter = painterResource(id = R.drawable.app_banner),
                 contentDescription = "MUVIO",
@@ -2069,6 +2068,7 @@ private fun MobileHeroCarousel(
                 modifier = Modifier
                     .height(36.dp)
                     .align(Alignment.Center)
+                    .offset(y = (-4).dp)
             )
             // Search icon pinned to end
             Icon(

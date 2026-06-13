@@ -9,7 +9,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.arflix.tv.ui.theme.InterFontFamily
+import com.arflix.tv.ui.theme.JetBrainsSansFontFamily
 
 @Immutable
 data class ArvioColorTokens(
@@ -88,22 +88,23 @@ data class ArvioSkinTokens(
 ) {
     companion object {
         fun defaults(): ArvioSkinTokens {
-            val easeOut: Easing = CubicBezierEasing(0.0f, 0.0f, 0.2f, 1.0f)
+            // Nuvio standard easing: cubic-bezier(0.2, 0, 0, 1)
+            val easeOut: Easing = CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f)
 
             return ArvioSkinTokens(
                 colors = ArvioColorTokens(
-                    background = Color(0xFF000000),
-                    surface = Color(0xFF0D0D0D),
-                    surfaceRaised = Color(0xFF1A1A1A),
-                    textPrimary = Color(0xFFEDEDED),
-                    textMuted = Color(0xB3EDEDED),
-                    accent = Color(0xFFEDEDED),
-                    focusOutline = Color(0xFFFFFFFF),  // Glowing white focus
-                    focusGradientStart = Color(0xFFFFFFFF),  // White
-                    focusGradientEnd = Color(0xFFFFFFFF),    // White (no gradient)
+                    background = Color(0xFF0D0D0D),     // Nuvio background
+                    surface = Color(0xFF1A1A1A),        // Nuvio backgroundElevated
+                    surfaceRaised = Color(0xFF222222),  // Nuvio backgroundCard (White palette)
+                    textPrimary = Color(0xFFF5F7F8),    // Nuvio textPrimary
+                    textMuted = Color(0xFF969CA3),      // Nuvio textMuted
+                    accent = Color(0xFFF5F5F5),         // Nuvio White palette secondary
+                    focusOutline = Color(0xFFFFFFFF),   // Nuvio White palette focusRing
+                    focusGradientStart = Color(0xFFFFFFFF),
+                    focusGradientEnd = Color(0xFFFFFFFF),
                     tealAccent = Color(0xFF00D9B5),  // Teal checkmark color
-                    watchedGreen = Color(0xFF4CAF50),  // Green checkmark (Arctic Fuse 2 style)
-                    inProgressGrey = Color(0xFF757575),  // Grey clock for in-progress
+                    watchedGreen = Color(0xFF66BB6A),  // Nuvio success
+                    inProgressGrey = Color(0xFF969CA3),  // Nuvio neutral/textMuted
                 ),
                 spacing = ArvioSpacingTokens(
                     x1 = 4.dp,
@@ -122,60 +123,60 @@ data class ArvioSkinTokens(
                 ),
                 typography = ArvioTypographyTokens(
                     heroTitle = TextStyle(
-                        fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.Black,
+                        fontFamily = JetBrainsSansFontFamily,
+                        fontWeight = FontWeight.Bold,
                         fontSize = 50.sp,
-                        letterSpacing = (-0.5).sp,
+                        letterSpacing = (-1.6).sp,
                         lineHeight = 56.sp,
                     ),
                     sectionTitle = TextStyle(
-                        fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.Bold,
+                        fontFamily = JetBrainsSansFontFamily,
+                        fontWeight = FontWeight.SemiBold,
                         fontSize = 20.sp,
-                        letterSpacing = 0.4.sp,
+                        letterSpacing = (-0.6).sp,
                         lineHeight = 26.sp,
                     ),
                     cardTitle = TextStyle(
-                        fontFamily = InterFontFamily,
+                        fontFamily = JetBrainsSansFontFamily,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 15.sp,
                         letterSpacing = 0.sp,
                         lineHeight = 20.sp,
                     ),
                     body = TextStyle(
-                        fontFamily = InterFontFamily,
+                        fontFamily = JetBrainsSansFontFamily,
                         fontWeight = FontWeight.Normal,
                         fontSize = 14.sp,
                         letterSpacing = 0.sp,
                         lineHeight = 20.sp,
                     ),
                     caption = TextStyle(
-                        fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.Medium,
+                        fontFamily = JetBrainsSansFontFamily,
+                        fontWeight = FontWeight.SemiBold,
                         fontSize = 11.sp,
-                        letterSpacing = 0.3.sp,
+                        letterSpacing = 0.sp,
                         lineHeight = 14.sp,
                     ),
                     badge = TextStyle(
-                        fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.Bold,
+                        fontFamily = JetBrainsSansFontFamily,
+                        fontWeight = FontWeight.SemiBold,
                         fontSize = 9.sp,
-                        letterSpacing = 0.4.sp,
+                        letterSpacing = 0.8.sp,
                         lineHeight = 12.sp,
                     ),
                     button = TextStyle(
-                        fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.Bold,
+                        fontFamily = JetBrainsSansFontFamily,
+                        fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp,
-                        letterSpacing = 0.4.sp,
+                        letterSpacing = 0.sp,
                         lineHeight = 20.sp,
                     ),
                 ),
                 motion = ArvioMotionTokens(
-                    focusDurationMillis = 120,    // Smooth focus transitions
+                    focusDurationMillis = 150,    // Nuvio fast
                     focusEasing = easeOut,
-                    screenTransitionMillis = 150, // Smooth screen transitions
-                    heroFadeMillis = 200,         // Smooth backdrop dissolve
+                    screenTransitionMillis = 220, // Nuvio normal
+                    heroFadeMillis = 220,         // Nuvio normal
                 ),
                 focus = ArvioFocusTokens(
                     scaleFocused = 1.05f,  // Noticeable scale for TV viewing distance

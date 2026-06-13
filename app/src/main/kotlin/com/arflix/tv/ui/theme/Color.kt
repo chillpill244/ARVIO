@@ -8,14 +8,14 @@ import androidx.compose.ui.graphics.Color
  */
 
 // ============================================
-// ARCTIC FUSE 2 MAIN COLORS
+// MAIN COLORS (Nuvio textPrimary #F5F7F8)
 // ============================================
-val ArcticWhite = Color(0xFFEDEDED)          // Main foreground #ededed
-val ArcticWhite90 = Color(0xE7EDEDED)        // 90% opacity
-val ArcticWhite70 = Color(0xB3EDEDED)        // 70% opacity
-val ArcticWhite50 = Color(0x80EDEDED)        // 50% opacity
-val ArcticWhite30 = Color(0x4DEDEDED)        // 30% opacity
-val ArcticWhite12 = Color(0x1FEDEDED)        // 12% opacity
+val ArcticWhite = Color(0xFFF5F7F8)          // Nuvio textPrimary
+val ArcticWhite90 = Color(0xE7F5F7F8)        // 90% opacity
+val ArcticWhite70 = Color(0xB3F5F7F8)        // 70% opacity
+val ArcticWhite50 = Color(0x80F5F7F8)        // 50% opacity
+val ArcticWhite30 = Color(0x4DF5F7F8)        // 30% opacity
+val ArcticWhite12 = Color(0x1FF5F7F8)        // 12% opacity
 
 val ArcticBlack = Color(0xFF000000)          // Main background #000000
 val ArcticBlack90 = Color(0xE7000000)        // 90% opacity
@@ -61,16 +61,16 @@ val PinkDark = ArcticGray
 val PinkGlow = Color(0x33FFFFFF)
 
 // Gradient combinations (minimal)
-val GradientStart = Color(0xFF08090A)
-val GradientMiddle = Color(0xFF08090A)
-val GradientEnd = Color(0xFF08090A)
+val GradientStart = Color(0xFF0D0D0D)
+val GradientMiddle = Color(0xFF0D0D0D)
+val GradientEnd = Color(0xFF0D0D0D)
 
 // ============================================
-// BACKGROUND COLORS (App Background)
+// BACKGROUND COLORS (Nuvio palette)
 // ============================================
-val BackgroundDark = Color(0xFF08090A)        // #08090A
-val BackgroundCard = Color(0xFF0D0D0D)        // Slightly elevated
-val BackgroundElevated = Color(0xFF1A1A1A)    // Elevated surfaces
+val BackgroundDark = Color(0xFF0D0D0D)        // Nuvio background
+val BackgroundCard = Color(0xFF1A1A1A)        // Nuvio backgroundElevated
+val BackgroundElevated = Color(0xFF222222)    // Nuvio backgroundCard (White palette)
 val BackgroundOverlay = BackgroundDark.copy(alpha = 0.90f)
 val BackgroundGlass = BackgroundDark.copy(alpha = 0.60f)
 
@@ -84,32 +84,32 @@ val BackgroundGradientEnd = BackgroundDark
 // SURFACE COLORS
 // ============================================
 val SurfaceDark = BackgroundDark
-val SurfaceVariant = Color(0xFF0D0D0D)
+val SurfaceVariant = Color(0xFF1A1A1A)
 val SurfaceGlass = Color(0x4D000000)
 
 // ============================================
-// TEXT COLORS (Light Gray #EDEDED)
+// TEXT COLORS (Nuvio text tokens)
 // ============================================
-val TextPrimary = ArcticWhite                 // #EDEDED
-val TextSecondary = ArcticWhite70             // 70% opacity
-val TextTertiary = ArcticWhite50              // 50% opacity
+val TextPrimary = ArcticWhite                 // Nuvio textPrimary #F5F7F8
+val TextSecondary = Color(0xFFB8BEC5)         // Nuvio textSecondary
+val TextTertiary = Color(0xFF969CA3)          // Nuvio textMuted
 val TextDisabled = ArcticWhite30              // 30% opacity
 
 // ============================================
-// BORDER COLORS
+// BORDER COLORS (Nuvio border tokens)
 // ============================================
-val BorderLight = ArcticWhite12               // 12% white
-val BorderMedium = ArcticWhite30              // 30% white
-val BorderGradient = ArcticWhite50            // 50% white
+val BorderLight = Color(0x8C252A2A)           // Nuvio borderSubtle (55%)
+val BorderMedium = Color(0xFF252A2A)          // Nuvio borderDefault
+val BorderGradient = Color(0xFF3A4040)        // Nuvio borderStrong
 
 // ============================================
-// STATUS COLORS
+// STATUS COLORS (Nuvio status tokens)
 // ============================================
-val SuccessGreen = AccentGreen
-val ErrorRed = Color(0xFFE74C3C)
-val WarningOrange = Color(0xFFF39C12)
-val InfoBlue = ArcticWhite
-val OngoingBlue = ArcticWhite
+val SuccessGreen = Color(0xFF66BB6A)          // Nuvio success
+val ErrorRed = Color(0xFFE36A8A)              // Nuvio danger
+val WarningOrange = Color(0xFFFFC857)         // Nuvio warning
+val InfoBlue = Color(0xFF42A5F5)              // Nuvio info
+val OngoingBlue = Color(0xFF42A5F5)           // Nuvio info
 
 // ============================================
 // SPECIAL COLORS

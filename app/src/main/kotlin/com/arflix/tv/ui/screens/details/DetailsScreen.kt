@@ -1502,9 +1502,10 @@ internal fun DetailsContent(
                             } else if (item.title.isNotBlank()) {
                                 Text(
                                     text = item.title,
-                                    style = ArflixTypography.body.copy(
+                                    style = ArflixTypography.heroTitle.copy(
                                         fontSize = 26.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        lineHeight = 32.sp,
+                                        letterSpacing = (-0.8).sp,
                                         shadow = textShadow
                                     ),
                                     color = Color.White,
@@ -2085,9 +2086,10 @@ internal fun DetailsContent(
                         } else if (item.title.isNotBlank()) {
                             Text(
                                 text = item.title,
-                                style = ArflixTypography.body.copy(
+                                style = ArflixTypography.heroTitle.copy(
                                     fontSize = 28.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    lineHeight = 34.sp,
+                                    letterSpacing = (-0.9).sp,
                                     shadow = textShadow
                                 ),
                                 color = Color.White,
@@ -2662,9 +2664,7 @@ private fun DetailsSeasonRail(
         rowState = seasonRowState,
         isCurrentRow = focusSectionForUi == FocusSection.SEASONS,
         focusedItemIndex = seasonIndex,
-        totalItems = totalSeasons,
-        itemWidth = 128.dp,
-        itemSpacing = 8.dp
+        totalItems = totalSeasons
     )
 
     val seasonFocusIndex by remember(focusSectionForUi, seasonIndex) {
@@ -2733,9 +2733,7 @@ private fun DetailsEpisodeRail(
         rowState = episodeRowState,
         isCurrentRow = focusSectionForUi == FocusSection.EPISODES,
         focusedItemIndex = episodeIndex,
-        totalItems = episodes.size,
-        itemWidth = episodeCardWidth,
-        itemSpacing = 16.dp
+        totalItems = episodes.size
     )
 
     val currentFocusedSection by rememberUpdatedState(focusSectionForUi)
@@ -2800,9 +2798,7 @@ private fun DetailsCastRail(
         rowState = castRowState,
         isCurrentRow = focusSectionForUi == FocusSection.CAST,
         focusedItemIndex = castIndex,
-        totalItems = cast.size,
-        itemWidth = 90.dp,
-        itemSpacing = 16.dp
+        totalItems = cast.size
     )
 
     Column {
@@ -2862,9 +2858,7 @@ private fun DetailsReviewRail(
         rowState = reviewRowState,
         isCurrentRow = focusSectionForUi == FocusSection.REVIEWS,
         focusedItemIndex = reviewIndex,
-        totalItems = reviews.size,
-        itemWidth = 320.dp,
-        itemSpacing = 16.dp
+        totalItems = reviews.size
     )
 
     Column {
@@ -2930,9 +2924,7 @@ private fun DetailsSimilarRail(
         rowState = similarRowState,
         isCurrentRow = focusSectionForUi == FocusSection.SIMILAR,
         focusedItemIndex = similarIndex,
-        totalItems = similar.size,
-        itemWidth = similarCardWidth,
-        itemSpacing = 14.dp
+        totalItems = similar.size
     )
 
     Column {
@@ -3014,9 +3006,7 @@ private fun DetailsCollectionRail(
         rowState = collectionRowState,
         isCurrentRow = focusSectionForUi == FocusSection.COLLECTION,
         focusedItemIndex = collectionIndex,
-        totalItems = collectionItems.size,
-        itemWidth = collectionCardWidth,
-        itemSpacing = 14.dp
+        totalItems = collectionItems.size
     )
 
     Column {
@@ -3164,11 +3154,8 @@ private fun HomeStyleRowAutoScroll(
     rowState: TvLazyListState,
     isCurrentRow: Boolean,
     focusedItemIndex: Int,
-    totalItems: Int,
-    itemWidth: androidx.compose.ui.unit.Dp,
-    itemSpacing: androidx.compose.ui.unit.Dp
+    totalItems: Int
 ) {
-    val density = LocalDensity.current
     val maxFirstIndex = remember(totalItems) {
         (totalItems - 1).coerceAtLeast(0)
     }
@@ -3178,9 +3165,6 @@ private fun HomeStyleRowAutoScroll(
             if (totalItems == 0) return@derivedStateOf -1
             focusedItemIndex.coerceAtMost(maxFirstIndex)
         }
-    }
-    val itemSpanPx = remember(density, itemWidth, itemSpacing) {
-        with(density) { (itemWidth + itemSpacing).toPx().coerceAtLeast(1f) }
     }
 
     var lastScrollIndex by remember { mutableIntStateOf(-1) }
@@ -3196,13 +3180,6 @@ private fun HomeStyleRowAutoScroll(
 
         val extraOffset = 0
 
-        if (focusedItemIndex == 0 && scrollTargetIndex == 0) {
-            rowState.scrollToItem(index = 0, scrollOffset = 0)
-            lastScrollIndex = 0
-            lastScrollOffset = 0
-            return@LaunchedEffect
-        }
-
         if (lastScrollIndex == scrollTargetIndex && lastScrollOffset == extraOffset) return@LaunchedEffect
         if (lastScrollIndex == -1) {
             rowState.scrollToItem(index = scrollTargetIndex, scrollOffset = extraOffset)
@@ -3211,23 +3188,30 @@ private fun HomeStyleRowAutoScroll(
             return@LaunchedEffect
         }
         val currentFirst = rowState.firstVisibleItemIndex
-        val currentOffset = rowState.firstVisibleItemScrollOffset
         val currentLast = rowState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: currentFirst
         val targetOutsideViewport = focusedItemIndex < currentFirst || focusedItemIndex > currentLast
         val delta = scrollTargetIndex - currentFirst
         if (abs(delta) > 6) {
             rowState.scrollToItem(index = scrollTargetIndex, scrollOffset = extraOffset)
         } else if (delta != 0 || targetOutsideViewport || lastScrollOffset != extraOffset) {
-            val deltaPx = (delta * itemSpanPx) + (extraOffset - currentOffset)
-            rowState.animateDetailsScrollDelta(
-                deltaPx = deltaPx,
-                durationMillis = if (abs(delta) >= 3) 180 else 150
-            )
-            if (
-                rowState.firstVisibleItemIndex != scrollTargetIndex ||
-                abs(rowState.firstVisibleItemScrollOffset - extraOffset) > 8
-            ) {
-                rowState.scrollToItem(index = scrollTargetIndex, scrollOffset = extraOffset)
+            // Items can have variable widths (e.g. season buttons size to their text),
+            // so derive the scroll distance from measured layout rather than an
+            // itemWidth estimate — a wrong estimate ends in a visible snap-correction
+            // after every animation, which reads as stutter.
+            val targetItem = rowState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == scrollTargetIndex }
+            if (targetItem != null) {
+                rowState.animateDetailsScrollDelta(
+                    deltaPx = (targetItem.offset - extraOffset).toFloat(),
+                    durationMillis = if (abs(delta) >= 3) 180 else 150
+                )
+                if (
+                    rowState.firstVisibleItemIndex != scrollTargetIndex ||
+                    abs(rowState.firstVisibleItemScrollOffset - extraOffset) > 8
+                ) {
+                    rowState.scrollToItem(index = scrollTargetIndex, scrollOffset = extraOffset)
+                }
+            } else {
+                rowState.animateScrollToItem(index = scrollTargetIndex, scrollOffset = extraOffset)
             }
         }
         lastScrollIndex = scrollTargetIndex

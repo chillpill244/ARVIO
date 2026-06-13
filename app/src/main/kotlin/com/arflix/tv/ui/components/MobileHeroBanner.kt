@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import com.arflix.tv.ui.theme.JetBrainsSansFontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -137,8 +138,10 @@ fun MobileHeroBanner(
                 Text(
                     text = title,
                     color = Color.White,
+                    fontFamily = JetBrainsSansFontFamily,
                     fontSize = 36.sp,
                     fontWeight = FontWeight.Bold,
+                    letterSpacing = (-1.1).sp,
                     lineHeight = 42.sp,
                     textAlign = TextAlign.Center,
                     maxLines = 3,

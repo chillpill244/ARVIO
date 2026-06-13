@@ -2707,7 +2707,7 @@ fun PlayerScreen(
                 )
                 Text(
                     text = "AI Translating",
-                    style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                    style = com.arflix.tv.ui.theme.ArflixTypography.caption,
                     color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f)
                 )
             }

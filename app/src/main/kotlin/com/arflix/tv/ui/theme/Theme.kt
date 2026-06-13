@@ -4,8 +4,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Typography
 import androidx.tv.material3.darkColorScheme
 import com.arflix.tv.ui.skin.LocalAccentColorOverride
 import com.arflix.tv.ui.skin.ProvideArvioSkin
@@ -82,6 +84,30 @@ fun appBackgroundDark(): Color {
 val LocalArflixColors = LocalArvioColors
 
 /**
+ * Material typography mapped to Nuvio's type treatment:
+ * JetBrains Sans everywhere, SemiBold titles/labels, Normal body.
+ */
+private val ArvioTvTypography: Typography = Typography().let { base ->
+    Typography(
+        displayLarge = base.displayLarge.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.Bold),
+        displayMedium = base.displayMedium.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.Bold),
+        displaySmall = base.displaySmall.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.Bold),
+        headlineLarge = base.headlineLarge.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.SemiBold),
+        headlineMedium = base.headlineMedium.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.SemiBold),
+        headlineSmall = base.headlineSmall.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.SemiBold),
+        titleLarge = base.titleLarge.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.SemiBold),
+        titleMedium = base.titleMedium.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.SemiBold),
+        titleSmall = base.titleSmall.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.SemiBold),
+        bodyLarge = base.bodyLarge.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.Normal),
+        bodyMedium = base.bodyMedium.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.Normal),
+        bodySmall = base.bodySmall.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.Normal),
+        labelLarge = base.labelLarge.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.SemiBold),
+        labelMedium = base.labelMedium.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.SemiBold),
+        labelSmall = base.labelSmall.copy(fontFamily = JetBrainsSansFontFamily, fontWeight = FontWeight.SemiBold),
+    )
+}
+
+/**
  * Main ARVIO TV theme - Arctic Fuse 2 inspired
  * Pure black background, light gray text, white focus states
  */
@@ -128,6 +154,7 @@ fun ArvioTvTheme(
         ProvideArvioSkin {
             MaterialTheme(
                 colorScheme = colorScheme,
+                typography = ArvioTvTypography,
                 content = content
             )
         }

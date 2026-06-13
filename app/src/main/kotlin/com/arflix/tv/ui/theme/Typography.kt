@@ -9,93 +9,93 @@ import androidx.compose.ui.unit.sp
  */
 object ArflixTypography {
     
-    // Hero title (large display) - reduced from 72sp
+    // Hero title (large display) - JetBrains Sans, Nuvio display style (Bold, tight tracking)
     val heroTitle = TextStyle(
-        fontFamily = InterFontFamily,
-        fontWeight = FontWeight.Black,
+        fontFamily = JetBrainsSansFontFamily,
+        fontWeight = FontWeight.Bold,
         fontSize = 48.sp,
-        letterSpacing = (-1).sp,
+        letterSpacing = (-1.5).sp,
         lineHeight = 52.sp
     )
-    
-    // Section headers - reduced from 28sp
+
+    // Section headers - JetBrains Sans, Nuvio headline style (SemiBold, tight tracking)
     val sectionTitle = TextStyle(
-        fontFamily = InterFontFamily,
-        fontWeight = FontWeight.Bold,
+        fontFamily = JetBrainsSansFontFamily,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 20.sp,
-        letterSpacing = 0.5.sp,  // Added letter spacing for premium feel
+        letterSpacing = (-0.6).sp,
         lineHeight = 26.sp
     )
-    
-    // Card titles - slightly larger for TV visibility
+
+    // Card titles - JetBrains Sans, Nuvio title style (SemiBold, neutral tracking)
     val cardTitle = TextStyle(
-        fontFamily = InterFontFamily,
-        fontWeight = FontWeight.SemiBold,  // Changed from Bold for softer look
-        fontSize = 15.sp,  // Increased from 14sp
+        fontFamily = JetBrainsSansFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 15.sp,
         letterSpacing = 0.sp,
         lineHeight = 20.sp
     )
     
-    // Body text - reduced from 16sp
+    // Body text - JetBrains Sans, Nuvio bodyMd style
     val body = TextStyle(
-        fontFamily = InterFontFamily,
+        fontFamily = JetBrainsSansFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         letterSpacing = 0.sp,
         lineHeight = 20.sp
     )
-    
-    // Body large (for hero overview) - reduced from 24sp
+
+    // Body large (for hero overview) - JetBrains Sans, Nuvio bodyLg style
     val bodyLarge = TextStyle(
-        fontFamily = InterFontFamily,
-        fontWeight = FontWeight.Medium,
+        fontFamily = JetBrainsSansFontFamily,
+        fontWeight = FontWeight.Normal,
         fontSize = 18.sp,
         letterSpacing = 0.sp,
         lineHeight = 24.sp
     )
-    
-    // Caption / small text - reduced from 12sp
+
+    // Caption / small text - JetBrains Sans, Nuvio labelXs style
     val caption = TextStyle(
-        fontFamily = InterFontFamily,
-        fontWeight = FontWeight.Medium,
+        fontFamily = JetBrainsSansFontFamily,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 11.sp,
-        letterSpacing = 0.4.sp,
+        letterSpacing = 0.sp,
         lineHeight = 14.sp
     )
-    
-    // Label (metadata pills) - reduced from 14sp
+
+    // Label (metadata pills) - JetBrains Sans, Nuvio labelMedium style (wide tracking)
     val label = TextStyle(
-        fontFamily = InterFontFamily,
-        fontWeight = FontWeight.Bold,
+        fontFamily = JetBrainsSansFontFamily,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 12.sp,
-        letterSpacing = 0.4.sp,
+        letterSpacing = 0.8.sp,
         lineHeight = 16.sp
     )
-    
-    // Button text
+
+    // Button text - JetBrains Sans, Nuvio labelLarge style
     val button = TextStyle(
-        fontFamily = InterFontFamily,
-        fontWeight = FontWeight.Bold,
+        fontFamily = JetBrainsSansFontFamily,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 14.sp,
-        letterSpacing = 0.5.sp,
+        letterSpacing = 0.sp,
         lineHeight = 20.sp
     )
-    
-    // Clock display - reduced from 32sp
+
+    // Clock display - JetBrains Sans, Nuvio title style
     val clock = TextStyle(
-        fontFamily = InterFontFamily,
-        fontWeight = FontWeight.Bold,
+        fontFamily = JetBrainsSansFontFamily,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 24.sp,
         letterSpacing = 0.sp,
         lineHeight = 30.sp
     )
-    
-    // Episode number badge - reduced from 11sp
+
+    // Episode number badge - JetBrains Sans, Nuvio label tracking
     val badge = TextStyle(
-        fontFamily = InterFontFamily,
-        fontWeight = FontWeight.Bold,
+        fontFamily = JetBrainsSansFontFamily,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 9.sp,
-        letterSpacing = 0.5.sp,
+        letterSpacing = 0.8.sp,
         lineHeight = 12.sp
     )
 }

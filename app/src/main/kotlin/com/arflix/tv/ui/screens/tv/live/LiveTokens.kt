@@ -7,10 +7,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.arflix.tv.ui.theme.InterFontFamily
+import com.arflix.tv.ui.theme.JetBrainsSansFontFamily
 
 // ARVIO Live TV — design tokens. OKLCH reference kept in spec.md §2.
-// Mapped from handoff/tokens.kt. `InterFontFamily` ships; JetBrains Mono
+// Mapped from handoff/tokens.kt. `JetBrainsSansFontFamily` ships; JetBrains Mono
 // falls back to system Monospace (Inter's tabular figures are acceptable
 // for the numeric/badge slots; can swap for bundled JBMono later).
 
@@ -56,20 +56,20 @@ object LiveColors {
     val BrandGeneral = Brand(Color(0xFF1B2B5A), Color(0xFFE8EFFB))
 }
 
-val LiveMono: FontFamily = InterFontFamily
+val LiveMono: FontFamily = JetBrainsSansFontFamily
 
 object LiveType {
     // v4 — minimum readable at 10ft. 7sp is the absolute floor for the
     // tightest tags/badges; no higher than 11sp anywhere on the TV page.
-    val ChannelName  = TextStyle(fontFamily = InterFontFamily, fontSize = 11.sp, fontWeight = FontWeight.W600, letterSpacing = 0.sp, lineHeight = 14.sp)
-    val ProgramTitle = TextStyle(fontFamily = InterFontFamily, fontSize = 10.sp, fontWeight = FontWeight.W500, letterSpacing = 0.sp, lineHeight = 13.sp)
-    val CellTitle    = TextStyle(fontFamily = InterFontFamily, fontSize = 9.sp, fontWeight = FontWeight.W500, letterSpacing = 0.sp, lineHeight = 12.sp)
-    val BodySynopsis = TextStyle(fontFamily = InterFontFamily, fontSize = 8.sp, fontWeight = FontWeight.W400, letterSpacing = 0.sp, lineHeight = 11.sp)
-    val CatLabel     = TextStyle(fontFamily = InterFontFamily, fontSize = 9.sp, fontWeight = FontWeight.W500, letterSpacing = 0.sp, lineHeight = 12.sp)
-    val SectionTag   = TextStyle(fontFamily = InterFontFamily, fontSize = 8.sp, fontWeight = FontWeight.W600, letterSpacing = 0.sp, lineHeight = 11.sp)
-    val Badge        = TextStyle(fontFamily = InterFontFamily, fontSize = 8.sp, fontWeight = FontWeight.W600, letterSpacing = 0.sp, lineHeight = 11.sp)
-    val TimeMono     = TextStyle(fontFamily = InterFontFamily, fontSize = 8.sp, fontWeight = FontWeight.W500, letterSpacing = 0.sp, lineHeight = 11.sp)
-    val NumberMono   = TextStyle(fontFamily = InterFontFamily, fontSize = 8.sp, fontWeight = FontWeight.W500, letterSpacing = 0.sp, lineHeight = 11.sp)
+    val ChannelName  = TextStyle(fontFamily = JetBrainsSansFontFamily, fontSize = 11.sp, fontWeight = FontWeight.W600, letterSpacing = 0.sp, lineHeight = 14.sp)
+    val ProgramTitle = TextStyle(fontFamily = JetBrainsSansFontFamily, fontSize = 10.sp, fontWeight = FontWeight.W500, letterSpacing = 0.sp, lineHeight = 13.sp)
+    val CellTitle    = TextStyle(fontFamily = JetBrainsSansFontFamily, fontSize = 9.sp, fontWeight = FontWeight.W500, letterSpacing = 0.sp, lineHeight = 12.sp)
+    val BodySynopsis = TextStyle(fontFamily = JetBrainsSansFontFamily, fontSize = 8.sp, fontWeight = FontWeight.W400, letterSpacing = 0.sp, lineHeight = 11.sp)
+    val CatLabel     = TextStyle(fontFamily = JetBrainsSansFontFamily, fontSize = 9.sp, fontWeight = FontWeight.W500, letterSpacing = 0.sp, lineHeight = 12.sp)
+    val SectionTag   = TextStyle(fontFamily = JetBrainsSansFontFamily, fontSize = 8.sp, fontWeight = FontWeight.W600, letterSpacing = 0.sp, lineHeight = 11.sp)
+    val Badge        = TextStyle(fontFamily = JetBrainsSansFontFamily, fontSize = 8.sp, fontWeight = FontWeight.W600, letterSpacing = 0.sp, lineHeight = 11.sp)
+    val TimeMono     = TextStyle(fontFamily = JetBrainsSansFontFamily, fontSize = 8.sp, fontWeight = FontWeight.W500, letterSpacing = 0.sp, lineHeight = 11.sp)
+    val NumberMono   = TextStyle(fontFamily = JetBrainsSansFontFamily, fontSize = 8.sp, fontWeight = FontWeight.W500, letterSpacing = 0.sp, lineHeight = 11.sp)
 }
 
 object LiveDims {
