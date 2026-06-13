@@ -9,17 +9,28 @@ import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.arflix.tv.data.db.DownloadStatus
+import com.arflix.tv.data.db.DownloadType
 import com.arflix.tv.data.repository.DownloadsRepository
 import com.arflix.tv.di.RepositoryAccessEntryPoint
+import com.arflix.tv.util.HlsDownloadUtil
 import com.arflix.tv.util.formatBytes
 import dagger.hilt.android.EntryPointAccessors
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runInterruptible
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 class DownloadWorker(
     appContext: Context,
@@ -35,9 +46,12 @@ class DownloadWorker(
         const val KEY_TITLE = "title"
         const val KEY_SEASON = "season"
         const val KEY_EPISODE = "episode"
+        const val KEY_DOWNLOAD_TYPE = "download_type"
+        const val KEY_STREAM_KEYS = "stream_keys"
         const val NOTIFICATION_CHANNEL_ID = "downloads"
         private const val PROGRESS_UPDATE_INTERVAL_MS = 500L
         private const val BUFFER_SIZE = 8 * 1024
+        private const val HLS_PARALLEL_SEGMENTS = 3
     }
 
     private val repository: DownloadsRepository by lazy {
@@ -79,11 +93,22 @@ class DownloadWorker(
         val baseName = buildFilename(title, season, episode, downloadId)
         val videoFile = File(downloadsDir, "$baseName.$ext")
 
+        val isHls = inputData.getString(KEY_DOWNLOAD_TYPE) == DownloadType.HLS.name
+
         return try {
             runCatching { setForeground(buildForegroundInfo(downloadId, "Starting…", 0)) }
             repository.updateStatusInternal(downloadId, DownloadStatus.DOWNLOADING)
 
-            downloadVideo(streamUrl, videoFile, downloadId, userAgent, streamHeaders)
+            val totalBytes: Long
+            if (isHls) {
+                totalBytes = downloadHls(
+                    streamUrl, downloadId, userAgent, streamHeaders,
+                    inputData.getString(KEY_STREAM_KEYS)
+                )
+            } else {
+                downloadVideo(streamUrl, videoFile, downloadId, userAgent, streamHeaders)
+                totalBytes = videoFile.length()
+            }
 
             if (isStopped) return Result.success()
 
@@ -93,8 +118,10 @@ class DownloadWorker(
 
             repository.markCompletedInternal(
                 id = downloadId,
-                localUri = videoFile.absolutePath,
-                fileSize = videoFile.length(),
+                // HLS data lives in the download cache keyed by URL, so the playlist URL is the
+                // canonical locator; FILE downloads point at the file on disk.
+                localUri = if (isHls) streamUrl else videoFile.absolutePath,
+                fileSize = totalBytes,
                 subtitleLocalUri = subtitleResult?.first,
                 subtitleLang = subtitleResult?.second
             )
@@ -105,6 +132,52 @@ class DownloadWorker(
             if (isStopped) return Result.success()
             repository.markFailedInternal(downloadId)
             if (runAttemptCount < 2) Result.retry() else Result.failure()
+        }
+    }
+
+    /**
+     * Downloads an HLS stream's playlists + segments into [com.arflix.tv.util.DownloadCacheSingleton]
+     * via Media3's HlsDownloader. Resume is implicit: already-cached segments are skipped on re-run.
+     * Coroutine cancellation (pause/cancel via WorkManager) interrupts the blocking download call.
+     *
+     * @return total bytes downloaded (includes previously-cached bytes), used as the final file size.
+     */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private suspend fun downloadHls(
+        url: String,
+        downloadId: Long,
+        userAgent: String,
+        headers: Map<String, String>,
+        streamKeysJson: String?
+    ): Long {
+        val executor = Executors.newFixedThreadPool(HLS_PARALLEL_SEGMENTS)
+        val downloader = HlsDownloadUtil.createDownloader(
+            applicationContext, url, streamKeysJson, userAgent, headers, executor
+        )
+        val percent = AtomicInteger(0)
+        val bytes = AtomicLong(0L)
+        return try {
+            coroutineScope {
+                val progressJob = launch {
+                    while (isActive) {
+                        delay(PROGRESS_UPDATE_INTERVAL_MS)
+                        val p = percent.get().coerceIn(0, 99)
+                        repository.updateProgressInternal(downloadId, p, bytes.get())
+                        runCatching { setForeground(buildForegroundInfo(downloadId, "$p%", p)) }
+                    }
+                }
+                runInterruptible(Dispatchers.IO) {
+                    downloader.download { _, bytesDownloaded, percentDownloaded ->
+                        bytes.set(bytesDownloaded)
+                        if (percentDownloaded >= 0) percent.set(percentDownloaded.toInt())
+                    }
+                }
+                progressJob.cancel()
+            }
+            bytes.get()
+        } finally {
+            downloader.cancel()
+            executor.shutdown()
         }
     }
 

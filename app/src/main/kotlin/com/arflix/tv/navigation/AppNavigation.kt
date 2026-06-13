@@ -16,6 +16,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.arflix.tv.data.db.DownloadEntity
+import com.arflix.tv.data.db.DownloadType
 import com.arflix.tv.data.model.Category
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
@@ -270,7 +271,11 @@ fun AppNavigation(
                             mediaId = download.tmdbId,
                             seasonNumber = download.season,
                             episodeNumber = download.episode,
-                            streamUrl = download.localUri?.let { "file://$it" }
+                            // HLS downloads have no local file; PlayerViewModel's own
+                            // completed-download check routes them through the download cache.
+                            streamUrl = download.localUri
+                                ?.takeIf { download.downloadType != DownloadType.HLS.name }
+                                ?.let { "file://$it" }
                         )
                     )
                 },
@@ -311,7 +316,11 @@ fun AppNavigation(
                             mediaId = download.tmdbId,
                             seasonNumber = download.season,
                             episodeNumber = download.episode,
-                            streamUrl = download.localUri?.let { "file://$it" }
+                            // HLS downloads have no local file; PlayerViewModel's own
+                            // completed-download check routes them through the download cache.
+                            streamUrl = download.localUri
+                                ?.takeIf { download.downloadType != DownloadType.HLS.name }
+                                ?.let { "file://$it" }
                         )
                     )
                 },

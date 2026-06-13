@@ -986,14 +986,15 @@ fun DetailsScreen(
                 isLoadingSubtitles = uiState.isLoadingSubtitles,
                 preferredSubtitleLang = uiState.preferredSubtitleLang,
                 secondarySubtitleLang = uiState.secondarySubtitleLang,
-                onConfirm = { stream, subtitle ->
+                onConfirm = { stream, subtitle, hlsSelection ->
                     showDownloadSheet = false
                     viewModel.enqueueDownload(
                         stream = stream,
                         season = downloadSheetSeason,
                         episode = downloadSheetEpisode,
                         episodeTitle = downloadSheetEpisodeTitle,
-                        subtitle = subtitle
+                        subtitle = subtitle,
+                        hlsSelection = hlsSelection
                     )
                 },
                 onDismiss = { showDownloadSheet = false }

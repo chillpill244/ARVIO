@@ -25,6 +25,10 @@ import com.arflix.tv.data.repository.TraktRepository
 import com.arflix.tv.data.repository.WatchHistoryEntry
 import com.arflix.tv.data.repository.WatchHistoryRepository
 import com.arflix.tv.data.db.DownloadStatus
+import com.arflix.tv.data.db.DownloadType
+import com.arflix.tv.data.model.ProxyHeaders
+import com.arflix.tv.data.model.StreamBehaviorHints
+import com.arflix.tv.util.HlsDownloadUtil
 import com.arflix.tv.data.repository.DownloadsRepository
 import com.arflix.tv.util.AppLogger
 import com.arflix.tv.util.Constants
@@ -133,7 +137,12 @@ data class PlayerUiState(
     // Release year extracted from TMDB releaseDate/firstAirDate (e.g. "2023")
     val releaseYear: String? = null,
     // True when playing a locally downloaded file (no network required)
-    val isOffline: Boolean = false
+    val isOffline: Boolean = false,
+    // True when the offline download is HLS: data is read from the download SimpleCache
+    // (keyed by the original playlist URL) rather than a local file
+    val isOfflineHls: Boolean = false,
+    // StreamKeys restricting playback to the downloaded HLS variant/renditions
+    val offlineStreamKeys: List<androidx.media3.common.StreamKey> = emptyList()
 )
 
 
@@ -461,12 +470,40 @@ class PlayerViewModel @Inject constructor(
                     episodeNumber = episodeNumber,
                     navigationStartPositionMs = startPositionMs
                 )
+                val isHlsDownload = localDownload.downloadType == DownloadType.HLS.name
+                // HLS downloads play from the download cache keyed by the original playlist URL;
+                // a synthesized StreamSource carries the stored headers so PlayerScreen applies
+                // them to the upstream data source (used only if a byte is missing from cache).
+                val offlineHlsStream = if (isHlsDownload) {
+                    StreamSource(
+                        source = "Downloaded",
+                        addonName = localDownload.addonName,
+                        addonId = localDownload.addonId,
+                        quality = localDownload.quality,
+                        size = "",
+                        url = localDownload.streamUrl,
+                        behaviorHints = parseStoredHeaders(localDownload.headers)
+                            .takeIf { it.isNotEmpty() }
+                            ?.let { StreamBehaviorHints(proxyHeaders = ProxyHeaders(request = it)) }
+                    )
+                } else null
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isLoadingStreams = false,
                     sourceSearchActive = false,
-                    selectedStreamUrl = "file://${localDownload.localUri}",
+                    selectedStreamUrl = if (isHlsDownload) {
+                        localDownload.streamUrl
+                    } else {
+                        "file://${localDownload.localUri}"
+                    },
+                    selectedStream = offlineHlsStream ?: _uiState.value.selectedStream,
                     isOffline = true,
+                    isOfflineHls = isHlsDownload,
+                    offlineStreamKeys = if (isHlsDownload) {
+                        HlsDownloadUtil.deserializeStreamKeys(localDownload.streamKeys)
+                    } else {
+                        emptyList()
+                    },
                     subtitles = listOfNotNull(localSubtitle),
                     selectedSubtitle = localSubtitle,
                     savedPosition = resumeData.positionMs
@@ -2299,6 +2336,15 @@ class PlayerViewModel @Inject constructor(
         val streamAddonId: String? = null,
         val streamTitle: String? = null
     )
+
+    /** Parses the JSON header map persisted on a DownloadEntity. */
+    private fun parseStoredHeaders(json: String?): Map<String, String> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return runCatching {
+            val type = object : TypeToken<Map<String, String>>() {}.type
+            Gson().fromJson<Map<String, String>>(json, type) ?: emptyMap()
+        }.getOrDefault(emptyMap())
+    }
 
     private suspend fun resolveResumeData(
         mediaType: MediaType,

@@ -741,6 +741,23 @@ fun PlayerScreen(
         HlsMediaSource.Factory(httpDataSourceFactory)
             .setAllowChunklessPreparation(true)
     }
+    // Offline HLS downloads: read-only view over the download cache (never write playback
+    // bytes into it); http upstream is a graceful fallback if a byte is missing from cache.
+    val offlineHlsDataSourceFactory = remember(httpDataSourceFactory) {
+        CacheDataSource.Factory()
+            .setCache(com.arflix.tv.util.DownloadCacheSingleton.getInstance(context))
+            .setUpstreamDataSourceFactory(httpDataSourceFactory)
+            .setCacheWriteDataSinkFactory(null)
+    }
+    val offlineHlsFactory = remember(offlineHlsDataSourceFactory) {
+        HlsMediaSource.Factory(offlineHlsDataSourceFactory)
+    }
+    // Subtitle rebuilds need DefaultMediaSourceFactory (HlsMediaSource.Factory ignores
+    // subtitle configurations). DefaultDataSource keeps file:// subtitles readable while
+    // the playlist/segments still come from the download cache.
+    val offlineHlsWithSubsFactory = remember(offlineHlsDataSourceFactory) {
+        DefaultMediaSourceFactory(DefaultDataSource.Factory(context, offlineHlsDataSourceFactory))
+    }
     val dashFactory = remember(httpDataSourceFactory) {
         DashMediaSource.Factory(httpDataSourceFactory)
     }
@@ -1413,6 +1430,11 @@ fun PlayerScreen(
             // Only add the selected subtitle to ExoPlayer (not all 30+).
             // Loading all external subs slows down preparation and causes non-UTF8 subs to fail.
             val mediaItemBuilder = MediaItem.Builder().setUri(Uri.parse(url))
+            if (latestUiState.isOfflineHls && latestUiState.offlineStreamKeys.isNotEmpty()) {
+                // Restrict playback to the downloaded variant/renditions so a fully
+                // downloaded stream never touches the network.
+                mediaItemBuilder.setStreamKeys(latestUiState.offlineStreamKeys)
+            }
             val mediaItem = mediaItemBuilder.build()
 
             // Use protocol-specific media source for faster startup:
@@ -1422,6 +1444,8 @@ fun PlayerScreen(
             val isHeavy = isLikelyHeavyStream(latestUiState.selectedStream)
             val isRemoteHttp = urlLower.startsWith("http://") || urlLower.startsWith("https://")
             val mediaSource: MediaSource = when {
+                latestUiState.isOfflineHls ->
+                    offlineHlsFactory.createMediaSource(mediaItem)
                 urlLower.startsWith("file://") ->
                     localFileFactory.createMediaSource(mediaItem)
                 urlLower.contains(".m3u8") || urlLower.contains("/hls") || urlLower.contains("format=hls") ->
@@ -1552,11 +1576,23 @@ fun PlayerScreen(
                     .build()
                 exoPlayer.setMediaSource(localMediaSourceFactory.createMediaSource(mediaItem), currentPosition)
             } else {
-                val mediaItem = MediaItem.Builder()
+                val mediaItemBuilder = MediaItem.Builder()
                     .setUri(Uri.parse(url))
                     .setSubtitleConfigurations(subtitleConfigs)
-                    .build()
-                exoPlayer.setMediaItem(mediaItem, currentPosition)
+                if (latestUiState.isOfflineHls && latestUiState.offlineStreamKeys.isNotEmpty()) {
+                    mediaItemBuilder.setStreamKeys(latestUiState.offlineStreamKeys)
+                }
+                val mediaItem = mediaItemBuilder.build()
+                if (latestUiState.isOfflineHls) {
+                    // setMediaItem would route through the player's default factory and
+                    // stream from the network instead of the download cache.
+                    exoPlayer.setMediaSource(
+                        offlineHlsWithSubsFactory.createMediaSource(mediaItem),
+                        currentPosition
+                    )
+                } else {
+                    exoPlayer.setMediaItem(mediaItem, currentPosition)
+                }
             }
             exoPlayer.prepare()
             if (wasPlaying) exoPlayer.play()

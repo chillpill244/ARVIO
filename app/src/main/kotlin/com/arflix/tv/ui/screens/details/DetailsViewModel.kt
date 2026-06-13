@@ -2581,7 +2581,8 @@ class DetailsViewModel @Inject constructor(
         season: Int?,
         episode: Int?,
         episodeTitle: String?,
-        subtitle: com.arflix.tv.data.model.Subtitle?
+        subtitle: com.arflix.tv.data.model.Subtitle?,
+        hlsSelection: com.arflix.tv.util.HlsDownloadSelection? = null
     ) {
         val item = _uiState.value.item ?: return
         val mediaTypeStr = currentMediaType.name.lowercase()
@@ -2598,12 +2599,20 @@ class DetailsViewModel @Inject constructor(
                 streamUrl = stream.url ?: return@launch,
                 addonId = stream.addonId,
                 addonName = stream.addonName,
-                quality = stream.quality,
+                quality = hlsSelection?.qualityLabel ?: stream.quality,
                 subtitleUrl = subtitle?.url,
                 subtitleLang = subtitle?.lang,
                 headers = stream.behaviorHints?.proxyHeaders?.request
                     ?.filterKeys { it.isNotBlank() }
-                    ?.takeIf { it.isNotEmpty() }
+                    ?.takeIf { it.isNotEmpty() },
+                downloadType = if (hlsSelection != null) {
+                    com.arflix.tv.data.db.DownloadType.HLS.name
+                } else {
+                    com.arflix.tv.data.db.DownloadType.FILE.name
+                },
+                streamKeys = hlsSelection?.let {
+                    com.arflix.tv.util.HlsDownloadUtil.serializeStreamKeys(it.streamKeys)
+                }
             )
             showToast("Download started", ToastType.SUCCESS)
         }

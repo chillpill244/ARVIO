@@ -11,11 +11,16 @@ import androidx.work.workDataOf
 import com.arflix.tv.data.db.DownloadDao
 import com.arflix.tv.data.db.DownloadEntity
 import com.arflix.tv.data.db.DownloadStatus
+import com.arflix.tv.data.db.DownloadType
 import com.arflix.tv.network.OkHttpProvider
+import com.arflix.tv.util.HlsDownloadUtil
 import com.arflix.tv.worker.DownloadWorker
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -58,7 +63,9 @@ class DownloadsRepository @Inject constructor(
         quality: String,
         subtitleUrl: String?,
         subtitleLang: String?,
-        headers: Map<String, String>? = null
+        headers: Map<String, String>? = null,
+        downloadType: String = DownloadType.FILE.name,
+        streamKeys: String? = null
     ) {
         val existing = dao.findDownload(tmdbId, mediaType, season, episode)
         if (existing != null) {
@@ -94,7 +101,9 @@ class DownloadsRepository @Inject constructor(
             subtitleUrl = subtitleUrl,
             subtitleLang = subtitleLang,
             status = DownloadStatus.QUEUED.name,
-            headers = headersJson
+            headers = headersJson,
+            downloadType = downloadType,
+            streamKeys = streamKeys
         )
         val id = dao.insert(entity)
         scheduleWork(id, streamUrl, subtitleUrl)
@@ -115,16 +124,47 @@ class DownloadsRepository @Inject constructor(
     suspend fun cancelDownload(id: Long) {
         val entity = dao.getById(id) ?: return
         workManager.cancelAllWorkByTag(workTag(id))
-        entity.localUri?.let { File(it) }?.takeIf { it.exists() }?.delete()
+        deleteVideoData(entity)
         dao.updateStatus(id, DownloadStatus.FAILED.name)
     }
 
     suspend fun deleteDownload(id: Long) {
         val entity = dao.getById(id) ?: return
         workManager.cancelAllWorkByTag(workTag(id))
-        entity.localUri?.let { File(it) }?.takeIf { it.exists() }?.delete()
+        deleteVideoData(entity)
         entity.subtitleLocalUri?.let { File(it) }?.takeIf { it.exists() }?.delete()
         dao.delete(entity)
+    }
+
+    /**
+     * Removes a download's video data: local file for FILE downloads, cached segments for HLS.
+     * HLS removal works offline — the segment list is enumerated from the cached playlists.
+     */
+    private suspend fun deleteVideoData(entity: DownloadEntity) {
+        if (entity.downloadType == DownloadType.HLS.name) {
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    HlsDownloadUtil.createDownloader(
+                        context = context,
+                        url = entity.streamUrl,
+                        streamKeysJson = entity.streamKeys,
+                        userAgent = OkHttpProvider.userAgent,
+                        headers = parseHeaders(entity.headers),
+                        executor = Runnable::run
+                    ).remove()
+                }
+            }
+        } else {
+            entity.localUri?.let { File(it) }?.takeIf { it.exists() }?.delete()
+        }
+    }
+
+    private fun parseHeaders(json: String?): Map<String, String> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return runCatching {
+            val type = object : TypeToken<Map<String, String>>() {}.type
+            Gson().fromJson<Map<String, String>>(json, type) ?: emptyMap()
+        }.getOrDefault(emptyMap())
     }
 
     suspend fun retryDownload(id: Long) {
@@ -183,7 +223,9 @@ class DownloadsRepository @Inject constructor(
                     DownloadWorker.KEY_HEADERS to (entity?.headers ?: ""),
                     DownloadWorker.KEY_TITLE to (entity?.title ?: ""),
                     DownloadWorker.KEY_SEASON to (entity?.season ?: -1),
-                    DownloadWorker.KEY_EPISODE to (entity?.episode ?: -1)
+                    DownloadWorker.KEY_EPISODE to (entity?.episode ?: -1),
+                    DownloadWorker.KEY_DOWNLOAD_TYPE to (entity?.downloadType ?: DownloadType.FILE.name),
+                    DownloadWorker.KEY_STREAM_KEYS to (entity?.streamKeys ?: "")
                 )
             )
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)

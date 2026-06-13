@@ -7,6 +7,9 @@ import androidx.room.PrimaryKey
 
 enum class DownloadStatus { QUEUED, DOWNLOADING, PAUSED, COMPLETED, FAILED }
 
+/** FILE = progressive byte-copy to a single local file; HLS = segments in the download SimpleCache. */
+enum class DownloadType { FILE, HLS }
+
 @Entity(
     tableName = "downloads",
     indices = [Index(value = ["tmdb_id", "media_type", "season", "episode"], unique = true)]
@@ -36,5 +39,10 @@ data class DownloadEntity(
     @ColumnInfo(name = "subtitle_lang") val subtitleLang: String? = null,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     // JSON-serialized Map<String,String> of stream-specific request headers (Referer, Authorization, etc.)
-    @ColumnInfo(name = "headers") val headers: String? = null
+    @ColumnInfo(name = "headers") val headers: String? = null,
+    @ColumnInfo(name = "download_type", defaultValue = "FILE")
+    val downloadType: String = DownloadType.FILE.name,
+    // JSON array of [groupIndex, streamIndex] pairs selecting the downloaded HLS variant/renditions;
+    // null = whole playlist (or FILE download)
+    @ColumnInfo(name = "stream_keys") val streamKeys: String? = null
 )

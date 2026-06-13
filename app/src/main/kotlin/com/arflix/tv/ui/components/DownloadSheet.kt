@@ -54,6 +54,10 @@ import com.arflix.tv.data.model.StreamSource
 import com.arflix.tv.data.model.Subtitle
 import com.arflix.tv.ui.theme.ArflixTypography
 import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.util.HlsDownloadSelection
+import com.arflix.tv.util.HlsDownloadUtil
+import com.arflix.tv.util.HlsInspection
+import com.arflix.tv.util.HlsVariantOption
 import com.arflix.tv.util.filterSubtitlesByLanguage
 import com.arflix.tv.util.isSubtitleLangDisabled
 import com.arflix.tv.util.normalizeSubtitleLang
@@ -62,10 +66,12 @@ import com.arflix.tv.util.subtitleMatchesLanguage
 private fun StreamSource.isDirectDownloadable(): Boolean {
     val u = url ?: return false
     if (u.startsWith("magnet:", ignoreCase = true)) return false
-    if (u.contains(".m3u8", ignoreCase = true)) return false
     if (u.contains(".mpd", ignoreCase = true)) return false
     return u.startsWith("http://", ignoreCase = true) || u.startsWith("https://", ignoreCase = true)
 }
+
+private fun StreamSource.isHls(): Boolean =
+    url?.contains(".m3u8", ignoreCase = true) == true
 
 private fun StreamSource.displayTitle(): String =
     behaviorHints?.filename?.takeIf { it.isNotBlank() } ?: source
@@ -92,7 +98,7 @@ fun DownloadSheet(
     isLoadingSubtitles: Boolean = false,
     preferredSubtitleLang: String = "",
     secondarySubtitleLang: String = "",
-    onConfirm: (stream: StreamSource, subtitle: Subtitle?) -> Unit,
+    onConfirm: (stream: StreamSource, subtitle: Subtitle?, hlsSelection: HlsDownloadSelection?) -> Unit,
     onDismiss: () -> Unit
 ) {
     val downloadable = streams.filter { it.isDirectDownloadable() }
@@ -111,10 +117,19 @@ fun DownloadSheet(
     var resolvedSizeBytes by remember(selectedStream) { mutableStateOf<Long?>(null) }
     // true = HEAD response set cookies the worker's cookie-less client can't maintain
     var sessionCookieDetected by remember(selectedStream) { mutableStateOf(false) }
+    var hlsInspection by remember(selectedStream) { mutableStateOf<HlsInspection?>(null) }
+    var selectedVariant by remember(selectedStream) { mutableStateOf<HlsVariantOption?>(null) }
 
     LaunchedEffect(selectedStream) {
         val stream = selectedStream ?: return@LaunchedEffect
         val url = stream.url ?: return@LaunchedEffect
+        if (stream.isHls()) {
+            hlsInspection = HlsDownloadUtil.inspect(
+                url,
+                stream.behaviorHints?.proxyHeaders?.request.orEmpty()
+            )
+            return@LaunchedEffect
+        }
         val needsSize = stream.size.isBlank() && stream.sizeBytes == null
         if (!needsSize) return@LaunchedEffect
         runCatching {
@@ -213,6 +228,11 @@ fun DownloadSheet(
                         .background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(2.dp))
                 )
 
+                // HLS streams pause at a quality/diagnostics step until a variant is chosen
+                // (or the playlist turns out to be a single VOD media playlist).
+                val hlsStepActive = selectedStream?.isHls() == true && selectedVariant == null &&
+                    hlsInspection !is HlsInspection.MediaPlaylistVod
+
                 // Header
                 Row(
                     modifier = Modifier
@@ -223,7 +243,11 @@ fun DownloadSheet(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (selectedStream == null) "Download" else "Choose subtitles",
+                            text = when {
+                                selectedStream == null -> "Download"
+                                hlsStepActive -> "Choose quality"
+                                else -> "Choose subtitles"
+                            },
                             style = ArflixTypography.sectionTitle,
                             color = Color.White
                         )
@@ -236,7 +260,11 @@ fun DownloadSheet(
                         )
                     }
                     IconButton(onClick = {
-                        if (selectedStream != null) selectedStream = null else onDismiss()
+                        when {
+                            selectedVariant != null -> selectedVariant = null
+                            selectedStream != null -> selectedStream = null
+                            else -> onDismiss()
+                        }
                     }) {
                         Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                     }
@@ -283,6 +311,45 @@ fun DownloadSheet(
                                     onClick = { selectedStream = stream }
                                 )
                             }
+                        }
+                    }
+                    hlsStepActive -> {
+                        when (val inspection = hlsInspection) {
+                            null -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(160.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(32.dp))
+                                }
+                            }
+                            is HlsInspection.MasterPlaylist -> {
+                                Text(
+                                    text = "Available qualities",
+                                    style = ArflixTypography.label,
+                                    color = TextSecondary,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                                    items(inspection.variants) { variant ->
+                                        SubtitleRow(
+                                            label = variant.label,
+                                            isSelected = false,
+                                            onClick = { selectedVariant = variant }
+                                        )
+                                    }
+                                }
+                            }
+                            else -> DownloadUnavailableNotice(
+                                message = when (inspection) {
+                                    is HlsInspection.Live -> "Live streams can't be downloaded."
+                                    is HlsInspection.UnsupportedEncryption ->
+                                        "This stream's encryption isn't supported offline."
+                                    else -> "Couldn't read this stream's playlist."
+                                }
+                            )
                         }
                     }
                     else -> {
@@ -334,44 +401,22 @@ fun DownloadSheet(
                             }
                         }
 
-                        val sizeLabel = stream.size.takeIf { it.isNotBlank() }
-                            ?: (stream.sizeBytes ?: resolvedSizeBytes)?.let { bytes ->
-                                when {
-                                    bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0)
-                                    bytes >= 1_000_000 -> "%.0f MB".format(bytes / 1_000_000.0)
-                                    else -> null
+                        val sizeLabel = when {
+                            stream.isHls() -> selectedVariant?.label
+                            else -> stream.size.takeIf { it.isNotBlank() }
+                                ?: (stream.sizeBytes ?: resolvedSizeBytes)?.let { bytes ->
+                                    when {
+                                        bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0)
+                                        bytes >= 1_000_000 -> "%.0f MB".format(bytes / 1_000_000.0)
+                                        else -> null
+                                    }
                                 }
-                            }
+                        }
 
                         if (sessionCookieDetected) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(56.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color.White.copy(alpha = 0.12f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "Not available for download",
-                                        style = ArflixTypography.button,
-                                        color = Color.White.copy(alpha = 0.4f)
-                                    )
-                                }
-                                Text(
-                                    text = "This source uses session cookies that can't be saved offline.",
-                                    style = ArflixTypography.caption,
-                                    color = TextSecondary,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                            }
+                            DownloadUnavailableNotice(
+                                message = "This source uses session cookies that can't be saved offline."
+                            )
                         } else {
                             Box(
                                 modifier = Modifier
@@ -380,7 +425,15 @@ fun DownloadSheet(
                                     .height(56.dp)
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(Color.White)
-                                    .clickable { onConfirm(stream, selectedSubtitle) },
+                                    .clickable {
+                                        val hlsSelection = if (stream.isHls()) {
+                                            HlsDownloadSelection(
+                                                streamKeys = selectedVariant?.streamKeys.orEmpty(),
+                                                qualityLabel = selectedVariant?.label
+                                            )
+                                        } else null
+                                        onConfirm(stream, selectedSubtitle, hlsSelection)
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
@@ -400,6 +453,40 @@ fun DownloadSheet(
                 }
             }
         }
+    }
+}
+
+/** Disabled-state notice shown in place of the download button when a source can't be saved offline. */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun DownloadUnavailableNotice(message: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.White.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Not available for download",
+                style = ArflixTypography.button,
+                color = Color.White.copy(alpha = 0.4f)
+            )
+        }
+        Text(
+            text = message,
+            style = ArflixTypography.caption,
+            color = TextSecondary,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
     }
 }
 
@@ -436,6 +523,9 @@ private fun StreamDownloadRow(stream: StreamSource, onClick: () -> Unit) {
                 )
                 if (stream.quality.isNotBlank()) {
                     QualityChip(stream.quality)
+                }
+                if (stream.isHls()) {
+                    QualityChip("HLS")
                 }
                 if (stream.size.isNotBlank()) {
                     Text(
