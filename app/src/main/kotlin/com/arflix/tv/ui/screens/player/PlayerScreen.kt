@@ -4071,6 +4071,26 @@ private fun getFullLanguageName(code: String?): String {
     }
 }
 
+/**
+ * Build the primary label for an audio track, always leading with the spoken language.
+ *
+ * Embedded MKV tracks frequently carry a descriptive [AudioTrackInfo.label] like
+ * "Dolby Digital Plus" while the language lives only in [AudioTrackInfo.language]. Showing
+ * just the descriptor leaves the user guessing which language a track is, so we prefix the
+ * full language name (e.g. "English — Dolby Digital Plus"). When the descriptor already
+ * names the language, or the language is unknown, we avoid redundant/placeholder prefixes.
+ */
+private fun audioTrackDisplayLabel(track: AudioTrackInfo): String {
+    val languageName = getFullLanguageName(track.language)
+    val descriptor = track.label?.takeIf { it.isNotBlank() }
+    return when {
+        descriptor == null -> languageName
+        languageName == "Unknown" -> descriptor
+        descriptor.contains(languageName, ignoreCase = true) -> descriptor
+        else -> "$languageName — $descriptor"
+    }
+}
+
 @Composable
 private fun rememberPlayerClockFormat(): String {
     val context = LocalContext.current
@@ -4676,10 +4696,8 @@ private fun AudioMenu(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             itemsIndexed(audioTracks, key = { _, track -> audioTrackKey(track) }) { index, track ->
-                                val languageName = getFullLanguageName(track.language)
-                                val trackLabel = track.label?.takeIf { it.isNotBlank() } ?: languageName
                                 TrackMenuItem(
-                                    label = trackLabel,
+                                    label = audioTrackDisplayLabel(track),
                                     subtitle = audioSubtitle(track),
                                     isSelected = index == selectedAudioIndex,
                                     isFocused = focusedIndex == index,
@@ -4767,10 +4785,8 @@ private fun AudioMenu(
                         }
                     } else {
                         itemsIndexed(audioTracks, key = { _, track -> audioTrackKey(track) }) { index, track ->
-                            val languageName = getFullLanguageName(track.language)
-                            val trackLabel = track.label?.takeIf { it.isNotBlank() } ?: languageName
                             MobileTrackItem(
-                                name = trackLabel,
+                                name = audioTrackDisplayLabel(track),
                                 description = audioSubtitle(track),
                                 isSelected = index == selectedAudioIndex,
                                 onClick = { onSelectAudio(track) }
