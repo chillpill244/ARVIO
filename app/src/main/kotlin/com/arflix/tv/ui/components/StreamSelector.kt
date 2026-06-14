@@ -166,8 +166,9 @@ fun StreamSelector(
 
     val presentations = remember(streams) { streams.map(::presentSource) }
 
-    // Sort streams with richer heuristics:
-    // cached/direct first, then resolution, then release type, then addon order, then size.
+    // Sort streams with richer heuristics. Primary key is the source class:
+    // IPTV-resolved first, then Home Server, then addons. Within each class:
+    // cached/direct first, then addon order, then resolution, release type, size.
     val addonOrder = remember(addonTabs, addonOrderedIds) {
         if (addonOrderedIds.isNotEmpty()) {
             // Use the user's configured addon order: map each stream's addonId to its
@@ -181,7 +182,8 @@ fun StreamSelector(
         }
     }
     val sortedStreams = remember(presentations, addonOrder) {
-        presentations.sortedWith(compareByDescending<SourcePresentation> { it.sortCached }
+        presentations.sortedWith(compareBy<SourcePresentation> { sourceClassRank(it.stream) }
+            .thenByDescending { it.sortCached }
             .thenByDescending { it.sortDirect }
             .thenBy { addonOrder[sourceTabId(it.stream)] ?: Int.MAX_VALUE }
             .thenByDescending { it.resolutionScore }
@@ -749,6 +751,16 @@ private object StreamRegexes {
     val SIZE_PATTERN_1 = Regex("""(\d+(?:\.\d+)?)\s*(TB|GB|MB|KB)""")
     val SIZE_PATTERN_2 = Regex("""(\d+(?:\.\d+)?)\s*(TIB|GIB|MIB|KIB)""")
     val SIZE_PATTERN_3 = Regex("""^(\d+(?:\.\d+)?)$""")
+}
+
+/**
+ * Primary stream-source ordering class. Lower rank sorts first.
+ * IPTV-resolved streams always come first, then Home Server, then any addons.
+ */
+private fun sourceClassRank(stream: StreamSource): Int = when (stream.addonId) {
+    "iptv_xtream_vod" -> 0
+    "home_server" -> 1
+    else -> 2
 }
 
 private fun sourceTabId(stream: StreamSource): String {
