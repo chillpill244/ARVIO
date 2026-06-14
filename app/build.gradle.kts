@@ -235,11 +235,14 @@ dependencies {
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
     implementation("androidx.media3:media3-common:$media3Version")
-    // FFmpeg extension for software decoding of DTS/TrueHD/Atmos/HEVC/DV.
-    // Keep this only in the sideload build. The Play Store build must comply
-    // with 16 KB memory page support, and the current prebuilt native library
-    // (libffmpegJNI.so) is the likely source of the Play Console warning.
-    add("sideloadImplementation", "org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1")
+    // FFmpeg extension for software decoding of DTS/TrueHD/Atmos/EAC3/HEVC/DV.
+    // Bundled in ALL flavors so multi-audio rips (e.g. Hindi EAC3 + English TrueHD)
+    // expose and play every track, matching CloudStream. Without it, only the
+    // device-native audio codec plays and the rest are silent.
+    // NOTE: for a Play Store release this prebuilt native lib (libffmpegJNI.so)
+    // can trip a Play Console 16 KB memory-page warning — gate it back to
+    // `sideloadImplementation` if/when shipping the play flavor to the Store.
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1")
 
     // Networking - Retrofit + OkHttp
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
