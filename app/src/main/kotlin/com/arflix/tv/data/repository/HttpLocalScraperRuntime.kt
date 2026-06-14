@@ -49,6 +49,9 @@ class HttpLocalScraperRuntime @Inject constructor(
     @Volatile private var newTvApiUrl: String = ""
     @Volatile private var toonstreamDomain: String = ""
     @Volatile private var toonstreamDomainCachedAt: Long = 0L
+    @Volatile private var fourKHDHubDomain: String = ""
+    @Volatile private var fourKHDHubHubcloud: String = ""
+    @Volatile private var fourKHDHubDomainCachedAt: Long = 0L
     private val noRedirectClient: OkHttpClient by lazy {
         okHttpClient.newBuilder()
             .followRedirects(false)
@@ -192,6 +195,18 @@ class HttpLocalScraperRuntime @Inject constructor(
             if ("toonstream" in providers) {
                 add(async(Dispatchers.IO) {
                     runCatching { resolveToonstream(tmdbId, mediaType, season, episode, fallbackTitle, fallbackYear) }
+                        .getOrDefault(emptyList())
+                })
+            }
+            if ("fourkhdhub" in providers) {
+                add(async(Dispatchers.IO) {
+                    runCatching { resolveFourKHDHub(tmdbId, mediaType, season, episode, fallbackTitle, fallbackYear) }
+                        .getOrDefault(emptyList())
+                })
+            }
+            if ("anidb" in providers) {
+                add(async(Dispatchers.IO) {
+                    runCatching { resolveAniDb(tmdbId, mediaType, season, episode, fallbackTitle, fallbackYear) }
                         .getOrDefault(emptyList())
                 })
             }
@@ -866,6 +881,502 @@ class HttpLocalScraperRuntime @Inject constructor(
 
     // ── End Toonstream ───────────────────────────────────────────────────────────
 
+    // ── 4KHDHub ──────────────────────────────────────────────────────────────────
+
+    private fun rot13(value: String): String = buildString(value.length) {
+        for (c in value) append(
+            when (c) {
+                in 'A'..'Z' -> ((c - 'A' + 13) % 26 + 'A'.code).toChar()
+                in 'a'..'z' -> ((c - 'a' + 13) % 26 + 'a'.code).toChar()
+                else -> c
+            }
+        )
+    }
+
+    private fun b64d(s: String): String = runCatching {
+        android.util.Base64.decode(s, android.util.Base64.DEFAULT).toString(Charsets.UTF_8)
+    }.getOrDefault("")
+
+    private fun normTitle(s: String): String =
+        s.lowercase(Locale.US).replace(Regex("[^a-z0-9]+"), " ").trim()
+
+    private fun absoluteUrl(domain: String, href: String): String {
+        if (href.isBlank()) return ""
+        if (href.startsWith("http")) return href
+        if (href.startsWith("//")) return "https:$href"
+        val base = domain.trimEnd('/')
+        return if (href.startsWith("/")) "$base$href" else "$base/$href"
+    }
+
+    private suspend fun resolveFourKHDHubDomains(): Pair<String, String> {
+        val now = System.currentTimeMillis()
+        if (fourKHDHubDomain.isNotEmpty() && now - fourKHDHubDomainCachedAt < 3_600_000L)
+            return fourKHDHubDomain to fourKHDHubHubcloud
+        val data = getJson(
+            "https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json",
+            mapOf("User-Agent" to USER_AGENT)
+        )
+        val main = data?.string("4khdhub") ?: "https://4khdhub.one"
+        val hub = data?.string("hubcloud") ?: "https://hubcloud.foo"
+        fourKHDHubDomain = main
+        fourKHDHubHubcloud = hub
+        fourKHDHubDomainCachedAt = now
+        return main to hub
+    }
+
+    private suspend fun resolveFourKHDHub(
+        tmdbId: Int,
+        mediaType: String,
+        season: Int?,
+        episode: Int?,
+        fallbackTitle: String,
+        fallbackYear: Int?
+    ): List<HttpResolvedStream> {
+        val details = fetchTmdbDetails(tmdbId, mediaType, fallbackTitle, fallbackYear)
+        val (main, hub) = resolveFourKHDHubDomains()
+        val ranked = rankFourK(searchFourK(main, details.title), details.title)
+
+        val collected = mutableListOf<FourKStream>()
+        val seen = mutableSetOf<String>()
+        val wantYear = details.year?.toIntOrNull()
+
+        for (candidate in ranked.take(5)) {
+            val page = runCatching {
+                loadFourKPage(candidate.url, mediaType, season ?: 1, episode ?: 1)
+            }.getOrNull() ?: continue
+
+            // Year gate — 4KHDHub lists same-named titles (e.g. 2010 animation vs 2025
+            // live-action) under identical headings; only the year distinguishes them.
+            if (wantYear != null && page.year != null && kotlin.math.abs(page.year - wantYear) > 1) continue
+
+            val pageLinks = page.links
+            if (pageLinks.isEmpty()) continue
+
+            // Each download link is an independent host chain — resolve them concurrently so a
+            // single slow host doesn't drag the whole resolver past the StreamFetch budget.
+            val groups = coroutineScope {
+                pageLinks.map { link ->
+                    async(Dispatchers.IO) { runCatching { resolveFourKLink(link, hub) }.getOrNull().orEmpty() }
+                }.awaitAll()
+            }
+
+            for (group in groups) {
+                for (s in group) {
+                    if (s.url.isBlank() || !seen.add(s.url)) continue
+                    collected.add(s)
+                }
+            }
+            if (collected.isNotEmpty()) break
+        }
+
+        // Best-first: higher resolution, then larger file size.
+        return collected
+            .sortedWith(compareByDescending<FourKStream> { fourKQualityRank(it.quality) }
+                .thenByDescending { parseSizeGb(it.size) })
+            .map { s ->
+                HttpResolvedStream("4KHDHub", buildFourKTitle(s, mediaType, season, episode), s.url, s.quality)
+            }
+    }
+
+    private suspend fun searchFourK(domain: String, query: String): List<FourKResult> {
+        val html = runCatching { getText("$domain/?s=${query.urlEncode()}") }.getOrNull() ?: return emptyList()
+        val doc = org.jsoup.Jsoup.parse(html)
+        val seen = mutableSetOf<String>()
+        val results = mutableListOf<FourKResult>()
+        doc.select("div.card-grid a").forEach { a ->
+            val href = absoluteUrl(domain, a.attr("href"))
+            val title = a.selectFirst("h3")?.text()?.trim().orEmpty()
+            if (href.isNotBlank() && title.isNotBlank() && seen.add(href)) results.add(FourKResult(href, title))
+        }
+        return results
+    }
+
+    private fun rankFourK(results: List<FourKResult>, title: String): List<FourKResult> {
+        val want = normTitle(title)
+        val exact = results.filter { normTitle(it.title) == want }
+        val partial = results.filter {
+            val n = normTitle(it.title)
+            n != want && (n.contains(want) || want.contains(n))
+        }
+        return exact + partial
+    }
+
+    private suspend fun loadFourKPage(
+        pageUrl: String,
+        mediaType: String,
+        season: Int,
+        episode: Int
+    ): FourKPage {
+        val html = runCatching { getText(pageUrl) }.getOrNull() ?: return FourKPage(null, emptyList())
+        val doc = org.jsoup.Jsoup.parse(html)
+        val titleText = doc.selectFirst("h1.page-title")?.text().orEmpty()
+        val year = (Regex("""\b(19|20)\d{2}\b""").find(titleText)?.value
+            ?: Regex("""\b(19|20)\d{2}\b""").find(doc.select("div.mt-2 span").text())?.value)?.toIntOrNull()
+        val links = if (mediaType == "tv") getFourKEpisodeLinks(doc, season, episode)
+        else doc.select("div.download-item a").mapNotNull { it.attr("href").trim().ifBlank { null } }
+        return FourKPage(year, links)
+    }
+
+    private fun getFourKEpisodeLinks(doc: org.jsoup.nodes.Document, season: Int, episode: Int): List<String> {
+        val links = mutableListOf<String>()
+        val seen = mutableSetOf<String>()
+        doc.select("div.episodes-list div.season-item").forEach { seasonEl ->
+            val seasonText = seasonEl.select("div.episode-number").text()
+            val s = Regex("S?([1-9][0-9]*)").find(seasonText)?.groupValues?.get(1)?.toIntOrNull()
+            if (s != season) return@forEach
+            seasonEl.select("div.episode-download-item").forEach { epEl ->
+                val epText = epEl.select("span.badge-psa").text()
+                val ep = Regex("Episode-0*([1-9][0-9]*)").find(epText)?.groupValues?.get(1)?.toIntOrNull()
+                if (ep != episode) return@forEach
+                epEl.select("a").forEach { a ->
+                    val href = a.attr("href").trim()
+                    if (href.isNotBlank() && seen.add(href)) links.add(href)
+                }
+            }
+        }
+        return links
+    }
+
+    private suspend fun resolveFourKLink(raw: String, hubcloud: String): List<FourKStream> {
+        val resolved = if (raw.contains("id=")) {
+            runCatching { getFourKRedirectLinks(raw) }.getOrNull().orEmpty()
+        } else raw
+        if (resolved.isBlank()) return emptyList()
+        return dispatchFourKHost(resolved, hubcloud)
+    }
+
+    private suspend fun getFourKRedirectLinks(url: String): String {
+        val html = runCatching { getText(url) }.getOrNull() ?: return ""
+        val regex = Regex("""s\('o','([A-Za-z0-9+/=]+)'|ck\('_wp_http_\d+','([^']+)'""")
+        val combined = StringBuilder()
+        for (m in regex.findAll(html)) {
+            (m.groups[1]?.value ?: m.groups[2]?.value)?.let { combined.append(it) }
+        }
+        if (combined.isEmpty()) return ""
+        return runCatching {
+            val decoded = b64d(rot13(b64d(b64d(combined.toString()))))
+            val json = gson.fromJson(decoded, JsonObject::class.java)
+            val encodedUrl = b64d(json.string("o") ?: "").trim()
+            if (encodedUrl.isNotBlank()) return@runCatching encodedUrl
+            val data = b64d(json.string("data") ?: "")
+            val wp = json.string("blog_url") ?: ""
+            if (wp.isBlank() || data.isBlank()) return@runCatching ""
+            val t = runCatching { getText("$wp?re=$data") }.getOrNull().orEmpty()
+            org.jsoup.Jsoup.parse(t).text().trim()
+        }.getOrDefault("")
+    }
+
+    private suspend fun dispatchFourKHost(url: String, hubcloud: String): List<FourKStream> {
+        val lower = url.lowercase(Locale.US)
+        return runCatching {
+            when {
+                "hubcloud" in lower -> extractHubCloud(url, hubcloud)
+                "hubdrive" in lower -> extractHubDrive(url, hubcloud)
+                "hblinks" in lower -> extractHblinks(url, hubcloud)
+                "hubcdn" in lower -> extractHubCdn(url)
+                else -> emptyList()
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun getFourKQuality(str: String): String {
+        val m = Regex("(\\d{3,4})[pP]").find(str)?.groupValues?.get(1)
+        return if (m != null) "${m}p" else "2160p"
+    }
+
+    // Parse a release filename/header into a compact spec for the picker.
+    private fun parseFourKRelease(name: String): FourKRelease {
+        val tags = mutableListOf<String>()
+        val resM = Regex("(\\d{3,4})[pP]").find(name)?.groupValues?.get(1)
+        val res = resM?.let { "${it}p" }
+            ?: if (Regex("\\b(4k|uhd|2160)\\b", RegexOption.IGNORE_CASE).containsMatchIn(name)) "2160p" else ""
+        if (res.isNotEmpty()) tags.add(res)
+
+        val sourceTags = listOf(
+            Regex("\\bremux\\b", RegexOption.IGNORE_CASE) to "REMUX",
+            Regex("blu[\\s._-]?ray|\\bbdrip\\b", RegexOption.IGNORE_CASE) to "BluRay",
+            Regex("web[\\s._-]?dl", RegexOption.IGNORE_CASE) to "WEB-DL",
+            Regex("web[\\s._-]?rip", RegexOption.IGNORE_CASE) to "WEBRip",
+            Regex("\\bhdrip\\b", RegexOption.IGNORE_CASE) to "HDRip",
+            Regex("\\bhdtv\\b", RegexOption.IGNORE_CASE) to "HDTV",
+            Regex("\\bdvdrip\\b", RegexOption.IGNORE_CASE) to "DVDRip",
+            Regex("\\bcam\\b|hdcam", RegexOption.IGNORE_CASE) to "CAM",
+        ).filter { it.first.containsMatchIn(name) }.map { it.second }
+            .let { if ("REMUX" in it) it.filter { t -> t != "BluRay" } else it } // REMUX implies BluRay
+        tags.addAll(sourceTags)
+
+        if (Regex("dolby[\\s._-]?vision|\\bdv\\b", RegexOption.IGNORE_CASE).containsMatchIn(name)) tags.add("DV")
+        if (Regex("hdr10\\+", RegexOption.IGNORE_CASE).containsMatchIn(name)) tags.add("HDR10+")
+        else if (Regex("\\bhdr\\b", RegexOption.IGNORE_CASE).containsMatchIn(name)) tags.add("HDR")
+
+        val codec = listOf(
+            Regex("hevc|x265|h[\\s._-]?265", RegexOption.IGNORE_CASE) to "HEVC",
+            Regex("x264|h[\\s._-]?264|\\bavc\\b", RegexOption.IGNORE_CASE) to "x264",
+            Regex("\\bav1\\b", RegexOption.IGNORE_CASE) to "AV1",
+        ).firstOrNull { it.first.containsMatchIn(name) }?.second
+        if (codec != null) tags.add(codec)
+
+        val audio = mutableListOf<String>()
+        if (Regex("atmos", RegexOption.IGNORE_CASE).containsMatchIn(name)) audio.add("Atmos")
+        if (Regex("true[\\s._-]?hd", RegexOption.IGNORE_CASE).containsMatchIn(name)) audio.add("TrueHD")
+        if (Regex("\\bdts(-?hd)?\\b", RegexOption.IGNORE_CASE).containsMatchIn(name)) audio.add("DTS")
+        if (Regex("ddp|dd\\+|e-?ac-?3", RegexOption.IGNORE_CASE).containsMatchIn(name)) audio.add("DDP")
+        else if (Regex("\\bdd\\b|\\bac-?3\\b", RegexOption.IGNORE_CASE).containsMatchIn(name)) audio.add("DD")
+        if (Regex("\\baac\\b", RegexOption.IGNORE_CASE).containsMatchIn(name)) audio.add("AAC")
+
+        val langDefs = listOf(
+            Regex("hindi|\\bhin\\b", RegexOption.IGNORE_CASE) to "Hin",
+            Regex("english|\\beng\\b", RegexOption.IGNORE_CASE) to "Eng",
+            Regex("tamil|\\btam\\b", RegexOption.IGNORE_CASE) to "Tam",
+            Regex("telugu|\\btel\\b", RegexOption.IGNORE_CASE) to "Tel",
+            Regex("malayalam|\\bmal\\b", RegexOption.IGNORE_CASE) to "Mal",
+            Regex("kannada|\\bkan\\b", RegexOption.IGNORE_CASE) to "Kan",
+            Regex("japanese|\\bjpn\\b", RegexOption.IGNORE_CASE) to "Jpn",
+            Regex("korean|\\bkor\\b", RegexOption.IGNORE_CASE) to "Kor",
+        )
+        val langs = langDefs.filter { it.first.containsMatchIn(name) }.map { it.second }
+        val langStr = langs.joinToString("+")
+        return FourKRelease(tags.joinToString(" "), audio.joinToString("/"), langStr, res.ifEmpty { "2160p" })
+    }
+
+    private fun parseSizeGb(size: String): Double {
+        val m = Regex("([\\d.]+)\\s*(GB|MB)", RegexOption.IGNORE_CASE).find(size) ?: return 0.0
+        val v = m.groupValues[1].toDoubleOrNull() ?: return 0.0
+        return if (m.groupValues[2].equals("MB", ignoreCase = true)) v / 1024.0 else v
+    }
+
+    private fun fourKQualityRank(q: String): Int {
+        val t = q.lowercase(Locale.US)
+        return when {
+            "2160" in t || "4k" in t -> 4
+            "1440" in t -> 3
+            "1080" in t -> 2
+            "720" in t -> 1
+            else -> 0
+        }
+    }
+
+    // Concise title: spec (resolution/source/range/codec) + languages + size. The verbose
+    // audio-codec list and server suffix are dropped to stop names overflowing/being trimmed.
+    private fun buildFourKTitle(s: FourKStream, mediaType: String, season: Int?, episode: Int?): String {
+        val parts = mutableListOf<String>()
+        if (s.spec.isNotBlank()) parts.add(s.spec)
+        if (s.langs.isNotBlank()) parts.add(s.langs)
+        if (s.size.isNotBlank()) parts.add(s.size)
+        var line = parts.joinToString(" · ")
+        if (mediaType == "tv") {
+            val tag = "S${(season ?: 1).toString().padStart(2, '0')}E${(episode ?: 1).toString().padStart(2, '0')}"
+            line = "$tag · $line"
+        }
+        return line.ifBlank { s.server.ifBlank { "4KHDHub" } }
+    }
+
+    private suspend fun extractHubCloud(url: String, hubcloudDomain: String): List<FourKStream> {
+        val out = mutableListOf<FourKStream>()
+        val baseUrl = runCatching { java.net.URI(url).let { "${it.scheme}://${it.host}" } }.getOrNull()
+            ?: hubcloudDomain.trimEnd('/')
+        val href = if (url.contains("hubcloud.php")) {
+            url
+        } else {
+            val html = runCatching { getText(url) }.getOrNull() ?: return out
+            val raw = org.jsoup.Jsoup.parse(html).selectFirst("#download")?.attr("href")?.trim().orEmpty()
+            if (raw.isBlank()) return out
+            if (raw.startsWith("http")) raw else "${baseUrl.trimEnd('/')}/${raw.trimStart('/')}"
+        }
+        if (href.isBlank()) return out
+
+        val pageHtml = runCatching { getText(href) }.getOrNull() ?: return out
+        val doc = org.jsoup.Jsoup.parse(pageHtml)
+        val size = doc.selectFirst("#size")?.text()?.trim().orEmpty()
+        val header = doc.selectFirst("div.card-header")?.text()?.trim().orEmpty()
+        val rel = parseFourKRelease(header)
+        fun stream(url: String, server: String) =
+            FourKStream(url, rel.quality, server, rel.spec, rel.audio, rel.langs, size)
+
+        doc.select("a.btn").forEach { el ->
+            val link = el.attr("href").trim()
+            val label = el.text().lowercase(Locale.US)
+            if (link.isBlank()) return@forEach
+            when {
+                // "Download File" → dead/throttled workers.dev direct file; does not stream. Skip.
+                "fsl server" in label -> out.add(stream(link, "FSL"))
+                "s3 server" in label -> out.add(stream(link, "S3"))
+                "pixeldra" in label || "pixel server" in label || "pixeldrain" in label -> {
+                    val base = runCatching { java.net.URI(link).let { "${it.scheme}://${it.host}" } }.getOrDefault("")
+                    val finalUrl = if ("download" in link) link
+                    else "$base/api/file/${link.substringAfterLast("/")}?download"
+                    out.add(stream(finalUrl, "Pixeldrain"))
+                }
+                "buzzserver" in label -> {
+                    val dlink = runCatching { fourKHeaderRedirect("$link/download", link) }.getOrNull().orEmpty()
+                    if (dlink.isNotBlank()) out.add(stream(dlink, "BuzzServer"))
+                }
+                "10gbps" in label || "mega" in label || "pdl" in label || "fslv2" in label ->
+                    out.add(stream(link, "10Gbps"))
+            }
+        }
+        return out
+    }
+
+    private suspend fun fourKHeaderRedirect(url: String, referer: String): String = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url(url)
+            .headers(okhttp3.Headers.headersOf("User-Agent", USER_AGENT, "Referer", referer))
+            .get()
+            .build()
+        noRedirectClient.newCall(request).execute().use { r ->
+            r.header("hx-redirect") ?: r.header("HX-Redirect") ?: ""
+        }
+    }
+
+    private suspend fun extractHubDrive(url: String, hubcloud: String): List<FourKStream> {
+        val html = runCatching { getText(url) }.getOrNull() ?: return emptyList()
+        val doc = org.jsoup.Jsoup.parse(html)
+        var href = doc.selectFirst(".btn.btn-primary.btn-user.btn-success1.m-1")?.attr("href").orEmpty()
+        if (href.isBlank()) {
+            href = doc.select("a").firstOrNull { it.attr("href").contains("hubcloud", ignoreCase = true) }
+                ?.attr("href").orEmpty()
+        }
+        if (href.isBlank()) return emptyList()
+        return if (href.contains("hubcloud", ignoreCase = true)) extractHubCloud(href, hubcloud) else emptyList()
+    }
+
+    private suspend fun extractHblinks(url: String, hubcloud: String): List<FourKStream> {
+        val html = runCatching { getText(url) }.getOrNull() ?: return emptyList()
+        val doc = org.jsoup.Jsoup.parse(html)
+        val hrefs = doc.select("h3 a, h5 a, div.entry-content p a")
+            .mapNotNull { it.attr("href").trim().ifBlank { null } }
+        val out = mutableListOf<FourKStream>()
+        hrefs.forEach { h -> out.addAll(dispatchFourKHost(h, hubcloud)) }
+        return out
+    }
+
+    private suspend fun extractHubCdn(url: String): List<FourKStream> {
+        val html = runCatching { getText(url) }.getOrNull() ?: return emptyList()
+        val m = Regex("""reurl\s*=\s*"([^"]+)"""").find(html)?.groupValues?.get(1) ?: return emptyList()
+        val after = m.substringAfter("?r=", "").ifBlank { m.substringAfter("link=", "") }
+        if (after.isBlank()) return emptyList()
+        val decoded = b64d(after)
+        val link = if (decoded.contains("link=")) decoded.substringAfterLast("link=") else decoded
+        return if (link.isNotBlank()) listOf(FourKStream(link, "Auto", "HubCdn")) else emptyList()
+    }
+
+    // ── End 4KHDHub ──────────────────────────────────────────────────────────────
+
+    // ── AniDB ────────────────────────────────────────────────────────────────────
+    // NOTE: anidb.app is behind a Cloudflare TLS-fingerprint (JA3) managed challenge,
+    // NOT a JS challenge — it passes/fails on the TLS handshake alone (no cf_clearance
+    // cookie needed). Android's OkHttp uses the system BoringSSL stack, whose fingerprint
+    // matches Chrome's, so this resolves on-device just like the CloudStream addon does.
+    // Desktop/JVM/Node TLS stacks get HTTP 403 ("Just a moment..."), so this returns empty
+    // in unit/CI tests run off-device.
+
+    private suspend fun resolveAniDb(
+        tmdbId: Int,
+        mediaType: String,
+        season: Int?,
+        episode: Int?,
+        fallbackTitle: String,
+        fallbackYear: Int?
+    ): List<HttpResolvedStream> {
+        val details = fetchTmdbDetails(tmdbId, mediaType, fallbackTitle, fallbackYear)
+        val base = "https://anidb.app"
+        val ranked = rankAniDb(searchAniDb(base, details.title), details.title)
+        val targetEpisode = if (mediaType == "tv") (episode ?: 1) else 1
+
+        for (candidate in ranked.take(3)) {
+            val slug = candidate.url.trimEnd('/').substringAfterLast("/")
+            val siteId = slug.substringAfterLast("-").toIntOrNull() ?: continue
+
+            val episodes = getJson(
+                "$base/api/frontend/anime/$siteId/episodes",
+                mapOf("X-Requested-With" to "XMLHttpRequest")
+            )?.getArray("episodes")?.toList().orEmpty().mapNotNull { it.asJsonObjectOrNull() }
+            if (episodes.isEmpty()) continue
+
+            val target = episodes.firstOrNull {
+                runCatching { it.get("number")?.asInt }.getOrNull() == targetEpisode
+            } ?: episodes.getOrNull(targetEpisode - 1) ?: episodes.firstOrNull() ?: continue
+            val epId = target.get("id")?.asStringOrNull() ?: continue
+
+            val languages = getJson(
+                "$base/api/frontend/episode/$epId/languages",
+                mapOf("X-Requested-With" to "XMLHttpRequest", "Referer" to "$base/anime/$slug")
+            )?.getArray("languages")?.toList().orEmpty().mapNotNull { it.asJsonObjectOrNull() }
+
+            val embedUrls = languages.mapNotNull { l ->
+                val eu = l.string("embed_url") ?: return@mapNotNull null
+                eu to (l.string("name") ?: l.string("code") ?: "")
+            }
+            if (embedUrls.isEmpty()) continue
+
+            val streams = coroutineScope {
+                embedUrls.map { (eu, name) ->
+                    async(Dispatchers.IO) {
+                        val m3u8 = runCatching { extractAniDbEmbed(eu, base) }.getOrNull() ?: return@async null
+                        val langLabel = if (name.isNotBlank()) " [$name]" else ""
+                        val label = if (mediaType == "tv") {
+                            "${details.title} E${targetEpisode.toString().padStart(2, '0')}$langLabel · AniDB"
+                        } else {
+                            "${details.title}$langLabel · AniDB"
+                        }
+                        HttpResolvedStream("AniDB", label, m3u8, "Auto", mapOf("Referer" to "$base/"))
+                    }
+                }.awaitAll().filterNotNull()
+            }.distinctBy { it.url }
+
+            if (streams.isNotEmpty()) return streams
+        }
+        return emptyList()
+    }
+
+    private suspend fun searchAniDb(base: String, query: String): List<AniDbResult> {
+        val html = runCatching {
+            getText(
+                "$base/browse?q=${query.urlEncode()}",
+                mapOf(
+                    "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language" to "en-US,en;q=0.9"
+                )
+            )
+        }.getOrNull() ?: return emptyList()
+        val doc = org.jsoup.Jsoup.parse(html)
+        val seen = mutableSetOf<String>()
+        val results = mutableListOf<AniDbResult>()
+        doc.select("a.anime-card").forEach { a ->
+            val href = absoluteUrl(base, a.attr("href"))
+            val title = a.attr("title").ifBlank { a.selectFirst("img")?.attr("alt").orEmpty() }.trim()
+            if (href.isNotBlank() && title.isNotBlank() && seen.add(href)) results.add(AniDbResult(href, title))
+        }
+        return results
+    }
+
+    private fun rankAniDb(results: List<AniDbResult>, title: String): List<AniDbResult> {
+        val want = normTitle(title)
+        val exact = results.filter { normTitle(it.title) == want }
+        val partial = results.filter {
+            val n = normTitle(it.title)
+            n != want && (n.contains(want) || want.contains(n))
+        }
+        return exact + partial
+    }
+
+    private suspend fun extractAniDbEmbed(embedUrl: String, base: String): String? {
+        val text = runCatching { getText(embedUrl, mapOf("Referer" to "$base/")) }.getOrNull() ?: return null
+        val regexes = listOf(
+            Regex("""file\s*:\s*["'](https?://[^"']+\.m3u8[^"']*)["']""", RegexOption.IGNORE_CASE),
+            Regex("""sources\s*:\s*\[\s*\{[^}]*file\s*:\s*["'](https?://[^"']+\.m3u8[^"']*)["']""", RegexOption.IGNORE_CASE),
+            Regex("""["'](https?://[^"']+/master\.m3u8[^"']*)["']""", RegexOption.IGNORE_CASE),
+            Regex("""["'](https?://[^"']+\.m3u8[^"']*)["']""", RegexOption.IGNORE_CASE)
+        )
+        for (r in regexes) {
+            r.find(text)?.groupValues?.get(1)?.let { return it }
+        }
+        return null
+    }
+
+    // ── End AniDB ────────────────────────────────────────────────────────────────
+
     private suspend fun resolveNewTvApiUrl(): String {
         if (newTvApiUrl.isNotEmpty()) return newTvApiUrl
         for (encoded in NEW_TV_DOMAINS) {
@@ -1350,6 +1861,20 @@ class HttpLocalScraperRuntime @Inject constructor(
     )
     private data class ToonstreamSeason(val dataPost: String, val dataSeason: String)
     private data class ToonstreamEpisode(val url: String, val season: Int, val episode: Int)
+
+    private data class FourKResult(val url: String, val title: String)
+    private data class FourKStream(
+        val url: String,
+        val quality: String,
+        val server: String,
+        val spec: String = "",
+        val audio: String = "",
+        val langs: String = "",
+        val size: String = ""
+    )
+    private data class FourKPage(val year: Int?, val links: List<String>)
+    private data class FourKRelease(val spec: String, val audio: String, val langs: String, val quality: String)
+    private data class AniDbResult(val url: String, val title: String)
 
     companion object {
         private val DIV_EP_REGEX = Regex("""<div[^>]+class=["']ep[^>]*>.*?</div>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
