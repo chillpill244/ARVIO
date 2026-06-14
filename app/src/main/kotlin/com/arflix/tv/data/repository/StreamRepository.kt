@@ -1128,6 +1128,11 @@ class StreamRepository @Inject constructor(
     // Stream source requests — generous timeouts to accommodate slow wifi and
     // debrid-backed addons (Torrentio, MediaFusion, etc.) that resolve remotely.
     private val ADDON_TIMEOUT_MS = 6_000L
+    // Built-in HTTP scrapers (NetMirror, Toonstream) do a multi-hop search→post→AJAX→embed
+    // chain on the device, so on slow links the round-trips alone exceed the debrid budget.
+    // withTimeout returns the moment the work finishes, so this higher ceiling only ever
+    // benefits a still-running scraper — a fast addon still returns immediately.
+    private val LOCAL_SCRAPER_TIMEOUT_MS = 14_000L
     // Subtitles should not block playback but need enough time on slow connections.
     private val SUBTITLE_TIMEOUT_MS = 6_000L
     // If addons return nothing, allow Xtream VOD lookup to recover playback.
@@ -1248,8 +1253,9 @@ class StreamRepository @Inject constructor(
         year: Int? = null
     ): List<StreamSource> {
         val startedAt = System.currentTimeMillis()
+        val addonTimeout = if (httpLocalScraperRuntime.canHandle(addon)) LOCAL_SCRAPER_TIMEOUT_MS else ADDON_TIMEOUT_MS
         return try {
-            withTimeout(ADDON_TIMEOUT_MS) {
+            withTimeout(addonTimeout) {
                 if (httpLocalScraperRuntime.canHandle(addon)) {
                     val streams = httpLocalScraperRuntime.resolveMovieStreams(
                         addon = addon,
@@ -1335,8 +1341,9 @@ class StreamRepository @Inject constructor(
         airDate: String? = null
     ): List<StreamSource> {
         val startedAt = System.currentTimeMillis()
+        val addonTimeout = if (httpLocalScraperRuntime.canHandle(addon)) LOCAL_SCRAPER_TIMEOUT_MS else ADDON_TIMEOUT_MS
         return try {
-            withTimeout(ADDON_TIMEOUT_MS) {
+            withTimeout(addonTimeout) {
                 if (httpLocalScraperRuntime.canHandle(addon)) {
                     val streams = httpLocalScraperRuntime.resolveEpisodeStreams(
                         addon = addon,
