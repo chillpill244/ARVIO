@@ -58,6 +58,7 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Forward10
@@ -66,7 +67,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeMute
@@ -146,6 +146,7 @@ import com.arflix.tv.ui.components.ToastType
 import com.arflix.tv.ui.components.NextEpisodeOverlay
 import com.arflix.tv.ui.components.StreamSelector
 import com.arflix.tv.ui.components.WaveLoadingDots
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.arflix.tv.util.LocalDeviceType
 import com.arflix.tv.util.settingsDataStore
@@ -353,12 +354,15 @@ fun PlayerScreen(
     val nextEpisodeButtonFocusRequester = remember { FocusRequester() }
     val containerFocusRequester = remember { FocusRequester() }
     val skipIntroFocusRequester = remember { FocusRequester() }
-    val subtitleSettingsBtnFocusRequester = remember { FocusRequester() }
+    val audioButtonFocusRequester = remember { FocusRequester() }
     val pipButtonFocusRequester = remember { FocusRequester() }
 
     // Focus state - 0=Play, 1=Subtitles
     var focusedButton by remember { mutableIntStateOf(0) }
     var showSubtitleMenu by remember { mutableStateOf(false) }
+    // Standalone audio-track picker, opened from its own pill (only shown when >1 audio track).
+    var showAudioMenu by remember { mutableStateOf(false) }
+    var audioMenuIndex by remember { mutableIntStateOf(0) }
     var showSourceMenu by remember { mutableStateOf(false) }
     // Post-episode "Up Next" prompt (issue #86). Shown on STATE_ENDED for TV shows:
     // a 10-second countdown lets the user Cancel or immediately Continue. On timeout we
@@ -376,13 +380,11 @@ fun PlayerScreen(
     var pendingNextBingeGroup by remember { mutableStateOf<String?>(null) }
     var nextEpisodePromptButton by remember { mutableIntStateOf(0) } // 0 = next, 1 = cancel
     var playerResizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
-    var subtitleMenuIndex by remember { mutableIntStateOf(0) }
-    var subtitleMenuTab by remember { mutableIntStateOf(0) } // 0 = Subtitles, 1 = Audio
+    var subtitleMenuTab by remember { mutableIntStateOf(0) } // 0 = Subtitles, 1 = Settings
     var subtitleLangIndex by remember { mutableIntStateOf(0) }
     var subtitleTrackIndex by remember { mutableIntStateOf(0) }
     var subtitlePanelFocus by remember { mutableIntStateOf(0) } // 0=lang panel, 1=track panel
-    // In-player subtitle settings panel state
-    var showSubtitleSettings by remember { mutableStateOf(false) }
+    // In-player subtitle settings state (rendered as the "Settings" tab inside the Subs menu)
     var subtitleSettingsRow by remember { mutableIntStateOf(0) }  // 0=Delay, 1=Size, 2=Vertical
     var subtitleSyncOffsetMs by remember { mutableLongStateOf(0L) }
     var subtitleSizePct by remember { mutableIntStateOf(100) }
@@ -1648,7 +1650,7 @@ fun PlayerScreen(
     // the controls are visible (D-pad navigation/clicks are consumed by the
     // focused buttons and never reach the container's onKeyEvent).
     LaunchedEffect(showControls, isPlaying, isCasting, controlsInteractionTick) {
-        if (showControls && isPlaying && !isCasting && !showSubtitleMenu && !showSourceMenu && !showSubtitleSettings) {
+        if (showControls && isPlaying && !isCasting && !showSubtitleMenu && !showSourceMenu && !showAudioMenu) {
             delay(5000)
             showControls = false
             // Return focus to container so it can receive key events
@@ -2020,12 +2022,13 @@ fun PlayerScreen(
         if (uiState.error != null) {
             showSourceMenu = false
             showSubtitleMenu = false
+            showAudioMenu = false
         }
     }
 
     // Request focus on the container when not showing controls
-    LaunchedEffect(showControls, showSubtitleMenu, showSourceMenu, showNextEpisodePrompt, uiState.error) {
-        if (!showControls && !showSubtitleMenu && !showSourceMenu && !showNextEpisodePrompt && uiState.error == null) {
+    LaunchedEffect(showControls, showSubtitleMenu, showAudioMenu, showSourceMenu, showNextEpisodePrompt, uiState.error) {
+        if (!showControls && !showSubtitleMenu && !showAudioMenu && !showSourceMenu && !showNextEpisodePrompt && uiState.error == null) {
             delay(100)
             try {
                 containerFocusRequester.requestFocus()
@@ -2057,17 +2060,17 @@ fun PlayerScreen(
         }
     }
 
-    BackHandler(enabled = showSubtitleSettings) {
-        showSubtitleSettings = false
+    BackHandler(enabled = showAudioMenu) {
+        showAudioMenu = false
         showControls = true
         coroutineScope.launch {
             delay(120)
-            runCatching { subtitleSettingsBtnFocusRequester.requestFocus() }
+            runCatching { audioButtonFocusRequester.requestFocus() }
         }
     }
 
     BackHandler(
-        enabled = !showSubtitleMenu && !showSourceMenu && !showNextEpisodePrompt && !showSubtitleSettings && uiState.error == null
+        enabled = !showSubtitleMenu && !showAudioMenu && !showSourceMenu && !showNextEpisodePrompt && uiState.error == null
     ) {
         if (showControls) {
             showControls = false
@@ -2247,7 +2250,7 @@ fun PlayerScreen(
                     }
 
                     if ((event.key == Key.Back || event.key == Key.Escape) &&
-                        !showSubtitleMenu && !showSourceMenu && !showNextEpisodePrompt && !showSubtitleSettings && uiState.error == null
+                        !showSubtitleMenu && !showAudioMenu && !showSourceMenu && !showNextEpisodePrompt && uiState.error == null
                     ) {
                         if (showControls) {
                             showControls = false
@@ -2285,39 +2288,49 @@ fun PlayerScreen(
                         }
                     }
 
-                    // Handle subtitle settings panel
-                    if (showSubtitleSettings) {
+                    // Handle standalone audio-track menu (opened from the Audio pill)
+                    if (showAudioMenu) {
                         return@onKeyEvent when (event.key) {
+                            Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> {
+                                if (event.key == Key.MediaPause) {
+                                    exoPlayer.pause()
+                                } else if (event.key == Key.MediaPlay) {
+                                    exoPlayer.play()
+                                } else {
+                                    if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                                }
+                                showControls = true
+                                true
+                            }
                             Key.DirectionUp -> {
-                                subtitleSettingsRow = (subtitleSettingsRow - 1).coerceAtLeast(0)
+                                if (audioMenuIndex > 0) audioMenuIndex--
                                 true
                             }
                             Key.DirectionDown -> {
-                                subtitleSettingsRow = (subtitleSettingsRow + 1).coerceAtMost(2)
+                                if (audioMenuIndex < audioTracks.size - 1) audioMenuIndex++
                                 true
                             }
-                            Key.DirectionLeft -> {
-                                when (subtitleSettingsRow) {
-                                    0 -> subtitleSyncOffsetMs = (subtitleSyncOffsetMs - 100L).coerceAtLeast(-10000L)
-                                    1 -> subtitleSizePct = (subtitleSizePct - 10).coerceAtLeast(50)
-                                    2 -> subtitleVerticalPct = (subtitleVerticalPct - 1).coerceAtLeast(0)
+                            Key.Enter, Key.DirectionCenter -> {
+                                audioTracks.getOrNull(audioMenuIndex)?.let { track ->
+                                    userPickedAudioForStream = true
+                                    applyAudioTrackSelection(exoPlayer, track, audioTracks)?.let {
+                                        selectedAudioIndex = it
+                                    }
                                 }
-                                true
-                            }
-                            Key.DirectionRight -> {
-                                when (subtitleSettingsRow) {
-                                    0 -> subtitleSyncOffsetMs = (subtitleSyncOffsetMs + 100L).coerceAtMost(10000L)
-                                    1 -> subtitleSizePct = (subtitleSizePct + 10).coerceAtMost(300)
-                                    2 -> subtitleVerticalPct = (subtitleVerticalPct + 1).coerceAtMost(50)
+                                showAudioMenu = false
+                                showControls = true
+                                coroutineScope.launch {
+                                    delay(150)
+                                    try { audioButtonFocusRequester.requestFocus() } catch (_: Exception) {}
                                 }
                                 true
                             }
                             Key.Back, Key.Escape -> {
-                                showSubtitleSettings = false
+                                showAudioMenu = false
                                 showControls = true
                                 coroutineScope.launch {
                                     delay(120)
-                                    runCatching { subtitleSettingsBtnFocusRequester.requestFocus() }
+                                    runCatching { audioButtonFocusRequester.requestFocus() }
                                 }
                                 true
                             }
@@ -2325,7 +2338,7 @@ fun PlayerScreen(
                         }
                     }
 
-                    // Handle subtitle/audio menu — two-panel layout: lang panel | track panel | audio tab
+                    // Handle subtitle menu — two-panel layout: lang panel | track panel | settings tab
                     if (showSubtitleMenu) {
                         return@onKeyEvent when (event.key) {
                         Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> {
@@ -2340,6 +2353,7 @@ fun PlayerScreen(
                             true
                         }
                         Key.Back, Key.Escape -> {
+                                // Back always closes the whole menu.
                                 showSubtitleMenu = false
                                 showControls = true
                                 coroutineScope.launch {
@@ -2350,7 +2364,11 @@ fun PlayerScreen(
                             }
                             Key.DirectionUp -> {
                                 when {
-                                    subtitleMenuTab == 1 -> { if (subtitleMenuIndex > 0) subtitleMenuIndex-- }
+                                    // Settings rows are stacked vertically: Up moves to the previous row;
+                                    // from the first row (Delay) it focuses the Settings tab header (-1).
+                                    subtitleMenuTab == 1 -> {
+                                        subtitleSettingsRow = if (subtitleSettingsRow <= 0) -1 else subtitleSettingsRow - 1
+                                    }
                                     subtitlePanelFocus == 0 -> { if (subtitleLangIndex > 0) subtitleLangIndex-- }
                                     else -> { if (subtitleTrackIndex > 0) subtitleTrackIndex-- }
                                 }
@@ -2358,8 +2376,9 @@ fun PlayerScreen(
                             }
                             Key.DirectionDown -> {
                                 when {
+                                    // From the tab header (-1), Down drops back into the first settings row.
                                     subtitleMenuTab == 1 -> {
-                                        if (subtitleMenuIndex < audioTracks.size.coerceAtLeast(1) - 1) subtitleMenuIndex++
+                                        subtitleSettingsRow = (subtitleSettingsRow + 1).coerceIn(0, 2)
                                     }
                                     subtitlePanelFocus == 0 -> {
                                         if (subtitleLangIndex < subtitleGroups.size) subtitleLangIndex++
@@ -2377,9 +2396,17 @@ fun PlayerScreen(
                             }
                             Key.DirectionLeft -> {
                                 when {
-                                    subtitleMenuTab == 1 -> {
+                                    // On the settings tab header (-1), Left switches to the Subtitles tab.
+                                    subtitleMenuTab == 1 && subtitleSettingsRow == -1 -> {
                                         subtitleMenuTab = 0
-                                        subtitlePanelFocus = 0
+                                    }
+                                    // In the settings rows, Left decreases the focused value.
+                                    subtitleMenuTab == 1 -> {
+                                        when (subtitleSettingsRow) {
+                                            0 -> subtitleSyncOffsetMs = (subtitleSyncOffsetMs - 100L).coerceAtLeast(-10000L)
+                                            1 -> subtitleSizePct = (subtitleSizePct - 10).coerceAtLeast(50)
+                                            2 -> subtitleVerticalPct = (subtitleVerticalPct - 1).coerceAtLeast(0)
+                                        }
                                     }
                                     subtitlePanelFocus == 1 -> {
                                         subtitlePanelFocus = 0
@@ -2389,9 +2416,18 @@ fun PlayerScreen(
                             }
                             Key.DirectionRight -> {
                                 when {
+                                    // On the settings tab header (-1), Right does nothing (rightmost tab).
+                                    subtitleMenuTab == 1 && subtitleSettingsRow == -1 -> { /* no-op */ }
+                                    subtitleMenuTab == 1 -> {
+                                        when (subtitleSettingsRow) {
+                                            0 -> subtitleSyncOffsetMs = (subtitleSyncOffsetMs + 100L).coerceAtMost(10000L)
+                                            1 -> subtitleSizePct = (subtitleSizePct + 10).coerceAtMost(300)
+                                            2 -> subtitleVerticalPct = (subtitleVerticalPct + 1).coerceAtMost(50)
+                                        }
+                                    }
                                     subtitleMenuTab == 0 && subtitlePanelFocus == 1 -> {
                                         subtitleMenuTab = 1
-                                        subtitleMenuIndex = 0
+                                        subtitleSettingsRow = 0
                                     }
                                     subtitleMenuTab == 0 && subtitleLangIndex > 0 -> {
                                         subtitlePanelFocus = 1
@@ -2399,25 +2435,16 @@ fun PlayerScreen(
                                     }
                                     subtitleMenuTab == 0 && subtitleLangIndex == 0 -> {
                                         subtitleMenuTab = 1
-                                        subtitleMenuIndex = 0
+                                        subtitleSettingsRow = 0
                                     }
                                 }
                                 true
                             }
                             Key.Enter, Key.DirectionCenter -> {
                                 if (subtitleMenuTab == 1) {
-                                    audioTracks.getOrNull(subtitleMenuIndex)?.let { track ->
-                                        userPickedAudioForStream = true
-                                        applyAudioTrackSelection(exoPlayer, track, audioTracks)?.let {
-                                            selectedAudioIndex = it
-                                        }
-                                    }
-                                    showSubtitleMenu = false
-                                    showControls = true
-                                    coroutineScope.launch {
-                                        delay(150)
-                                        try { subtitleButtonFocusRequester.requestFocus() } catch (_: Exception) {}
-                                    }
+                                    // From the tab header, Enter drops into the first settings row;
+                                    // on a row, settings adjust via left/right so Enter is a no-op.
+                                    if (subtitleSettingsRow == -1) subtitleSettingsRow = 0
                                 } else if (subtitlePanelFocus == 0) {
                                     if (subtitleLangIndex == 0) {
                                         viewModel.disableSubtitles()
@@ -3031,9 +3058,15 @@ fun PlayerScreen(
                     Spacer(modifier = Modifier.height(if (isTouchDevice) 10.dp else 12.dp))
 
                     // Pill-shaped options bar (Nuvio-style), centered below the trackbar:
-                    // Subs · Sources · Settings · Fit (+ Next Episode on shows, PiP on touch).
+                    // Subs · Audio? · Sources · Fit (+ Next Episode on shows, PiP on touch).
+                    // The Audio pill only appears when the stream has more than one audio track.
                     val hasPipButton = isTouchDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                     val hasNextEpisode = mediaType == MediaType.TV && uiState.nextEpisodeTarget != null
+                    val hasAudioButton = audioTracks.size > 1
+                    // Pill immediately to the right of Subs (Audio when present, else Sources).
+                    val firstPillAfterSubs = if (hasAudioButton) audioButtonFocusRequester else sourceButtonFocusRequester
+                    // Pill immediately to the left of Sources (Audio when present, else Subs).
+                    val pillBeforeSources = if (hasAudioButton) audioButtonFocusRequester else subtitleButtonFocusRequester
                     val lastPillFocusRequester = when {
                         hasPipButton -> pipButtonFocusRequester
                         hasNextEpisode -> nextEpisodeButtonFocusRequester
@@ -3054,7 +3087,7 @@ fun PlayerScreen(
                             focusRequester = subtitleButtonFocusRequester,
                             onFocusChanged = { if (it) focusedButton = 1 },
                             onClick = {
-                                subtitleMenuIndex = 0
+                                subtitleMenuTab = 0
                                 subtitlePanelFocus = 0
                                 val selected = latestUiState.selectedSubtitle
                                 if (selected == null) {
@@ -3083,33 +3116,34 @@ fun PlayerScreen(
                                 }
                             },
                             onLeftKey = { lastPillFocusRequester.requestFocus() },
-                            onRightKey = { sourceButtonFocusRequester.requestFocus() },
+                            onRightKey = { firstPillAfterSubs.requestFocus() },
                             onUpKey = { trackbarFocusRequester.requestFocus() })
+
+                        // Audio track picker — only when the stream has multiple audio tracks
+                        if (hasAudioButton) {
+                            PlayerPillButton(icon = Icons.Default.Audiotrack, label = "Audio",
+                                compact = isTouchDevice,
+                                focusRequester = audioButtonFocusRequester,
+                                onClick = {
+                                    audioMenuIndex = selectedAudioIndex.coerceIn(0, audioTracks.lastIndex)
+                                    showAudioMenu = true
+                                    showControls = true
+                                    coroutineScope.launch {
+                                        delay(50)
+                                        try { containerFocusRequester.requestFocus() } catch (_: Exception) {}
+                                    }
+                                },
+                                onLeftKey = { subtitleButtonFocusRequester.requestFocus() },
+                                onRightKey = { sourceButtonFocusRequester.requestFocus() },
+                                onUpKey = { trackbarFocusRequester.requestFocus() })
+                        }
 
                         // Sources
                         PlayerPillButton(icon = Icons.Default.Folder, label = stringResource(R.string.sources),
                             compact = isTouchDevice,
                             focusRequester = sourceButtonFocusRequester,
                             onClick = { showSourceMenu = true; showControls = true },
-                            onLeftKey = { subtitleButtonFocusRequester.requestFocus() },
-                            onRightKey = { subtitleSettingsBtnFocusRequester.requestFocus() },
-                            onUpKey = { trackbarFocusRequester.requestFocus() })
-
-                        // Subtitle settings (delay, size, vertical position)
-                        PlayerPillButton(icon = Icons.Default.Tune, label = "Settings",
-                            compact = isTouchDevice,
-                            focusRequester = subtitleSettingsBtnFocusRequester,
-                            onClick = {
-                                showSubtitleSettings = !showSubtitleSettings
-                                if (showSubtitleSettings) {
-                                    subtitleSettingsRow = 0
-                                    coroutineScope.launch {
-                                        delay(50)
-                                        runCatching { containerFocusRequester.requestFocus() }
-                                    }
-                                }
-                            },
-                            onLeftKey = { sourceButtonFocusRequester.requestFocus() },
+                            onLeftKey = { pillBeforeSources.requestFocus() },
                             onRightKey = { aspectButtonFocusRequester.requestFocus() },
                             onUpKey = { trackbarFocusRequester.requestFocus() })
 
@@ -3118,7 +3152,7 @@ fun PlayerScreen(
                             compact = isTouchDevice,
                             focusRequester = aspectButtonFocusRequester,
                             onClick = cycleAspectRatio,
-                            onLeftKey = { subtitleSettingsBtnFocusRequester.requestFocus() },
+                            onLeftKey = { sourceButtonFocusRequester.requestFocus() },
                             onRightKey = {
                                 when {
                                     hasNextEpisode -> nextEpisodeButtonFocusRequester.requestFocus()
@@ -3158,29 +3192,40 @@ fun PlayerScreen(
             }
         }
 
-        // In-player subtitle settings panel (Delay, Size, Vertical Position)
+        // Standalone audio-track picker (opened from the Audio pill)
         AnimatedVisibility(
-            visible = showSubtitleSettings && hasPlaybackStarted,
-            enter = fadeIn(animTween(150)),
-            exit = fadeOut(animTween(150)),
-            modifier = Modifier.align(Alignment.Center).zIndex(8f)
+            visible = showAudioMenu,
+            enter = fadeIn(androidx.compose.animation.core.tween(150)),
+            exit = fadeOut(androidx.compose.animation.core.tween(200))
         ) {
-            PlayerSubtitleSettingsPanel(
-                selectedRow = subtitleSettingsRow,
-                syncOffsetMs = subtitleSyncOffsetMs,
-                sizePct = subtitleSizePct,
-                verticalPct = subtitleVerticalPct,
-                onRowSelect = { subtitleSettingsRow = it },
-                onOffsetDecrease = { subtitleSyncOffsetMs = (subtitleSyncOffsetMs - 100L).coerceAtLeast(-10000L) },
-                onOffsetIncrease = { subtitleSyncOffsetMs = (subtitleSyncOffsetMs + 100L).coerceAtMost(10000L) },
-                onSizeDecrease = { subtitleSizePct = (subtitleSizePct - 10).coerceAtLeast(50) },
-                onSizeIncrease = { subtitleSizePct = (subtitleSizePct + 10).coerceAtMost(300) },
-                onVerticalDecrease = { subtitleVerticalPct = (subtitleVerticalPct - 1).coerceAtLeast(0) },
-                onVerticalIncrease = { subtitleVerticalPct = (subtitleVerticalPct + 1).coerceAtMost(50) }
+            AudioMenu(
+                audioTracks = audioTracks,
+                selectedAudioIndex = selectedAudioIndex,
+                focusedIndex = audioMenuIndex,
+                onSelectAudio = { track ->
+                    userPickedAudioForStream = true
+                    applyAudioTrackSelection(exoPlayer, track, audioTracks)?.let {
+                        selectedAudioIndex = it
+                    }
+                    showAudioMenu = false
+                    showControls = true
+                    coroutineScope.launch {
+                        delay(150)
+                        try { audioButtonFocusRequester.requestFocus() } catch (_: Exception) {}
+                    }
+                },
+                onClose = {
+                    showAudioMenu = false
+                    showControls = true
+                    coroutineScope.launch {
+                        delay(150)
+                        try { audioButtonFocusRequester.requestFocus() } catch (_: Exception) {}
+                    }
+                }
             )
         }
 
-        // Subtitle/Audio menu
+        // Subtitle menu (Subtitles tab + Settings tab)
         AnimatedVisibility(
             visible = showSubtitleMenu,
             enter = fadeIn(androidx.compose.animation.core.tween(150)),
@@ -3192,18 +3237,19 @@ fun PlayerScreen(
                 isAiTranslating = uiState.isAiTranslating,
                 isAiAvailable = uiState.isAiAvailable,
                 aiTargetLanguageName = uiState.aiTargetLanguageName,
-                audioTracks = audioTracks,
-                selectedAudioIndex = selectedAudioIndex,
                 activeTab = subtitleMenuTab,
-                focusedIndex = subtitleMenuIndex,
                 subtitleGroups = subtitleGroups,
                 streamSource = uiState.selectedStream?.source ?: "",
                 subtitleLangIndex = subtitleLangIndex,
                 subtitleTrackIndex = subtitleTrackIndex,
                 subtitlePanelFocus = subtitlePanelFocus,
+                settingsRow = subtitleSettingsRow,
+                syncOffsetMs = subtitleSyncOffsetMs,
+                sizePct = subtitleSizePct,
+                verticalPct = subtitleVerticalPct,
                 onTabChanged = { tab ->
                     subtitleMenuTab = tab
-                    subtitleMenuIndex = 0
+                    if (tab == 1) subtitleSettingsRow = 0
                 },
                 onSelectSubtitle = { index ->
                     if (index == 0) {
@@ -3218,18 +3264,13 @@ fun PlayerScreen(
                         try { subtitleButtonFocusRequester.requestFocus() } catch (_: Exception) {}
                     }
                 },
-                onSelectAudio = { track ->
-                    userPickedAudioForStream = true
-                    applyAudioTrackSelection(exoPlayer, track, audioTracks)?.let {
-                        selectedAudioIndex = it
-                    }
-                    showSubtitleMenu = false
-                    showControls = true
-                    coroutineScope.launch {
-                        delay(150)
-                        try { subtitleButtonFocusRequester.requestFocus() } catch (_: Exception) {}
-                    }
-                },
+                onSettingsRowSelect = { subtitleSettingsRow = it },
+                onOffsetDecrease = { subtitleSyncOffsetMs = (subtitleSyncOffsetMs - 100L).coerceAtLeast(-10000L) },
+                onOffsetIncrease = { subtitleSyncOffsetMs = (subtitleSyncOffsetMs + 100L).coerceAtMost(10000L) },
+                onSizeDecrease = { subtitleSizePct = (subtitleSizePct - 10).coerceAtLeast(50) },
+                onSizeIncrease = { subtitleSizePct = (subtitleSizePct + 10).coerceAtMost(300) },
+                onVerticalDecrease = { subtitleVerticalPct = (subtitleVerticalPct - 1).coerceAtLeast(0) },
+                onVerticalIncrease = { subtitleVerticalPct = (subtitleVerticalPct + 1).coerceAtMost(50) },
                 onToggleAi = { viewModel.activateAiSubtitle() },
                 onClose = {
                     showSubtitleMenu = false
@@ -4094,39 +4135,40 @@ private fun SubtitleMenu(
     isAiTranslating: Boolean = false,
     isAiAvailable: Boolean = false,
     aiTargetLanguageName: String = "",
-    audioTracks: List<AudioTrackInfo>,
-    selectedAudioIndex: Int,
     activeTab: Int,
-    focusedIndex: Int,
     subtitleGroups: List<Pair<String, List<Pair<Int, Subtitle>>>>,
     subtitleLangIndex: Int,
     subtitleTrackIndex: Int,
     subtitlePanelFocus: Int,
     streamSource: String = "",
+    settingsRow: Int,
+    syncOffsetMs: Long,
+    sizePct: Int,
+    verticalPct: Int,
     onTabChanged: (Int) -> Unit,
     onSelectSubtitle: (Int) -> Unit,
-    onSelectAudio: (AudioTrackInfo) -> Unit,
+    onSettingsRowSelect: (Int) -> Unit,
+    onOffsetDecrease: () -> Unit,
+    onOffsetIncrease: () -> Unit,
+    onSizeDecrease: () -> Unit,
+    onSizeIncrease: () -> Unit,
+    onVerticalDecrease: () -> Unit,
+    onVerticalIncrease: () -> Unit,
     onToggleAi: () -> Unit = {},
     onClose: () -> Unit
 ) {
     val isMobile = LocalDeviceType.current.isTouchDevice()
     val langListState = rememberLazyListState()
     val trackListState = rememberLazyListState()
-    val audioListState = rememberLazyListState()
 
     if (!isMobile) {
-        // ── TV layout: two-panel (language list | track list) + Audio tab ─
+        // ── TV layout: two-panel (language list | track list) + Settings tab ─
         LaunchedEffect(subtitleLangIndex) {
             langListState.animateScrollToItem(subtitleLangIndex.coerceAtLeast(0))
         }
         LaunchedEffect(subtitleTrackIndex, subtitlePanelFocus) {
             if (subtitlePanelFocus == 1 && subtitleTrackIndex >= 0) {
                 trackListState.animateScrollToItem(subtitleTrackIndex)
-            }
-        }
-        LaunchedEffect(focusedIndex, activeTab) {
-            if (activeTab == 1 && focusedIndex >= 0) {
-                audioListState.animateScrollToItem(focusedIndex)
             }
         }
 
@@ -4161,8 +4203,9 @@ private fun SubtitleMenu(
                         onClick = { onTabChanged(0) }
                     )
                     TabButton(
-                        text = stringResource(R.string.audio),
+                        text = stringResource(R.string.settings),
                         isSelected = activeTab == 1,
+                        isFocused = activeTab == 1 && settingsRow == -1,
                         onClick = { onTabChanged(1) }
                     )
                 }
@@ -4296,44 +4339,21 @@ private fun SubtitleMenu(
                             }
                         }
                     } else {
-                        // Audio tab
-                        LazyColumn(
-                            state = audioListState,
+                        // Settings tab — subtitle delay / size / vertical position
+                        SubtitleSettingsContent(
                             modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            if (audioTracks.isEmpty()) {
-                                item {
-                                    Text(
-                                        text = stringResource(R.string.no_audio_tracks),
-                                        style = ArflixTypography.body,
-                                        color = TextSecondary,
-                                        modifier = Modifier.padding(16.dp)
-                                    )
-                                }
-                            } else {
-                                itemsIndexed(audioTracks, key = { _, track -> audioTrackKey(track) }) { index, track ->
-                                    val languageName = getFullLanguageName(track.language)
-                                    val trackLabel = track.label?.takeIf { it.isNotBlank() } ?: languageName
-                                    val codecInfo = detectAudioCodecLabel(track.codec, trackLabel)
-                                    val channelInfo = when (track.channelCount) {
-                                        1 -> "Mono"
-                                        2 -> "Stereo"
-                                        6 -> "5.1"
-                                        8 -> "7.1"
-                                        else -> if (track.channelCount > 0) "${track.channelCount}ch" else null
-                                    }
-                                    val subtitleText = listOfNotNull(codecInfo, channelInfo).joinToString(" • ")
-                                    TrackMenuItem(
-                                        label = trackLabel,
-                                        subtitle = subtitleText.ifEmpty { null },
-                                        isSelected = index == selectedAudioIndex,
-                                        isFocused = focusedIndex == index,
-                                        onClick = { onSelectAudio(track) }
-                                    )
-                                }
-                            }
-                        }
+                            selectedRow = settingsRow,
+                            syncOffsetMs = syncOffsetMs,
+                            sizePct = sizePct,
+                            verticalPct = verticalPct,
+                            onRowSelect = onSettingsRowSelect,
+                            onOffsetDecrease = onOffsetDecrease,
+                            onOffsetIncrease = onOffsetIncrease,
+                            onSizeDecrease = onSizeDecrease,
+                            onSizeIncrease = onSizeIncrease,
+                            onVerticalDecrease = onVerticalDecrease,
+                            onVerticalIncrease = onVerticalIncrease
+                        )
                     }
                 }
 
@@ -4390,7 +4410,7 @@ private fun SubtitleMenu(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = if (mobileTab == 0) "Subtitles" else "Audio",
+                        text = if (mobileTab == 0) "Subtitles" else "Settings",
                         style = ArflixTypography.body.copy(
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold
@@ -4422,7 +4442,7 @@ private fun SubtitleMenu(
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("Subtitles" to 0, "Audio" to 1).forEach { (label, tabIndex) ->
+                    listOf("Subtitles" to 0, "Settings" to 1).forEach { (label, tabIndex) ->
                         val selected = mobileTab == tabIndex
                         Box(
                             modifier = Modifier
@@ -4555,46 +4575,214 @@ private fun SubtitleMenu(
                             }
                         }
                     } else {
-                        // Audio tab
-                        if (audioTracks.isEmpty()) {
-                            item {
-                                Text(
-                                    text = stringResource(R.string.no_audio_tracks),
-                                    style = ArflixTypography.body.copy(fontSize = 14.sp),
-                                    color = TextSecondary,
-                                    modifier = Modifier.padding(16.dp)
-                                )
-                            }
-                        } else {
+                        // Settings tab — subtitle delay / size / vertical position
+                        item {
+                            SubtitleSettingsContent(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                layoutAsRow = true,
+                                selectedRow = settingsRow,
+                                syncOffsetMs = syncOffsetMs,
+                                sizePct = sizePct,
+                                verticalPct = verticalPct,
+                                onRowSelect = onSettingsRowSelect,
+                                onOffsetDecrease = onOffsetDecrease,
+                                onOffsetIncrease = onOffsetIncrease,
+                                onSizeDecrease = onSizeDecrease,
+                                onSizeIncrease = onSizeIncrease,
+                                onVerticalDecrease = onVerticalDecrease,
+                                onVerticalIncrease = onVerticalIncrease
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Standalone audio-track picker, opened from the dedicated "Audio" pill in the player
+ * controls. Only surfaced when the active stream exposes more than one audio track.
+ */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun AudioMenu(
+    audioTracks: List<AudioTrackInfo>,
+    selectedAudioIndex: Int,
+    focusedIndex: Int,
+    onSelectAudio: (AudioTrackInfo) -> Unit,
+    onClose: () -> Unit
+) {
+    val isMobile = LocalDeviceType.current.isTouchDevice()
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(focusedIndex) {
+        if (!isMobile && focusedIndex >= 0) {
+            listState.animateScrollToItem(focusedIndex.coerceAtLeast(0))
+        }
+    }
+
+    @Composable
+    fun audioSubtitle(track: AudioTrackInfo): String? {
+        val codecInfo = detectAudioCodecLabel(track.codec, track.label ?: "")
+        val channelInfo = when (track.channelCount) {
+            1 -> "Mono"
+            2 -> "Stereo"
+            6 -> "5.1"
+            8 -> "7.1"
+            else -> if (track.channelCount > 0) "${track.channelCount}ch" else null
+        }
+        return listOfNotNull(codecInfo, channelInfo).joinToString(" • ").ifEmpty { null }
+    }
+
+    if (!isMobile) {
+        // ── TV layout: right-aligned single-column list ───────────────────
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f))
+                .clickable { onClose() },
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(420.dp)
+                    .padding(end = 32.dp)
+                    .background(Color.Black.copy(alpha = 0.85f), RoundedCornerShape(16.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                    .padding(16.dp)
+                    .clickable(enabled = false) {}
+            ) {
+                Text(
+                    text = stringResource(R.string.audio),
+                    style = ArflixTypography.sectionTitle.copy(fontSize = 16.sp),
+                    color = Color.White,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                Box(modifier = Modifier.height(300.dp)) {
+                    if (audioTracks.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.no_audio_tracks),
+                            style = ArflixTypography.body,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                             itemsIndexed(audioTracks, key = { _, track -> audioTrackKey(track) }) { index, track ->
                                 val languageName = getFullLanguageName(track.language)
                                 val trackLabel = track.label?.takeIf { it.isNotBlank() } ?: languageName
-                                val codecInfo = detectAudioCodecLabel(track.codec, trackLabel)
-                                val channelInfo = when (track.channelCount) {
-                                    1 -> "Mono"
-                                    2 -> "Stereo"
-                                    6 -> "5.1"
-                                    8 -> "7.1"
-                                    else -> if (track.channelCount > 0) "${track.channelCount}ch" else null
-                                }
-                                val description = listOfNotNull(codecInfo, channelInfo).joinToString(" • ").ifEmpty { null }
-
-                                MobileTrackItem(
-                                    name = trackLabel,
-                                    description = description,
+                                TrackMenuItem(
+                                    label = trackLabel,
+                                    subtitle = audioSubtitle(track),
                                     isSelected = index == selectedAudioIndex,
+                                    isFocused = focusedIndex == index,
                                     onClick = { onSelectAudio(track) }
                                 )
-                                // Divider between items
-                                if (index < audioTracks.lastIndex) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 8.dp)
-                                            .height(1.dp)
-                                            .background(Color.White.copy(alpha = 0.06f))
-                                    )
-                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // ── Mobile layout (bottom sheet style) ────────────────────────────
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { onClose() }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.70f)
+                    .align(Alignment.BottomCenter)
+                    .background(Color(0xFF1A1A1A), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) { /* consume clicks so they don't dismiss */ }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = stringResource(R.string.audio),
+                        style = ArflixTypography.body.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
+                        color = Color.White
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) { onClose() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.close),
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .height(1.dp)
+                        .background(Color.White.copy(alpha = 0.1f))
+                )
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    if (audioTracks.isEmpty()) {
+                        item {
+                            Text(
+                                text = stringResource(R.string.no_audio_tracks),
+                                style = ArflixTypography.body.copy(fontSize = 14.sp),
+                                color = TextSecondary,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                    } else {
+                        itemsIndexed(audioTracks, key = { _, track -> audioTrackKey(track) }) { index, track ->
+                            val languageName = getFullLanguageName(track.language)
+                            val trackLabel = track.label?.takeIf { it.isNotBlank() } ?: languageName
+                            MobileTrackItem(
+                                name = trackLabel,
+                                description = audioSubtitle(track),
+                                isSelected = index == selectedAudioIndex,
+                                onClick = { onSelectAudio(track) }
+                            )
+                            if (index < audioTracks.lastIndex) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp)
+                                        .height(1.dp)
+                                        .background(Color.White.copy(alpha = 0.06f))
+                                )
                             }
                         }
                     }
@@ -4610,18 +4798,23 @@ private fun TabButton(
     text: String,
     isSelected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isFocused: Boolean = false
 ) {
-    // Selected tab shows subtle highlight, not full white (to avoid confusion with list focus)
+    // Focused header = full white (D-pad focus); selected-only = subtle highlight.
     Box(
         modifier = modifier
             .clickable { onClick() }
             .background(
-                if (isSelected) Color.White.copy(alpha = 0.2f) else Color.Transparent,
+                when {
+                    isFocused -> Color.White
+                    isSelected -> Color.White.copy(alpha = 0.2f)
+                    else -> Color.Transparent
+                },
                 RoundedCornerShape(20.dp)
             )
             .then(
-                if (isSelected) Modifier.border(1.dp, Color.White, RoundedCornerShape(20.dp))
+                if (isSelected && !isFocused) Modifier.border(1.dp, Color.White, RoundedCornerShape(20.dp))
                 else Modifier
             )
             .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -4629,10 +4822,10 @@ private fun TabButton(
         Text(
             text = text,
             style = ArflixTypography.body.copy(
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                fontWeight = if (isSelected || isFocused) FontWeight.SemiBold else FontWeight.Normal,
                 fontSize = 14.sp
             ),
-            color = Color.White
+            color = if (isFocused) Color.Black else Color.White
         )
     }
 }
@@ -5296,7 +5489,7 @@ private object PlayerScreenRegexes {
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun PlayerSubtitleSettingsPanel(
+private fun SubtitleSettingsContent(
     selectedRow: Int,
     syncOffsetMs: Long,
     sizePct: Int,
@@ -5307,7 +5500,9 @@ private fun PlayerSubtitleSettingsPanel(
     onSizeDecrease: () -> Unit,
     onSizeIncrease: () -> Unit,
     onVerticalDecrease: () -> Unit,
-    onVerticalIncrease: () -> Unit
+    onVerticalIncrease: () -> Unit,
+    modifier: Modifier = Modifier,
+    layoutAsRow: Boolean = false
 ) {
     val accent = LocalAccentColorOverride.current ?: Color.White
 
@@ -5315,125 +5510,138 @@ private fun PlayerSubtitleSettingsPanel(
     val offsetLabel = if (syncOffsetMs == 0L) "0.0s"
     else "${if (syncOffsetMs > 0) "+" else "-"}${absMs / 1000}.${(absMs % 1000) / 100}s"
 
-    Column(
-        modifier = Modifier
-            .width(280.dp)
-            .background(Color.Black.copy(alpha = 0.92f), RoundedCornerShape(16.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Text(
-            text = stringResource(R.string.subtitle_settings_title),
-            style = ArflixTypography.sectionTitle.copy(fontSize = 16.sp),
-            color = Color.White,
-            modifier = Modifier.padding(bottom = 6.dp)
-        )
-        PlayerSubtitleSettingRow(
+    @Composable
+    fun cells(cellModifier: Modifier) {
+        PlayerSubtitleSettingCell(
+            modifier = cellModifier,
             label = stringResource(R.string.subtitle_delay),
             value = offsetLabel,
             selected = selectedRow == 0,
             accent = accent,
+            compact = layoutAsRow,
             onClick = { onRowSelect(0) },
             onDecrease = onOffsetDecrease,
             onIncrease = onOffsetIncrease
         )
-        PlayerSubtitleSettingRow(
+        PlayerSubtitleSettingCell(
+            modifier = cellModifier,
             label = stringResource(R.string.subtitle_size_label),
             value = "${sizePct}%",
             selected = selectedRow == 1,
             accent = accent,
+            compact = layoutAsRow,
             onClick = { onRowSelect(1) },
             onDecrease = onSizeDecrease,
             onIncrease = onSizeIncrease
         )
-        PlayerSubtitleSettingRow(
+        PlayerSubtitleSettingCell(
+            modifier = cellModifier,
             label = stringResource(R.string.subtitle_vertical_position),
             value = "${verticalPct}%",
             selected = selectedRow == 2,
             accent = accent,
+            compact = layoutAsRow,
             onClick = { onRowSelect(2) },
             onDecrease = onVerticalDecrease,
             onIncrease = onVerticalIncrease
         )
     }
+
+    if (layoutAsRow) {
+        // Mobile: three settings side by side in a single row.
+        Row(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            cells(Modifier.weight(1f))
+        }
+    } else {
+        // TV: three settings stacked as vertical rows.
+        Column(
+            modifier = modifier,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            cells(Modifier.fillMaxWidth())
+        }
+    }
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-private fun PlayerSubtitleSettingRow(
+private fun PlayerSubtitleSettingCell(
     label: String,
     value: String,
     selected: Boolean,
     accent: Color,
     onClick: () -> Unit,
     onDecrease: () -> Unit,
-    onIncrease: () -> Unit
+    onIncrease: () -> Unit,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
 ) {
-    val rowBg = if (selected) Color.White.copy(alpha = 0.08f) else Color.Transparent
-    val valueColor = if (selected) accent else Color.White
+    // Mobile (compact) has no D-pad focus, so don't render the selection highlight there.
+    val showSelection = selected && !compact
+    val cellBg = if (showSelection) Color.White.copy(alpha = 0.08f) else Color.Transparent
+    val valueColor = if (showSelection) accent else Color.White
+    val stepperColor = if (showSelection) accent else Color.White
+    val stepperSize = if (compact) 32.dp else 40.dp
+    val valueFontSize = if (compact) 14.sp else 16.sp
+
+    @Composable
+    fun StepperButton(symbol: String, onTap: () -> Unit) {
+        Box(
+            modifier = Modifier
+                .size(stepperSize)
+                .background(Color.White.copy(alpha = 0.12f), CircleShape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onTap
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = symbol,
+                style = ArflixTypography.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold),
+                color = stepperColor
+            )
+        }
+    }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(rowBg, RoundedCornerShape(10.dp))
+        modifier = modifier
+            .background(cellBg, RoundedCornerShape(10.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = if (compact) 6.dp else 12.dp, vertical = if (compact) 10.dp else 10.dp),
+        horizontalAlignment = if (compact) Alignment.CenterHorizontally else Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = label,
             style = ArflixTypography.label.copy(fontWeight = FontWeight.Normal),
-            color = Color.White.copy(alpha = 0.55f)
+            color = Color.White.copy(alpha = 0.55f),
+            maxLines = 1,
+            textAlign = if (compact) TextAlign.Center else TextAlign.Start
         )
+        // − decrease · value · + increase, all in one horizontal row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onDecrease
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "−",
-                    style = ArflixTypography.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold),
-                    color = Color.White
-                )
-            }
+            StepperButton("−", onDecrease)
             Text(
                 text = value,
-                style = ArflixTypography.body.copy(fontWeight = FontWeight.Bold, fontSize = 16.sp),
-                color = valueColor
+                style = ArflixTypography.body.copy(fontWeight = FontWeight.Bold, fontSize = valueFontSize),
+                color = valueColor,
+                maxLines = 1
             )
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onIncrease
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "+",
-                    style = ArflixTypography.body.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold),
-                    color = Color.White
-                )
-            }
+            StepperButton("+", onIncrease)
         }
     }
 }
