@@ -1,6 +1,8 @@
 # Muvio KMP — Implementation Progress
 
-## Status: Phase 6 (CMP Touch UI) — iOS build fixes in progress
+## Status: Phase 6 COMPLETE ✅ — Phase 7 (iOS app shell) next
+
+## Last commit: 213717f3 feat: implement KMP phases 3-6
 
 ### Phases Complete
 - **Phase 1**: `:shared` KMP scaffold (androidTarget + iosArm64 + iosSimulatorArm64)
@@ -22,38 +24,17 @@
   - androidApp/ module created (build.gradle.kts, AndroidManifest.xml, MuvioApplication.kt, MainActivity.kt, themes.xml, strings.xml)
   - shared UI files created: App.kt, AppTheme.kt, AppNavigation.kt, MediaCard.kt, HomeScreen.kt, SearchScreen.kt, DetailsScreen.kt, PlayerScreen.kt, SettingsScreen.kt
 
-### Android Build: PASSING ✅
-`./gradlew :shared:compileDebugKotlinAndroid` — BUILD SUCCESSFUL
+### Build Status
+- `./gradlew :shared:compileDebugKotlinAndroid` — ✅ PASSING
+- `./gradlew :shared:compileKotlinIosSimulatorArm64` — ✅ PASSING
+- `./gradlew :androidApp:assembleDebug` — ✅ PASSING
 
-### iOS Build: FAILING ❌
-`./gradlew :shared:compileKotlinIosSimulatorArm64` — 4 categories of errors remaining:
-
-#### 1. String.format on Native (Unresolved reference 'format')
-Files affected: TmdbClient.kt, MediaRepository.kt, AddonRepository.kt, PlayerScreen.kt
-Root cause: `"%.2f".format(x)` requires `@OptIn(ExperimentalStdlibApi::class)` on Kotlin/Native in 2.3.0.
-Fix: Replace all String.format calls with manual formatting helpers.
-
-#### 2. Bundle.getInt / Bundle.getString in AppNavigation.kt
-Files affected: shared/src/commonMain/.../ui/navigation/AppNavigation.kt (lines 60, 61, 80, 81, 82)
-Root cause: `backStackEntry.arguments?.getInt()` and `getString()` are Android Bundle methods.
-In CMP navigation 2.9.x, `NavBackStackEntry.arguments` is a `SavedStateHandle` on non-Android platforms.
-Fix: Use `backStackEntry.arguments?.get<Int>("key")` instead (SavedStateHandle generic getter).
-
-#### 3. NSDate.date() mapping in PlatformUtils.ios.kt (line 7)
-Root cause: `NSDate.date()` factory method isn't mapped as expected.
-Fix: Use `NSDate()` (default init = current date) instead of `NSDate.date()`.
-
-#### 4. PlayerEngine.ios.kt val/var — FIXED ✅
-Already fixed (removed `private set` from mutable vars).
-
-### Next Steps (in order)
-1. Fix String.format → create `MuvioStringUtils.kt` in commonMain with manual float/int formatters
-2. Fix AppNavigation.kt → use `SavedStateHandle.get<T>()` 
-3. Fix PlatformUtils.ios.kt → `NSDate()` instead of `NSDate.date()`
-4. Run `./gradlew :shared:compileKotlinIosSimulatorArm64` — should pass
-5. Run `./gradlew :androidApp:assembleDebug` — full Android app build
-6. Commit all Phase 3–6 work
-7. Phase 7: iOS app shell (iosApp/ Xcode project, MPVPlayerBridge.swift, kmp-nativecoroutines or similar)
+### Next Steps — Phase 7: iOS app shell
+1. Create `iosApp/` Xcode project (or use xcodegen/swift package)
+2. Add MPVPlayerBridge.swift + MetalLayer.swift (port from NuvioMobile)
+3. Wire `PlayerEngine.ios.kt` to the Swift bridge via cinterop
+4. Create `iosApp/src/iosMain/swift/` entrypoint calling `App()` composable
+5. Configure AltStore / TestFlight sideload packaging
 
 ### Key File Locations
 ```
