@@ -31,4 +31,5 @@ dependencyResolutionManagement {
 }
 
 include(":shared")
-// :androidApp and :iosApp are added in the UI phase; :shared is validated first.
+include(":androidApp")
+// :iosApp is the Xcode project; it links the Shared.framework produced by :shared.
