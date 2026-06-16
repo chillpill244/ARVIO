@@ -71,6 +71,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeMute
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
@@ -105,6 +107,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -2956,6 +2959,10 @@ fun PlayerScreen(
                 // Bottom controls - positioned at very bottom.
                 // Gradient made stronger on touch devices so the icon row stays readable
                 // against bright content. Issue #97.
+                val config = LocalConfiguration.current
+                val isPortraitMode = config.screenHeightDp > config.screenWidthDp
+                val hideLabelsInPortrait = isTouchDevice && isPortraitMode
+                
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3084,6 +3091,7 @@ fun PlayerScreen(
                         // Subtitles / audio menu
                         PlayerPillButton(icon = Icons.Default.ClosedCaption, label = "Subs",
                             compact = isTouchDevice,
+                            hideLabel = hideLabelsInPortrait,
                             focusRequester = subtitleButtonFocusRequester,
                             onFocusChanged = { if (it) focusedButton = 1 },
                             onClick = {
@@ -3123,6 +3131,7 @@ fun PlayerScreen(
                         if (hasAudioButton) {
                             PlayerPillButton(icon = Icons.Default.Audiotrack, label = "Audio",
                                 compact = isTouchDevice,
+                                hideLabel = hideLabelsInPortrait,
                                 focusRequester = audioButtonFocusRequester,
                                 onClick = {
                                     audioMenuIndex = selectedAudioIndex.coerceIn(0, audioTracks.lastIndex)
@@ -3141,6 +3150,7 @@ fun PlayerScreen(
                         // Sources
                         PlayerPillButton(icon = Icons.Default.Folder, label = stringResource(R.string.sources),
                             compact = isTouchDevice,
+                            hideLabel = hideLabelsInPortrait,
                             focusRequester = sourceButtonFocusRequester,
                             onClick = { showSourceMenu = true; showControls = true },
                             onLeftKey = { pillBeforeSources.requestFocus() },
@@ -3150,6 +3160,7 @@ fun PlayerScreen(
                         // Aspect ratio (Fit / Zoom / Fill)
                         PlayerPillButton(icon = Icons.Default.AspectRatio, label = aspectModeLabel,
                             compact = isTouchDevice,
+                            hideLabel = hideLabelsInPortrait,
                             focusRequester = aspectButtonFocusRequester,
                             onClick = cycleAspectRatio,
                             onLeftKey = { sourceButtonFocusRequester.requestFocus() },
@@ -3165,6 +3176,7 @@ fun PlayerScreen(
                         if (hasNextEpisode) {
                             PlayerPillButton(icon = Icons.Default.SkipNext, label = stringResource(R.string.next_episode),
                                 compact = isTouchDevice,
+                                hideLabel = hideLabelsInPortrait,
                                 focusRequester = nextEpisodeButtonFocusRequester,
                                 onClick = {
                                     val target = uiState.nextEpisodeTarget ?: return@PlayerPillButton
@@ -3180,9 +3192,33 @@ fun PlayerScreen(
                         if (hasPipButton) {
                             PlayerPillButton(icon = Icons.Default.PictureInPicture, label = "PiP",
                                 compact = isTouchDevice,
+                                hideLabel = hideLabelsInPortrait,
                                 focusRequester = pipButtonFocusRequester,
                                 onClick = { enterPipMode() },
                                 onLeftKey = { if (hasNextEpisode) nextEpisodeButtonFocusRequester.requestFocus() else aspectButtonFocusRequester.requestFocus() },
+                                onRightKey = { subtitleButtonFocusRequester.requestFocus() },
+                                onUpKey = { trackbarFocusRequester.requestFocus() })
+                        }
+
+                        // Orientation toggle — mobile devices only
+                        if (isTouchDevice && LocalDeviceType.current != com.arflix.tv.util.DeviceType.TV) {
+                            val orientationButtonFocusRequester = remember { FocusRequester() }
+                            val orientationIcon = if (isPortraitMode) Icons.Default.Fullscreen else Icons.Default.FullscreenExit
+                            val orientationLabel = if (isPortraitMode) "Fullscreen" else "Portrait"
+                            val activity = context.findActivity()
+                            
+                            PlayerPillButton(icon = orientationIcon, label = orientationLabel,
+                                compact = isTouchDevice,
+                                hideLabel = hideLabelsInPortrait,
+                                focusRequester = orientationButtonFocusRequester,
+                                onClick = {
+                                    activity?.requestedOrientation = if (isPortraitMode) {
+                                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                    } else {
+                                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                                    }
+                                },
+                                onLeftKey = { if (hasPipButton) pipButtonFocusRequester.requestFocus() else aspectButtonFocusRequester.requestFocus() },
                                 onRightKey = { subtitleButtonFocusRequester.requestFocus() },
                                 onUpKey = { trackbarFocusRequester.requestFocus() })
                         }
@@ -3665,6 +3701,7 @@ private fun PlayerPillButton(
     label: String,
     focusRequester: FocusRequester,
     compact: Boolean = false,
+    hideLabel: Boolean = false,
     onFocusChanged: (Boolean) -> Unit = {},
     onClick: () -> Unit,
     onLeftKey: () -> Unit = {},
@@ -3697,7 +3734,7 @@ private fun PlayerPillButton(
             .background(if (focused) btnAccent else Color.Transparent, RoundedCornerShape(22.dp))
             .padding(horizontal = if (compact) 12.dp else 14.dp, vertical = if (compact) 8.dp else 9.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 7.dp)
+        horizontalArrangement = Arrangement.spacedBy(if (hideLabel || compact) 0.dp else if (compact) 6.dp else 7.dp)
     ) {
         Icon(
             imageVector = icon,
@@ -3705,15 +3742,17 @@ private fun PlayerPillButton(
             tint = if (focused) Color.Black else Color.White,
             modifier = Modifier.size(if (compact) 18.dp else 20.dp)
         )
-        Text(
-            text = label,
-            style = ArflixTypography.label.copy(
-                fontSize = if (compact) 13.sp else 14.sp,
-                fontWeight = FontWeight.SemiBold
-            ),
-            color = if (focused) Color.Black else Color.White,
-            maxLines = 1
-        )
+        if (!hideLabel) {
+            Text(
+                text = label,
+                style = ArflixTypography.label.copy(
+                    fontSize = if (compact) 13.sp else 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = if (focused) Color.Black else Color.White,
+                maxLines = 1
+            )
+        }
     }
 }
 
