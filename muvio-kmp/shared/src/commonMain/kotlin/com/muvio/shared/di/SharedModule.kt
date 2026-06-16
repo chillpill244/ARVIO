@@ -12,6 +12,7 @@ import com.muvio.shared.viewmodel.DetailsViewModel
 import com.muvio.shared.viewmodel.HomeViewModel
 import com.muvio.shared.viewmodel.PlayerViewModel
 import com.muvio.shared.viewmodel.SearchViewModel
+import com.muvio.shared.viewmodel.SettingsViewModel
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
@@ -75,6 +76,7 @@ val viewModelModule = module {
     factory { HomeViewModel(get()) }
     factory { SearchViewModel(get()) }
     factory { PlayerViewModel(get()) }
+    factory { SettingsViewModel(get()) }
     factory { (tmdbId: Int, mediaTypeStr: String) ->
         val mediaType = com.muvio.shared.domain.MediaType.valueOf(mediaTypeStr)
         DetailsViewModel(tmdbId, mediaType, get(), get(), get())

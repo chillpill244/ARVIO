@@ -1,0 +1,15 @@
+{
+  "originHash" : "d43f6fe83791cfde9e6ed55d9bf51b912b9624b7d7cb221d628ce0377f1c6a52",
+  "pins" : [
+    {
+      "identity" : "mpvkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/NuvioMedia/MPVKit.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "f5d1f0e3e9d7341d922162f8a590b16ac7eefc36"
+      }
+    }
+  ],
+  "version" : 3
+}

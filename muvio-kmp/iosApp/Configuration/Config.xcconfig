@@ -1,0 +1,5 @@
+// Set your Apple Developer Team ID here (10-character string from developer.apple.com)
+DEVELOPMENT_TEAM =
+
+// Bundle identifier — change if you need a different one for your Apple account
+PRODUCT_BUNDLE_IDENTIFIER = com.muvio.app

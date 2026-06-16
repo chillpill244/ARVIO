@@ -2,15 +2,16 @@ package com.muvio.shared.player
 
 import com.muvio.shared.domain.StreamSource
 import com.muvio.shared.domain.Subtitle
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
-/**
- * iOS implementation — delegates to libmpv via MPVPlayerBridge.swift.
- * The Swift bridge is called through the Kotlin/Native cinterop layer
- * (configured in iosApp/muvio.xcodeproj once the Swift bridge is added).
- *
- * For now this stub satisfies the expect contract so :shared compiles.
- * Wire [MpvBridgeCompat] from the Xcode target in Phase 7.
- */
 actual class PlayerEngine actual constructor() {
 
     private var listener: PlayerEngineListener? = null
@@ -18,39 +19,100 @@ actual class PlayerEngine actual constructor() {
     actual var durationMs: Long = 0L
     actual var isPlaying: Boolean = false
 
+    private var bridge: MuvioPlayerBridge? = null
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var pollJob: Job? = null
+
     actual fun setListener(listener: PlayerEngineListener?) {
         this.listener = listener
     }
 
     actual fun prepare(stream: StreamSource, startPositionMs: Long) {
-        // Will call MPVPlayerBridge.play(url:headers:startPosition:) via cinterop
-        currentPositionMs = startPositionMs
+        bridge?.destroy()
+
+        val newBridge = MuvioPlayerBridgeFactory.create() ?: return
+        bridge = newBridge
+
+        val requestHeaders = stream.behaviorHints?.proxyHeaders?.request.orEmpty()
+        val headersJson = requestHeaders
+            .takeIf { it.isNotEmpty() }
+            ?.let { runCatching { Json.encodeToString(it) }.getOrNull() }
+
+        newBridge.loadFileWithAudio(
+            videoUrl = stream.url ?: return,
+            audioUrl = null,
+            headersJson = headersJson,
+        )
+        if (startPositionMs > 0L) {
+            newBridge.seekTo(startPositionMs)
+        }
+        newBridge.play()
+        startPolling(newBridge)
     }
 
     actual fun play() {
-        // mpvBridge?.play()
+        bridge?.play()
         isPlaying = true
         listener?.onPlayStateChanged(true)
     }
 
     actual fun pause() {
-        // mpvBridge?.pause()
+        bridge?.pause()
         isPlaying = false
         listener?.onPlayStateChanged(false)
     }
 
     actual fun seekTo(positionMs: Long) {
-        // mpvBridge?.seek(toMs: positionMs)
+        bridge?.seekTo(positionMs)
         currentPositionMs = positionMs
     }
 
     actual fun setSubtitle(subtitle: Subtitle?) {
-        // mpvBridge?.selectSubtitle(url: subtitle?.url)
+        val url = subtitle?.url ?: return
+        bridge?.loadFileWithAudio(url, null, null)
     }
 
     actual fun release() {
-        // mpvBridge?.release()
+        stopPolling()
+        bridge?.destroy()
+        bridge = null
         listener = null
         isPlaying = false
+    }
+
+    private fun startPolling(activeBridge: MuvioPlayerBridge) {
+        stopPolling()
+        pollJob = scope.launch {
+            var lastError: String? = null
+            while (isActive) {
+                val pos = activeBridge.getPositionMs()
+                val dur = activeBridge.getDurationMs()
+                val playing = activeBridge.getIsPlaying()
+                val loading = activeBridge.getIsLoading()
+                val ended = activeBridge.getIsEnded()
+                val errorMsg = activeBridge.getErrorMessage().ifBlank { null }
+
+                currentPositionMs = pos
+                durationMs = dur
+
+                if (playing != isPlaying) {
+                    isPlaying = playing
+                    listener?.onPlayStateChanged(playing)
+                }
+                listener?.onProgress(pos, dur)
+                listener?.onBufferingChanged(loading)
+                if (ended) listener?.onEnded()
+                if (errorMsg != lastError) {
+                    lastError = errorMsg
+                    if (errorMsg != null) listener?.onError(errorMsg)
+                }
+                delay(250L)
+            }
+        }
+    }
+
+    private fun stopPolling() {
+        pollJob?.cancel()
+        pollJob = null
     }
 }
