@@ -547,7 +547,7 @@ class HttpLocalScraperRuntime @Inject constructor(
             "https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json",
             mapOf("User-Agent" to USER_AGENT)
         )
-        val domain = data?.string("toonstream") ?: "https://toonstream.day"
+        val domain = data?.string("toonstream") ?: "https://toonstream.one"
         toonstreamDomain = domain
         toonstreamDomainCachedAt = now
         return domain
@@ -563,23 +563,21 @@ class HttpLocalScraperRuntime @Inject constructor(
     ): List<HttpResolvedStream> {
         val details = fetchTmdbDetails(tmdbId, mediaType, fallbackTitle, fallbackYear)
         val domain = resolveToonStreamDomain()
-        val ranked = rankToonstream(searchToonstream(domain, details.title), details.title)
-        val detailYear = details.year?.toIntOrNull()
+        val searchResults = searchToonstream(domain, details.title)
+        val typedResults = searchResults.filter { 
+            if (mediaType == "tv") it.type == "series" else it.type == "movie" 
+        }
+        val ranked = rankToonstream(typedResults, details.title)
 
         for (candidate in ranked.take(3)) {
-            val post = runCatching { loadToonstreamPost(candidate.url) }.getOrNull() ?: continue
-            if (detailYear != null && post.year != null && kotlin.math.abs(post.year - detailYear) > 2) continue
-
             val pageUrl = if (mediaType == "tv") {
-                findToonstreamEpisodeUrl(domain, post, season ?: 1, episode ?: 1) ?: continue
+                val eps = getToonstreamSeasonEpisodes(domain, candidate.url, season ?: 1)
+                eps.find { it.season == (season ?: 1) && it.episode == (episode ?: 1) }?.url ?: continue
             } else {
                 candidate.url
             }
 
             val videoLinks = runCatching { getToonstreamVideoLinks(pageUrl) }.getOrNull() ?: continue
-            // Try the AWS-mechanism CDN hosts first (as-cdn*/awstream) — they resolve to a
-            // direct token-authed m3u8 reliably and cheaply, so we don't spend the whole
-            // StreamFetch timeout budget on obfuscated players (abyss) that we can't crack.
             val orderedLinks = videoLinks.sortedByDescending { l ->
                 if ("as-cdn" in l || "awstream" in l || "zephyrflick" in l) 1 else 0
             }
@@ -599,23 +597,22 @@ class HttpLocalScraperRuntime @Inject constructor(
     }
 
     private suspend fun searchToonstream(domain: String, query: String): List<ToonstreamResult> {
-        val seen = mutableSetOf<String>()
+        val html = runCatching {
+            getText("$domain/s?q=${query.urlEncode()}", mapOf("User-Agent" to USER_AGENT))
+        }.getOrNull() ?: return emptyList()
+        val doc = org.jsoup.Jsoup.parse(html)
         val results = mutableListOf<ToonstreamResult>()
-        for (page in 1..3) {
-            val html = runCatching {
-                getText("$domain/page/$page/?s=${query.urlEncode()}")
-            }.getOrNull() ?: break
-            val doc = org.jsoup.Jsoup.parse(html)
-            val items = doc.select("#movies-a > ul > li")
-            if (items.isEmpty()) break
-            var added = 0
-            items.forEach { li ->
-                val href = li.select("article > a").attr("href").ifBlank { return@forEach }
-                val title = li.select("article > header > h2").text()
-                    .trim().replace("Watch Online", "").trim().ifBlank { return@forEach }
-                if (seen.add(href)) { results.add(ToonstreamResult(href, title)); added++ }
+        doc.select("article").forEach { art ->
+            val href = art.selectFirst("a")?.attr("href") ?: return@forEach
+            val title = art.selectFirst("h2")?.text()?.trim()
+                ?: art.selectFirst(".title")?.text()?.trim()
+                ?: art.selectFirst("img")?.attr("alt")?.trim() ?: return@forEach
+            var type = "movie"
+            if (href.contains("/series/")) type = "series"
+            val url = if (href.startsWith("http")) href else "$domain$href"
+            if (title.isNotBlank()) {
+                results.add(ToonstreamResult(url, title, type))
             }
-            if (added == 0) break
         }
         return results
     }
@@ -627,151 +624,78 @@ class HttpLocalScraperRuntime @Inject constructor(
                results.filter { norm(it.title) != want && norm(it.title).startsWith(want) }
     }
 
-    private suspend fun loadToonstreamPost(url: String): ToonstreamPost {
-        val html = getText(url)
-        val doc = org.jsoup.Jsoup.parse(html)
-        val title = doc.selectFirst("header.entry-header > h1")
-            ?.text()?.trim()?.replace("Watch Online", "")?.trim() ?: ""
-        val year = Regex("""\b(19|20)\d{2}\b""").find(doc.text())?.value?.toIntOrNull()
-        val isSeries = url.contains("/series/")
-        val seasons = if (isSeries) {
-            doc.select("div.aa-drp.choose-season > ul > li > a").map { a ->
-                ToonstreamSeason(dataPost = a.attr("data-post"), dataSeason = a.attr("data-season"))
-            }
-        } else emptyList()
-        return ToonstreamPost(title, year, isSeries, seasons)
-    }
-
     private suspend fun getToonstreamSeasonEpisodes(
         domain: String,
-        dataPost: String,
-        dataSeason: String
+        seriesUrl: String,
+        targetSeason: Int
     ): List<ToonstreamEpisode> {
-        val html = postFormText(
-            "$domain/wp-admin/admin-ajax.php",
-            mapOf("action" to "action_select_season", "season" to dataSeason, "post" to dataPost),
-            mapOf("X-Requested-With" to "XMLHttpRequest")
-        ) ?: return emptyList()
+        val html = runCatching { 
+            getText("$seriesUrl/season/$targetSeason", mapOf("User-Agent" to USER_AGENT)) 
+        }.getOrNull() ?: return emptyList()
         val doc = org.jsoup.Jsoup.parse(html)
-        return doc.select("article").mapNotNull { art ->
-            val href = art.selectFirst("a")?.attr("href") ?: return@mapNotNull null
-            val numEpi = art.selectFirst("span.num-epi")?.text() ?: ""
+        val episodes = mutableListOf<ToonstreamEpisode>()
+        
+        doc.select("article").forEach { art ->
+            val aTag = art.closest("a") ?: art.selectFirst("a") ?: return@forEach
+            val href = aTag.attr("href").ifBlank { return@forEach }
+            val numEpi = art.selectFirst(".num-epi")?.text()?.trim() ?: ""
             val parts = numEpi.split("x")
             val s = parts.getOrNull(0)?.trim()?.toIntOrNull() ?: 1
             val e = parts.getOrNull(1)?.trim()?.toIntOrNull() ?: 1
-            ToonstreamEpisode(href, s, e)
+            val epUrl = if (href.startsWith("http")) href else "$domain$href"
+            episodes.add(ToonstreamEpisode(epUrl, s, e))
         }
-    }
-
-    private suspend fun findToonstreamEpisodeUrl(
-        domain: String,
-        post: ToonstreamPost,
-        season: Int,
-        episode: Int
-    ): String? {
-        // The season whose data-season matches the wanted season is overwhelmingly the right
-        // one, so query it first; only if that misses do we fan out to the rest. Querying every
-        // season sequentially is what made long-running series time out.
-        val (preferred, rest) = post.seasons.partition { it.dataSeason.trim().toIntOrNull() == season }
-        for (group in listOf(preferred, rest)) {
-            if (group.isEmpty()) continue
-            val match = coroutineScope {
-                group.map { s ->
-                    async(Dispatchers.IO) {
-                        runCatching { getToonstreamSeasonEpisodes(domain, s.dataPost, s.dataSeason) }
-                            .getOrNull().orEmpty()
-                            .find { it.season == season && it.episode == episode }?.url
-                    }
-                }.awaitAll().filterNotNull().firstOrNull()
+        
+        if (episodes.isEmpty()) {
+            doc.select("a").forEach { aTag ->
+                val href = aTag.attr("href").ifBlank { return@forEach }
+                val numEpi = aTag.selectFirst(".num-epi")?.text()?.trim() ?: ""
+                if (numEpi.isNotBlank()) {
+                    val parts = numEpi.split("x")
+                    val s = parts.getOrNull(0)?.trim()?.toIntOrNull() ?: 1
+                    val e = parts.getOrNull(1)?.trim()?.toIntOrNull() ?: 1
+                    val epUrl = if (href.startsWith("http")) href else "$domain$href"
+                    episodes.add(ToonstreamEpisode(epUrl, s, e))
+                }
             }
-            if (match != null) return match
         }
-        return null
+        
+        return episodes
     }
 
     private suspend fun getToonstreamVideoLinks(pageUrl: String): List<String> = withContext(Dispatchers.IO) {
-        // Mirror CloudStream's app singleton: one cookie jar shared across all requests
-        // so WordPress session cookies set on the episode page are sent with the trembed request.
-        val cookieStore = mutableListOf<okhttp3.Cookie>()
-        val cookieJar = object : okhttp3.CookieJar {
-            override fun saveFromResponse(url: okhttp3.HttpUrl, cookies: List<okhttp3.Cookie>) {
-                cookieStore.removeAll { c -> cookies.any { it.name == c.name && it.domain == c.domain } }
-                cookieStore.addAll(cookies)
-            }
-            override fun loadForRequest(url: okhttp3.HttpUrl): List<okhttp3.Cookie> =
-                cookieStore.filter { it.matches(url) }
-        }
-        // Bound each request: blocking execute() can't be interrupted by the addon-level
-        // withTimeout, so an unresponsive server would otherwise drag the whole resolver past
-        // the StreamFetch budget. A per-call cap lets slow servers fail fast while the parallel
-        // fetches still surface the responsive ones.
-        val session = okHttpClient.newBuilder()
-            .cookieJar(cookieJar)
-            .callTimeout(4, java.util.concurrent.TimeUnit.SECONDS)
-            .build()
-
-        fun sessionGet(url: String, extra: Map<String, String> = emptyMap()): String? = runCatching {
-            val headers = (mapOf("User-Agent" to USER_AGENT) + extra)
-            val req = Request.Builder().url(url)
-                .headers(okhttp3.Headers.headersOf(*headers.flatMap { listOf(it.key, it.value) }.toTypedArray()))
-                .get().build()
-            session.newCall(req).execute().use { r -> if (r.isSuccessful) r.body?.string() else null }
-        }.getOrNull()
-
-        // Visit the episode page first — establishes the WordPress session cookie
-        val html = sessionGet(pageUrl) ?: return@withContext emptyList()
+        val html = runCatching { getText(pageUrl, mapOf("User-Agent" to USER_AGENT)) }.getOrNull() ?: return@withContext emptyList()
         val doc = org.jsoup.Jsoup.parse(html)
 
-        val trembedUrls = doc.select("#aa-options > div > iframe")
+        val trembedUrls = doc.select("#aa-options iframe, .video-player iframe")
             .map { it.attr("data-src").ifBlank { it.attr("src") } }
             .filter { it.isNotBlank() }
+            .map { if (it.startsWith("http")) it else "${java.net.URI(pageUrl).scheme}://${java.net.URI(pageUrl).host}$it" }
 
-        // Fetch every server's trembed page concurrently — they're independent, so doing them
-        // sequentially is what was burning the StreamFetch timeout budget on multi-server titles.
+        val links = mutableListOf<String>()
         coroutineScope {
             trembedUrls.map { dataSrc ->
                 async(Dispatchers.IO) {
-                    val innerHtml = sessionGet(dataSrc, mapOf(
-                        "Referer" to pageUrl,
-                        "Sec-Fetch-Dest" to "iframe",
-                        "Sec-Fetch-Mode" to "navigate",
-                        "Sec-Fetch-Site" to "same-origin"
-                    )) ?: return@async null
-                    val innerFrame = org.jsoup.Jsoup.parse(innerHtml).selectFirst("iframe")
-                    val domSrc = innerFrame?.attr("src")?.ifBlank { innerFrame.attr("data-src") }
-                        ?.takeIf { it.isNotBlank() }
-                    val src = domSrc ?: findEmbedUrlInHtml(innerHtml) ?: return@async null
-                    if (src.startsWith("//")) "https:$src" else src
+                    if (dataSrc.contains("/embed/")) {
+                        val innerHtml = runCatching { getText(dataSrc, mapOf("User-Agent" to USER_AGENT)) }.getOrNull() ?: return@async null
+                        val innerFrame = org.jsoup.Jsoup.parse(innerHtml).selectFirst("iframe")
+                        val src = innerFrame?.attr("src")?.ifBlank { innerFrame.attr("data-src") }
+                        if (!src.isNullOrBlank()) {
+                            if (src.startsWith("//")) "https:$src" else src
+                        } else null
+                    } else {
+                        dataSrc
+                    }
                 }
-            }.awaitAll().filterNotNull()
+            }.awaitAll().filterNotNull().forEach { links.add(it) }
         }
-    }
-
-    private fun findEmbedUrlInHtml(html: String): String? {
-        val knownHosts = listOf(
-            "gdmirrorbot", "techinmind", "awstream", "zephyrflick",
-            "streamruby", "filemoon", "filelions", "cdnwish", "streamwish",
-            "wishfast", "vidhide", "vidhidevip", "d000d", "doodstream",
-            "streamsb", "streamtape", "vidmoly", "cloudy.upns"
-        )
-        val pattern = Regex("""["']((?:https?:)?//[^"'\s<>]+)["']""")
-        for (match in pattern.findAll(html)) {
-            val url = match.groupValues[1]
-            if (knownHosts.any { it in url }) {
-                return if (url.startsWith("//")) "https:$url" else url
-            }
-        }
-        // last resort: any iframe src not on the same domain
-        val iframeSrcRe = Regex("""<iframe[^>]+(?:src|data-src)=["']((?:https?:)?//(?!toonstream)[^"']{8,})["']""", RegexOption.IGNORE_CASE)
-        val iframeSrc = iframeSrcRe.find(html)?.groupValues?.get(1)?.takeIf { it.length > 10 }
-        return if (iframeSrc?.startsWith("//") == true) "https:$iframeSrc" else iframeSrc
+        links
     }
 
     private suspend fun extractToonstreamStream(url: String): HttpResolvedStream? = when {
         "awstream" in url || "zephyrflick" in url || "as-cdn" in url -> extractToonstreamAWSStream(url)
-        "streamruby.com" in url                       -> extractToonstreamStreamruby(url)
-        "gdmirrorbot" in url || "techinmind" in url   -> extractToonstreamGDMirrorbot(url)
-        else                                           -> extractToonstreamM3u8Page(url)
+        "streamruby.com" in url || "rubystm.com" in url -> extractToonstreamStreamruby(url)
+        else -> extractToonstreamM3u8Page(url)
     }
 
     private suspend fun extractToonstreamM3u8Page(url: String): HttpResolvedStream? {
@@ -785,9 +709,6 @@ class HttpLocalScraperRuntime @Inject constructor(
     }
 
     private suspend fun extractToonstreamAWSStream(url: String): HttpResolvedStream? {
-        // URL shape is e.g. https://as-cdn21.top/video/<hash> — the getVideo endpoint lives at
-        // the site origin (/player/index.php), NOT at the directory the hash sits in. The POST
-        // body's `r` referer must also be the origin, which is what the player JS sends.
         val hash = url.substringAfterLast("/").substringBefore("?")
         val uri = runCatching { java.net.URI(url) }.getOrNull() ?: return null
         val origin = "${uri.scheme}://${uri.host}"
@@ -804,8 +725,6 @@ class HttpLocalScraperRuntime @Inject constructor(
         } ?: return null
         val data = runCatching { gson.fromJson(responseText, JsonObject::class.java) }.getOrNull() ?: return null
         val m3u8 = data.string("videoSource")?.takeIf { it.isNotBlank() } ?: return null
-        // The m3u8 is token-authed (md5+expires) and the player sets referrer=no-referrer,
-        // so the link plays without extra headers.
         android.util.Log.d("Toonstream", "AWS m3u8 at ${uri.host}: $m3u8")
         return HttpResolvedStream("Toonstream", uri.host, m3u8, "Auto")
     }
@@ -813,71 +732,10 @@ class HttpLocalScraperRuntime @Inject constructor(
     private suspend fun extractToonstreamStreamruby(url: String): HttpResolvedStream? {
         val clean = url.replace(Regex("/e/(?=\\w)"), "/")
         val text = runCatching { getText(clean) }.getOrNull() ?: return null
-        val m3u8 = Regex("""file:\s*"(.*?\.m3u8.*?)"""").find(text)?.groupValues?.get(1) ?: return null
+        val m3u8 = Regex("""file:\s*['"](.*?\.m3u8.*?)['"]""").find(text)?.groupValues?.get(1) ?: return null
         return HttpResolvedStream("Toonstream", "Streamruby", m3u8, "Auto",
             mapOf("Referer" to "streamruby.com"))
     }
-
-    private suspend fun extractToonstreamGDMirrorbot(url: String): HttpResolvedStream? {
-        val sid = url.substringAfter("embed/").substringBefore("?")
-        val host = url.substringBefore("/embed/")
-        val formBody = "sid=${java.net.URLEncoder.encode(sid, "UTF-8")}"
-        val request = Request.Builder()
-            .url("$host/embedhelper.php")
-            .post(formBody.toRequestBody("application/x-www-form-urlencoded".toMediaType()))
-            .addHeader("User-Agent", USER_AGENT)
-            .build()
-        val responseText = withContext(Dispatchers.IO) {
-            okHttpClient.newCall(request).execute().use { it.body?.string() }
-        } ?: return null
-        val root = runCatching { gson.fromJson(responseText, JsonObject::class.java) }.getOrNull() ?: return null
-        val siteUrls = root.getAsJsonObject("siteUrls") ?: return null
-        val mresultRaw = root.get("mresult") ?: return null
-        val mresult = if (mresultRaw.isJsonObject) {
-            mresultRaw.asJsonObject
-        } else {
-            runCatching {
-                val decoded = android.util.Base64.decode(mresultRaw.asString, android.util.Base64.DEFAULT)
-                    .toString(Charsets.UTF_8)
-                gson.fromJson(decoded, JsonObject::class.java)
-            }.getOrNull() ?: return null
-        }
-        for (key in siteUrls.keySet().intersect(mresult.keySet())) {
-            val base = siteUrls.get(key)?.asString?.trimEnd('/') ?: continue
-            val path = mresult.get(key)?.asString?.trimStart('/') ?: continue
-            val subUrl = "$base/$path"
-            val stream = runCatching {
-                when {
-                    "awstream.net" in subUrl || "zephyrflick" in subUrl -> extractToonstreamAWSStream(subUrl)
-                    "streamruby.com" in subUrl -> extractToonstreamStreamruby(subUrl)
-                    else -> null
-                }
-            }.getOrNull()
-            if (stream != null) return stream
-        }
-        return null
-    }
-
-    private suspend fun postFormText(
-        url: String,
-        formData: Map<String, String>,
-        extraHeaders: Map<String, String> = emptyMap()
-    ): String? = runCatching {
-        withContext(Dispatchers.IO) {
-            val body = okhttp3.FormBody.Builder().apply {
-                formData.forEach { (k, v) -> add(k, v) }
-            }.build()
-            val request = Request.Builder()
-                .url(url)
-                .post(body)
-                .apply {
-                    addHeader("User-Agent", USER_AGENT)
-                    extraHeaders.forEach { (k, v) -> addHeader(k, v) }
-                }
-                .build()
-            okHttpClient.newCall(request).execute().use { it.body?.string() }
-        }
-    }.getOrNull()
 
     // ── End Toonstream ───────────────────────────────────────────────────────────
 
@@ -1852,14 +1710,7 @@ class HttpLocalScraperRuntime @Inject constructor(
 
     private data class NetMirrorEpisode(val id: String, val season: Int, val episode: Int)
 
-    private data class ToonstreamResult(val url: String, val title: String)
-    private data class ToonstreamPost(
-        val title: String,
-        val year: Int?,
-        val isSeries: Boolean,
-        val seasons: List<ToonstreamSeason>
-    )
-    private data class ToonstreamSeason(val dataPost: String, val dataSeason: String)
+    private data class ToonstreamResult(val url: String, val title: String, val type: String = "movie")
     private data class ToonstreamEpisode(val url: String, val season: Int, val episode: Int)
 
     private data class FourKResult(val url: String, val title: String)
