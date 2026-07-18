@@ -858,6 +858,7 @@ private fun presentSource(stream: StreamSource): SourcePresentation {
 
     val iptvLanguageScore = if (isIptvVod) {
         when {
+            !StreamRegexes.LANGUAGE_HINT.containsMatchIn(searchBlob) -> 3
             StreamRegexes.ENGLISH_HINT.containsMatchIn(searchBlob) -> 2
             StreamRegexes.TELUGU_HINT.containsMatchIn(searchBlob) -> 1
             else -> 0
