@@ -183,6 +183,7 @@ fun StreamSelector(
     }
     val sortedStreams = remember(presentations, addonOrder) {
         presentations.sortedWith(compareBy<SourcePresentation> { sourceClassRank(it.stream) }
+            .thenByDescending { it.iptvLanguageScore }
             .thenByDescending { it.sortCached }
             .thenByDescending { it.sortDirect }
             .thenBy { addonOrder[sourceTabId(it.stream)] ?: Int.MAX_VALUE }
@@ -722,12 +723,15 @@ private data class SourcePresentation(
     val sizeBytes: Long,
     val sortCached: Boolean,
     val sortDirect: Boolean,
+    val iptvLanguageScore: Int,
     val description: String? = null
 )
 
 
 
 private object StreamRegexes {
+    val ENGLISH_HINT = Regex("""\b(ENG|ENGLISH)\b""", RegexOption.IGNORE_CASE)
+    val TELUGU_HINT = Regex("""\b(TEL|TELUGU)\b""", RegexOption.IGNORE_CASE)
     val AV1 = Regex("""\bAV1\b""", RegexOption.IGNORE_CASE)
     val HEVC = Regex("""\b(HEVC|X265|H265)\b""", RegexOption.IGNORE_CASE)
     val H264 = Regex("""\b(H264|X264|AVC)\b""", RegexOption.IGNORE_CASE)
@@ -852,6 +856,14 @@ private fun presentSource(stream: StreamSource): SourcePresentation {
     val hasDirectHttpUrl = !stream.url.isNullOrBlank() && stream.url.startsWith("http", true)
     val isIptvVod = stream.addonId == "iptv_xtream_vod" || addonLower.contains("iptv vod")
 
+    val iptvLanguageScore = if (isIptvVod) {
+        when {
+            StreamRegexes.ENGLISH_HINT.containsMatchIn(searchBlob) -> 2
+            StreamRegexes.TELUGU_HINT.containsMatchIn(searchBlob) -> 1
+            else -> 0
+        }
+    } else 0
+
     val transportLabel = when {
         stream.behaviorHints?.cached == true -> "Cached"
         !stream.infoHash.isNullOrBlank() || stream.sources.isNotEmpty() || isTorrentProvider -> "Torrent"
@@ -911,7 +923,8 @@ private fun presentSource(stream: StreamSource): SourcePresentation {
         qualityColor = qualityColor,
         sizeBytes = getSizeBytes(stream),
         sortCached = stream.behaviorHints?.cached == true,
-        sortDirect = !stream.url.isNullOrBlank() && stream.url.startsWith("http", true),
+        sortDirect = hasDirectHttpUrl,
+        iptvLanguageScore = iptvLanguageScore,
         description = cleanStreamDescription(stream.description, title)
     )
 }
