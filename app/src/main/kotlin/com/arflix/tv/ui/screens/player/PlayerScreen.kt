@@ -216,6 +216,8 @@ private const val PIP_ACTION_REWIND = "com.arflix.tv.pip.REWIND"
 private const val PIP_ACTION_PLAY_PAUSE = "com.arflix.tv.pip.PLAY_PAUSE"
 private const val PIP_ACTION_FORWARD = "com.arflix.tv.pip.FORWARD"
 
+private var activePlayerScreenCount = 0
+
 /**
  * Netflix-style Player UI for Android TV
  */
@@ -275,21 +277,15 @@ fun PlayerScreen(
         !preferExtensionDecoder
     }
 
-    // Keep playback in landscape while the player is visible, regardless of the
-    // device's auto-rotate lock. Restore the app's prior orientation afterward.
-    DisposableEffect(activity) {
+    // Keep playback in landscape and immersive fullscreen while the player is visible.
+    // We use a counter because navigating to a new PlayerScreen (e.g., next episode) 
+    // briefly has both screens in the composition, and we don't want the exiting screen 
+    // to restore the system bars and portrait mode while the new one is active.
+    DisposableEffect(activity, deviceType) {
+        activePlayerScreenCount++
         val previousOrientation = activity?.requestedOrientation
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        onDispose {
-            if (previousOrientation != null) {
-                activity.requestedOrientation = previousOrientation
-            }
-        }
-    }
-
-    // On mobile, enable immersive fullscreen for the player and restore system bars on exit.
-    // TV is always in fullscreen so no change is needed there.
-    DisposableEffect(Unit) {
+        
         val window = activity?.window
         if (window != null && deviceType != com.arflix.tv.util.DeviceType.TV) {
             val controller = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
@@ -297,10 +293,18 @@ fun PlayerScreen(
                 androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         }
+
         onDispose {
-            if (window != null && deviceType != com.arflix.tv.util.DeviceType.TV) {
-                val controller = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
-                controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            activePlayerScreenCount--
+            if (activePlayerScreenCount <= 0) {
+                activePlayerScreenCount = 0
+                if (previousOrientation != null) {
+                    activity?.requestedOrientation = previousOrientation
+                }
+                if (window != null && deviceType != com.arflix.tv.util.DeviceType.TV) {
+                    val controller = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
+                    controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                }
             }
         }
     }
