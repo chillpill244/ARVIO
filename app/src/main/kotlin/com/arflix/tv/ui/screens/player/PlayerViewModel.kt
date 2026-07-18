@@ -2814,7 +2814,7 @@ class PlayerViewModel @Inject constructor(
         )
         prewarmTopStreams(sortedStreams, preferredLanguage)
         if (shouldAutoplayHomeServer) {
-            pickPreferredStream(sortedStreams, preferredLanguage)?.let { selectStream(it) }
+            autoplaySelectBest(sortedStreams, preferredLanguage)
         }
     }
 
@@ -2876,7 +2876,7 @@ class PlayerViewModel @Inject constructor(
         )
         prewarmTopStreams(sortedStreams, preferredLanguage)
         if (shouldAutoplayVod) {
-            pickPreferredStream(sortedStreams, preferredLanguage)?.let { selectStream(it) }
+            autoplaySelectBest(sortedStreams, preferredLanguage)
         }
     }
 
