@@ -1020,9 +1020,9 @@ class CatalogRepository @Inject constructor(
     private fun parseCatalogsJson(json: String?): List<CatalogConfig> {
         if (json.isNullOrBlank()) return emptyList()
         val strict = runCatching {
-            gson.fromJson<List<CatalogConfig>>(json, listType) ?: emptyList()
+            val list = gson.fromJson<List<CatalogConfig>>(json, listType) ?: emptyList()
+            list.mapNotNull { normalizeCatalogConfig(it) }
         }.getOrElse { emptyList() }
-            .mapNotNull { normalizeCatalogConfig(it) }
         if (strict.isNotEmpty()) return strict
 
         // Legacy/compat parse: recover from older/partial enum values so existing
