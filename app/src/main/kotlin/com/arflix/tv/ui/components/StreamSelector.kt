@@ -747,7 +747,7 @@ private object StreamRegexes {
     val CH71 = Regex("""\b7[ .]?1\b""", RegexOption.IGNORE_CASE)
     val CH51 = Regex("""\b5[ .]?1\b""", RegexOption.IGNORE_CASE)
     val MULTI_AUDIO = Regex("""\b(MULTI|DUAL[ .-]?AUDIO|MULTI[ .-]?AUDIO)\b""", RegexOption.IGNORE_CASE)
-    val LANGUAGE_HINT = Regex("""\b(ENG|ENGLISH|HIN|HINDI|TAM|TAMIL|TEL|TELUGU|JPN|JAPANESE|KOR|KOREAN|SPA|SPANISH|FRE|FRENCH|GER|GERMAN|ITA|ITALIAN)\b""", RegexOption.IGNORE_CASE)
+    val LANGUAGE_HINT = Regex("""\b(ENG|ENGLISH|HIN|HINDI|TAM|TAMIL|TEL|TELUGU|JPN|JAPANESE|KOR|KOREAN|SPA|SPANISH|FRE|FRENCH|GER|GERMAN|ITA|ITALIAN|MAL|MALAYALAM|KAN|KANNADA|GUJ|GUJARATI|BEN|BENGALI|MAR|MARATHI|PUN|PUNJABI|URD|URDU|TUR|TURKISH)\b""", RegexOption.IGNORE_CASE)
     val DV = Regex("""\b(DV|DoVi|Dolby[\s._-]*Vision)\b""", RegexOption.IGNORE_CASE)
     val HDR = Regex("""\bHDR(10\+?|10)?\b""", RegexOption.IGNORE_CASE)
     val IMAX = Regex("""\bIMAX\b""", RegexOption.IGNORE_CASE)
