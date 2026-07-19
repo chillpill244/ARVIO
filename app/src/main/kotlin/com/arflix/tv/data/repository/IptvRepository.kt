@@ -1395,7 +1395,7 @@ class IptvRepository @Inject constructor(
                     val aggregatedChannels = java.util.Collections.synchronizedList(mutableListOf<IptvChannel>())
                     activePlaylists.map { playlist ->
                         async {
-                            val playlistChannels = fetchChannelsForPlaylistWithRetries(playlist, onProgress).map { channel ->
+                            val playlistChannels = fetchChannelsForPlaylistWithRetries(playlist, onProgress, forcePlaylistReload).map { channel ->
                                 channel.copy(
                                     id = "${playlist.id}:${channel.id}",
                                     group = channel.group
@@ -2264,7 +2264,7 @@ class IptvRepository @Inject constructor(
         val channels = coroutineScope {
             activeLists.map { playlist ->
                 async {
-                    fetchChannelsForPlaylistWithRetries(playlist) { }
+                    fetchChannelsForPlaylistWithRetries(playlist, onProgress = {})
                         .map { channel ->
                             channel.copy(
                                 id = "${playlist.id}:${channel.id}",
@@ -2644,13 +2644,14 @@ class IptvRepository @Inject constructor(
 
     private suspend fun fetchChannelsForPlaylistWithRetries(
         playlist: IptvPlaylistEntry,
-        onProgress: (IptvLoadProgress) -> Unit
+        onProgress: (IptvLoadProgress) -> Unit,
+        forceNetwork: Boolean = false
     ): List<IptvChannel> {
         resolveXtreamCredentials(playlist)?.let { creds ->
             onProgress(IptvLoadProgress("Detected Xtream provider. Loading live channels...", 6))
             runCatching {
                 withTimeoutOrNull(120_000L) {
-                    fetchXtreamLiveChannels(creds, onProgress)
+                    fetchXtreamLiveChannels(creds, onProgress, forceNetwork)
                 } ?: throw IllegalStateException("Xtream provider timed out while loading live channels.")
             }
                 .onSuccess { channels ->
@@ -2660,18 +2661,19 @@ class IptvRepository @Inject constructor(
                     }
                 }
         }
-        return fetchAndParseM3uWithRetries(playlist.m3uUrl, onProgress)
+        return fetchAndParseM3uWithRetries(playlist.m3uUrl, onProgress, forceNetwork)
     }
 
     private suspend fun fetchAndParseM3uWithRetries(
         url: String,
-        onProgress: (IptvLoadProgress) -> Unit
+        onProgress: (IptvLoadProgress) -> Unit,
+        forceNetwork: Boolean = false
     ): List<IptvChannel> {
         resolveXtreamCredentials(url)?.let { creds ->
             onProgress(IptvLoadProgress("Detected Xtream provider. Loading live channels...", 6))
             runCatching {
                 withTimeoutOrNull(120_000L) {
-                    fetchXtreamLiveChannels(creds, onProgress)
+                    fetchXtreamLiveChannels(creds, onProgress, forceNetwork)
                 } ?: throw IllegalStateException("Xtream provider timed out while loading live channels.")
             }
                 .onSuccess { channels ->
@@ -2688,7 +2690,7 @@ class IptvRepository @Inject constructor(
             onProgress(IptvLoadProgress("Connecting to playlist (attempt ${attempt + 1}/$maxAttempts)...", 5))
             runCatching {
                 withTimeoutOrNull(90_000L) {
-                    fetchAndParseM3uOnce(url, onProgress)
+                    fetchAndParseM3uOnce(url, onProgress, forceNetwork)
                 } ?: throw IllegalStateException("Playlist loading timed out. Try refreshing or using the provider's Xtream credentials.")
             }.onSuccess { channels ->
                 if (channels.isNotEmpty()) return channels
@@ -4013,15 +4015,15 @@ class IptvRepository @Inject constructor(
             )
     }
 
-    suspend fun warmXtreamVodCachesIfPossible() {
+    suspend fun warmXtreamVodCachesIfPossible(forceNetwork: Boolean = false) {
         withContext(Dispatchers.IO) {
             val config = observeConfig().first()
             val creds = resolveXtreamCredentials(config.epgUrl)
                 ?: resolveXtreamCredentials(config.m3uUrl)
                 ?: return@withContext
             runCatching {
-                loadXtreamVodStreams(creds)
-                loadXtreamSeriesList(creds)
+                loadXtreamVodStreams(creds, forceNetwork = forceNetwork)
+                loadXtreamSeriesList(creds, forceNetwork = forceNetwork)
                 val activeProfileId = runCatching { profileManager.getProfileIdSync() }.getOrDefault("default")
                 val providerKey = "$activeProfileId|${xtreamCacheKey(creds)}"
                 seriesResolver.refreshCatalog(providerKey, creds)
@@ -4170,13 +4172,14 @@ class IptvRepository @Inject constructor(
 
     private suspend fun loadXtreamVodStreams(
         creds: XtreamCredentials,
-        fast: Boolean = false
+        fast: Boolean = false,
+        forceNetwork: Boolean = false
     ): List<XtreamVodStream> {
         return withContext(Dispatchers.IO) {
             // 1. Fast check: in-memory cache (no lock needed, fields are @Volatile)
             ensureXtreamVodCacheOwnership(creds)
             val now = System.currentTimeMillis()
-            if (cachedXtreamVodStreams.isNotEmpty() && now - xtreamVodLoadedAtMs < xtreamVodCacheMs) {
+            if (!forceNetwork && cachedXtreamVodStreams.isNotEmpty() && now - xtreamVodLoadedAtMs < xtreamVodCacheMs) {
                 if (cachedVodIdIndex?.items !== cachedXtreamVodStreams) {
                     cachedVodIdIndex = buildVodIdIndex(cachedXtreamVodStreams)
                 }
@@ -4185,7 +4188,7 @@ class IptvRepository @Inject constructor(
 
             // 2. Check disk cache (fast — reading a file, not a network call)
             val diskFile = vodDiskCacheFile(creds)
-            val diskCache: XtreamDiskCache<XtreamVodStream>? = readDiskCache(diskFile, vodDiskCacheType)
+            val diskCache: XtreamDiskCache<XtreamVodStream>? = if (forceNetwork) null else readDiskCache(diskFile, vodDiskCacheType)
             if (diskCache != null && diskCache.items.isNotEmpty() && now - diskCache.savedAtMs < xtreamVodCacheMs) {
                 System.err.println("[VOD-Cache] Loaded ${diskCache.items.size} VOD streams from disk cache (age ${(now - diskCache.savedAtMs) / 1000}s)")
                 cachedXtreamVodStreams = diskCache.items
@@ -4202,7 +4205,8 @@ class IptvRepository @Inject constructor(
                 requestJson(
                     url,
                     TypeToken.getParameterized(List::class.java, XtreamVodStream::class.java).type,
-                    client = if (fast) xtreamLookupHttpClient else iptvHttpClient
+                    client = if (fast) xtreamLookupHttpClient else iptvHttpClient,
+                    forceNetwork = forceNetwork
                 ) ?: emptyList()
             val elapsed = System.currentTimeMillis() - downloadStart
             System.err.println("[VOD-Cache] Downloaded ${vod.size} VOD streams in ${elapsed}ms")
@@ -4254,19 +4258,20 @@ class IptvRepository @Inject constructor(
 
     private suspend fun loadXtreamSeriesList(
         creds: XtreamCredentials,
-        fast: Boolean = false
+        fast: Boolean = false,
+        forceNetwork: Boolean = false
     ): List<XtreamSeriesItem> {
         return withContext(Dispatchers.IO) {
             // 1. Fast check: in-memory cache
             ensureXtreamVodCacheOwnership(creds)
             val now = System.currentTimeMillis()
-            if (cachedXtreamSeries.isNotEmpty() && now - xtreamSeriesLoadedAtMs < xtreamVodCacheMs) {
+            if (!forceNetwork && cachedXtreamSeries.isNotEmpty() && now - xtreamSeriesLoadedAtMs < xtreamVodCacheMs) {
                 return@withContext cachedXtreamSeries
             }
 
             // 2. Check disk cache
             val diskFile = seriesDiskCacheFile(creds)
-            val diskCache: XtreamDiskCache<XtreamSeriesItem>? = readDiskCache(diskFile, seriesDiskCacheType)
+            val diskCache: XtreamDiskCache<XtreamSeriesItem>? = if (forceNetwork) null else readDiskCache(diskFile, seriesDiskCacheType)
             if (diskCache != null && diskCache.items.isNotEmpty() && now - diskCache.savedAtMs < xtreamVodCacheMs) {
                 System.err.println("[VOD-Cache] Loaded ${diskCache.items.size} series from disk cache (age ${(now - diskCache.savedAtMs) / 1000}s)")
                 cachedXtreamSeries = diskCache.items
@@ -4282,7 +4287,8 @@ class IptvRepository @Inject constructor(
                 requestJson(
                     url,
                     TypeToken.getParameterized(List::class.java, XtreamSeriesItem::class.java).type,
-                    client = if (fast) xtreamLookupHttpClient else iptvHttpClient
+                    client = if (fast) xtreamLookupHttpClient else iptvHttpClient,
+                    forceNetwork = forceNetwork
                 ) ?: emptyList()
             val elapsed = System.currentTimeMillis() - downloadStart
             System.err.println("[VOD-Cache] Downloaded ${series.size} series in ${elapsed}ms")
@@ -4904,7 +4910,8 @@ class IptvRepository @Inject constructor(
 
     private suspend fun fetchXtreamLiveChannels(
         creds: XtreamCredentials,
-        onProgress: (IptvLoadProgress) -> Unit
+        onProgress: (IptvLoadProgress) -> Unit,
+        forceNetwork: Boolean = false
     ): List<IptvChannel> {
         val categoriesUrl = "${creds.baseUrl}/player_api.php?username=${creds.username}&password=${creds.password}&action=get_live_categories"
         val streamsUrl = "${creds.baseUrl}/player_api.php?username=${creds.username}&password=${creds.password}&action=get_live_streams"
@@ -4914,7 +4921,8 @@ class IptvRepository @Inject constructor(
             requestJson(
                 categoriesUrl,
                 TypeToken.getParameterized(List::class.java, XtreamLiveCategory::class.java).type,
-                client = iptvCatalogHttpClient
+                client = iptvCatalogHttpClient,
+                forceNetwork = forceNetwork
             ) ?: emptyList()
         val categoryMap = categories
             .associate { it.categoryId.orEmpty() to (it.categoryName?.trim().orEmpty().ifBlank { "Uncategorized" }) }
@@ -4924,7 +4932,8 @@ class IptvRepository @Inject constructor(
             requestJson(
                 streamsUrl,
                 TypeToken.getParameterized(List::class.java, XtreamLiveStream::class.java).type,
-                client = iptvCatalogHttpClient
+                client = iptvCatalogHttpClient,
+                forceNetwork = forceNetwork
             ) ?: emptyList()
         if (streams.isEmpty()) return emptyList()
 
@@ -4958,14 +4967,20 @@ class IptvRepository @Inject constructor(
     private suspend fun <T> requestJson(
         url: String,
         type: Type,
-        client: OkHttpClient = iptvHttpClient
+        client: OkHttpClient = iptvHttpClient,
+        forceNetwork: Boolean = false
     ): T? = suspendCancellableCoroutine { continuation ->
-        val request = Request.Builder()
+        val requestBuilder = Request.Builder()
             .url(url)
             .header("User-Agent", OkHttpProvider.userAgentOr(IPTV_USER_AGENT))
             .header("Accept", "application/json,*/*")
             .get()
-            .build()
+            
+        if (forceNetwork) {
+            requestBuilder.cacheControl(okhttp3.CacheControl.FORCE_NETWORK)
+        }
+            
+        val request = requestBuilder.build()
 
         val call = client.newCall(request)
 
@@ -5009,14 +5024,20 @@ class IptvRepository @Inject constructor(
 
     private fun fetchAndParseM3uOnce(
         url: String,
-        onProgress: (IptvLoadProgress) -> Unit
+        onProgress: (IptvLoadProgress) -> Unit,
+        forceNetwork: Boolean = false
     ): List<IptvChannel> {
-        val request = Request.Builder()
+        val requestBuilder = Request.Builder()
             .url(url)
             .header("User-Agent", OkHttpProvider.userAgentOr(IPTV_USER_AGENT))
             .header("Accept", "*/*")
             .get()
-            .build()
+            
+        if (forceNetwork) {
+            requestBuilder.cacheControl(okhttp3.CacheControl.FORCE_NETWORK)
+        }
+            
+        val request = requestBuilder.build()
         iptvHttpClient.newCall(request).execute().use { response ->
             val raw = response.body?.byteStream() ?: throw IllegalStateException("M3U response was empty.")
             val contentLength = response.body?.contentLength()?.takeIf { it > 0L }
