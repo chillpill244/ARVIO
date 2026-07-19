@@ -1,5 +1,8 @@
 package com.arflix.tv.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -28,15 +31,19 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -44,7 +51,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -67,6 +77,38 @@ val bottomBarItems = listOf(
     BottomBarItem(R.string.settings, Icons.Rounded.Settings, Icons.Outlined.Settings, "settings")
 )
 
+@Stable
+class AppBottomBarScrollState {
+    var labelVisibility by mutableFloatStateOf(1f)
+        private set
+    private var accumulatedDelta = 0f
+
+    val nestedScrollConnection: NestedScrollConnection = object : NestedScrollConnection {
+        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+            val deltaY = available.y
+            if (deltaY == 0f) return Offset.Zero
+
+            accumulatedDelta += deltaY
+            if (accumulatedDelta < -60f && labelVisibility != 0f) {
+                labelVisibility = 0f
+                accumulatedDelta = 0f
+            } else if (accumulatedDelta > 60f && labelVisibility != 1f) {
+                labelVisibility = 1f
+                accumulatedDelta = 0f
+            }
+            if (deltaY < 0f && accumulatedDelta > 0f) accumulatedDelta = deltaY
+            if (deltaY > 0f && accumulatedDelta < 0f) accumulatedDelta = deltaY
+
+            return Offset.Zero
+        }
+    }
+}
+
+@Composable
+fun rememberAppBottomBarScrollState(): AppBottomBarScrollState {
+    return remember { AppBottomBarScrollState() }
+}
+
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun AppBottomBar(
@@ -74,23 +116,32 @@ fun AppBottomBar(
     onNavigate: (String) -> Unit,
     activeDownloadProgress: Float? = null,
     hasAnyDownloads: Boolean = false,
+    scrollState: AppBottomBarScrollState? = null,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        // Hairline glass edge separating the bar from content above.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(Color.White.copy(alpha = 0.12f))
-        )
+    val labelFraction by animateFloatAsState(
+        targetValue = scrollState?.labelVisibility ?: 1f,
+        animationSpec = tween(durationMillis = 300),
+        label = "nav_label_alpha"
+    )
+    
+    val expandedHorizontalPadding = 28.dp
+    val collapsedHorizontalPadding = 58.dp
+    val horizontalPadding = expandedHorizontalPadding + (collapsedHorizontalPadding - expandedHorizontalPadding) * (1f - labelFraction)
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = horizontalPadding)
+            .padding(bottom = 24.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(appBackgroundDark())
-                // Subtle tint lifts the bar off the app's black background.
-                .background(Color.White.copy(alpha = 0.06f))
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .clip(CircleShape)
+                .background(Color(0xFF141414).copy(alpha = 0.95f))
+                .padding(horizontal = 6.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -115,15 +166,14 @@ fun AppBottomBar(
                     isSelected -> item.selectedIcon
                     else -> item.unselectedIcon
                 }
-                // Search/download glyphs have more built-in padding than the rest;
-                // scale them visually (no layout impact) to keep weight and alignment even.
                 val iconScale = if (showAsDownloads || item.route == "search") 1.12f else 1f
+                val selectedBgColor = if (isSelected) Color.White.copy(alpha = 0.12f) else Color.Transparent
 
-                Box(
+                Column(
                     modifier = Modifier
                         .weight(1f)
                         .clip(CircleShape)
-                        .background(if (isFocused) Color.White.copy(alpha = 0.12f) else Color.Transparent)
+                        .background(if (isFocused) Color.White.copy(alpha = 0.12f) else selectedBgColor)
                         .focusable()
                         .onFocusChanged { isFocused = it.isFocused }
                         .onKeyEvent { event ->
@@ -136,27 +186,25 @@ fun AppBottomBar(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) { onNavigate(navRoute) }
-                        .padding(vertical = 3.dp),
-                    contentAlignment = Alignment.Center
+                        .padding(vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Fixed slot so every item has identical height regardless of
-                    // glyph scaling or the download progress ring.
                     Box(
-                        modifier = Modifier.size(36.dp),
+                        modifier = Modifier.size(32.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         if (isDownloading) {
                             if (activeDownloadProgress!! > 0f) {
                                 CircularProgressIndicator(
                                     progress = { activeDownloadProgress },
-                                    modifier = Modifier.size(36.dp),
+                                    modifier = Modifier.size(32.dp),
                                     color = iconTint,
                                     strokeWidth = 2.dp,
                                     trackColor = Color.White.copy(alpha = 0.15f)
                                 )
                             } else {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(36.dp),
+                                    modifier = Modifier.size(32.dp),
                                     color = iconTint,
                                     strokeWidth = 2.dp,
                                     trackColor = Color.White.copy(alpha = 0.15f)
@@ -168,9 +216,25 @@ fun AppBottomBar(
                             contentDescription = label,
                             tint = iconTint,
                             modifier = Modifier
-                                .size(28.dp)
+                                .size(26.dp)
                                 .scale(iconScale)
                         )
+                    }
+                    if (labelFraction > 0f) {
+                        Spacer(modifier = Modifier.height(3.dp * labelFraction))
+                        Box(
+                            modifier = Modifier
+                                .height(14.dp * labelFraction)
+                                .alpha(labelFraction)
+                        ) {
+                            androidx.compose.material3.Text(
+                                text = label,
+                                color = iconTint,
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                                fontWeight = if (isSelected) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal
+                            )
+                        }
                     }
                 }
             }

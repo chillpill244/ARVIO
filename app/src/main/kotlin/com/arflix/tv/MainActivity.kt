@@ -58,6 +58,8 @@ import com.arflix.tv.ui.components.AppBottomBar
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.arflix.tv.ui.components.rememberAppBottomBarScrollState
 import android.content.pm.ActivityInfo
 import com.arflix.tv.util.DeviceType
 import com.arflix.tv.util.DEVICE_MODE_OVERRIDE_KEY
@@ -610,8 +612,11 @@ fun ArflixApp(
         !currentRoute.contains("profile") &&
         !currentRoute.contains("login")
 
-    Column(
+    val bottomBarScrollState = rememberAppBottomBarScrollState()
+
+    Box(
         modifier = Modifier
+            .nestedScroll(bottomBarScrollState.nestedScrollConnection)
             .fillMaxSize()
             // Background fills edge-to-edge (including behind transparent bars).
             .background(
@@ -633,8 +638,7 @@ fun ArflixApp(
             // becomes 0 when the player hides the bars.
             .then(if (isMobile) Modifier.systemBarsPadding() else Modifier)
     ) {
-        Box(modifier = Modifier.weight(1f)) {
-            AppNavigation(
+        AppNavigation(
                 navController = navController,
                 startDestination = startDestination,
                 preloadedCategories = preloadedCategories,
@@ -659,7 +663,6 @@ fun ArflixApp(
                 },
                 onExitApp = onExitApp,
             )
-        }
         if (showBottomBar) {
             AppBottomBar(
                 currentRoute = currentRoute,
@@ -671,7 +674,10 @@ fun ArflixApp(
                 },
                 activeDownloadProgress = activeDownloadProgress,
                 hasAnyDownloads = hasAnyDownloads,
-                modifier = Modifier.fillMaxWidth()
+                scrollState = bottomBarScrollState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
             )
         }
     }
