@@ -18,8 +18,13 @@ import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
 import javax.inject.Named
 import javax.inject.Singleton
+import com.arflix.tv.util.settingsDataStore
+import com.arflix.tv.util.mediaCategoryPreferences
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -37,7 +42,7 @@ object AppModule {
         return Retrofit.Builder()
             .baseUrl(Constants.TMDB_BASE_URL)
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(TmdbApi::class.java)
     }
@@ -48,7 +53,7 @@ object AppModule {
         return Retrofit.Builder()
             .baseUrl(Constants.TRAKT_API_URL)
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(TraktApi::class.java)
     }
@@ -64,7 +69,7 @@ object AppModule {
         return Retrofit.Builder()
             .baseUrl(Constants.SUPABASE_URL + "/")
             .client(noCacheClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(SupabaseApi::class.java)
     }
@@ -76,7 +81,7 @@ object AppModule {
         return Retrofit.Builder()
             .baseUrl("https://api.themoviedb.org/")
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(StreamApi::class.java)
     }
@@ -90,7 +95,7 @@ object AppModule {
         return Retrofit.Builder()
             .baseUrl("https://api.introdb.app/")
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
             .build()
     }
 
@@ -107,7 +112,7 @@ object AppModule {
         return Retrofit.Builder()
             .baseUrl("https://api.aniskip.com/v2/")
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
             .build()
     }
 
@@ -124,7 +129,7 @@ object AppModule {
         return Retrofit.Builder()
             .baseUrl("https://arm.haglund.dev/api/v2/")
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
             .build()
     }
 
@@ -141,7 +146,7 @@ object AppModule {
         return Retrofit.Builder()
             .baseUrl("https://api.jikan.moe/v4/")
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
             .build()
     }
 
@@ -149,5 +154,20 @@ object AppModule {
     @Singleton
     fun provideJikanApi(@Named("jikan") retrofit: Retrofit): com.arflix.tv.data.api.JikanApi {
         return retrofit.create(com.arflix.tv.data.api.JikanApi::class.java)
+    }
+    @Provides
+    @Singleton
+    fun providePreferenceStore(@ApplicationContext context: android.content.Context): com.arflix.tv.data.repository.PreferenceStore {
+        return com.arflix.tv.data.repository.AndroidPreferenceStore(
+            context = context,
+            settings = context.settingsDataStore,
+            mediaCategory = context.mediaCategoryPreferences
+        )
+    }
+
+    @Provides
+    @Singleton
+    fun providePlatformEnvironment(@ApplicationContext context: android.content.Context): com.arflix.tv.data.repository.PlatformEnvironment {
+        return com.arflix.tv.data.repository.AndroidPlatformEnvironment(context)
     }
 }

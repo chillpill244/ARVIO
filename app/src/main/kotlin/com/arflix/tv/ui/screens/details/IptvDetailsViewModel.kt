@@ -1,9 +1,10 @@
 package com.arflix.tv.ui.screens.details
 
-import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.ViewModel
+import com.arflix.tv.data.repository.PreferenceStore
+import com.arflix.tv.data.repository.PlatformEnvironment
 import androidx.lifecycle.viewModelScope
 import com.arflix.tv.data.model.CastMember
 import com.arflix.tv.data.model.Episode
@@ -18,7 +19,6 @@ import com.arflix.tv.data.repository.TraktRepository
 import com.arflix.tv.data.repository.WatchlistRepository
 import com.arflix.tv.util.settingsDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -55,8 +55,7 @@ class IptvDetailsViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val watchlistRepository: WatchlistRepository,
     private val traktRepository: TraktRepository,
-    @ApplicationContext private val context: Context
-) : ViewModel() {
+    private val preferenceStore: PreferenceStore, private val platformEnvironment: PlatformEnvironment,) : ViewModel() {
 
     private val _uiState = MutableStateFlow(IptvDetailsUiState())
     val uiState: StateFlow<IptvDetailsUiState> = _uiState.asStateFlow()
@@ -74,7 +73,7 @@ class IptvDetailsViewModel @Inject constructor(
         initialEpisode: Int? = null
     ) {
         viewModelScope.launch {
-            val prefs = context.settingsDataStore.data.first()
+            val prefs = preferenceStore.settings.data.first()
             val autoPlay = prefs[autoPlaySingleSourceKey()] ?: true
             val autoQuality = prefs[autoPlayMinQualityKey()] ?: "Any"
             when (mediaType) {

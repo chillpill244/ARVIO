@@ -1,11 +1,12 @@
 package com.arflix.tv.ui.screens.settings
 
-import android.content.Context
 import android.graphics.Bitmap
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.ViewModel
+import com.arflix.tv.data.repository.PreferenceStore
+import com.arflix.tv.data.repository.PlatformEnvironment
 import androidx.lifecycle.viewModelScope
 import com.arflix.tv.server.AiKeyConfigServer
 import com.arflix.tv.ui.screens.player.SubtitleAiModel
@@ -59,7 +60,6 @@ import com.arflix.tv.util.settingsDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -202,7 +202,7 @@ data class SettingsUiState(
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+    private val preferenceStore: PreferenceStore, private val platformEnvironment: PlatformEnvironment,
     private val profileManager: ProfileManager,
     private val traktRepository: TraktRepository,
     private val streamRepository: StreamRepository,
@@ -411,7 +411,7 @@ class SettingsViewModel @Inject constructor(
     private fun loadSettings() {
         viewModelScope.launch {
             // Load local preferences first
-            val prefs = context.settingsDataStore.data.first()
+            val prefs = preferenceStore.settings.data.first()
             var defaultSub = prefs[defaultSubtitleKey()] ?: "Off"
             val defaultAudio = prefs[defaultAudioLanguageKey()] ?: "Auto (Original)"
             val cardLayoutMode = normalizeCardLayoutMode(prefs[cardLayoutModeKey()])
@@ -427,10 +427,10 @@ class SettingsViewModel @Inject constructor(
             // Ensure defaults are persisted on first launch so they're never ambiguous
             if (prefs[autoPlaySingleSourceKey()] == null) {
                 autoPlaySingleSource = true
-                context.settingsDataStore.edit { it[autoPlaySingleSourceKey()] = true }
+                preferenceStore.settings.edit { it[autoPlaySingleSourceKey()] = true }
             }
             if (prefs[autoPlayNextKey()] == null) {
-                context.settingsDataStore.edit { it[autoPlayNextKey()] = true }
+                preferenceStore.settings.edit { it[autoPlayNextKey()] = true }
             }
             val autoPlayMinQuality = normalizeAutoPlayMinQuality(prefs[autoPlayMinQualityKey()])
             val trailerAutoPlay = prefs[trailerAutoPlayKey()] ?: false
@@ -446,7 +446,7 @@ class SettingsViewModel @Inject constructor(
             // Schedule async migration to copy old key → new key and delete old
             if (legacyColor != null) {
                 viewModelScope.launch {
-                    context.settingsDataStore.edit {
+                    preferenceStore.settings.edit {
                         val old = it[OLD_FOCUS_BORDER_COLOR_KEY] ?: return@edit
                         it[com.arflix.tv.util.ACCENT_COLOR_KEY] = old
                         it.remove(OLD_FOCUS_BORDER_COLOR_KEY)
@@ -777,7 +777,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             // Save locally
             val changedAt = System.currentTimeMillis()
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[defaultSubtitleKey()] = language
                 prefs[subtitleSettingsUpdatedAtKey()] = changedAt.toString()
             }
@@ -794,7 +794,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setDefaultAudioLanguage(language: String) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[defaultAudioLanguageKey()] = language
             }
             _uiState.value = _uiState.value.copy(
@@ -806,7 +806,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     private suspend fun loadSubtitleOptions(current: String): List<String> {
-        val prefs = context.settingsDataStore.data.first()
+        val prefs = preferenceStore.settings.data.first()
         val json = prefs[subtitleUsageKey()]
         val type = TypeToken.getParameterized(Map::class.java, String::class.java, Int::class.javaObjectType).type
         val usage: Map<String, Int> = if (!json.isNullOrBlank()) {
@@ -935,7 +935,7 @@ class SettingsViewModel @Inject constructor(
     fun setAutoPlayNext(enabled: Boolean) {
         viewModelScope.launch {
             // Save locally
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[autoPlayNextKey()] = enabled
             }
             _uiState.value = _uiState.value.copy(autoPlayNext = enabled)
@@ -948,7 +948,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setAutoPlaySingleSource(enabled: Boolean) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[autoPlaySingleSourceKey()] = enabled
             }
             _uiState.value = _uiState.value.copy(autoPlaySingleSource = enabled)
@@ -958,7 +958,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setSecondarySubtitle(language: String) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[secondarySubtitleKey()] = language
             }
             _uiState.value = _uiState.value.copy(secondarySubtitle = language)
@@ -968,7 +968,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setFilterSubtitlesByLanguage(enabled: Boolean) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[filterSubtitlesByLanguageKey()] = enabled
             }
             _uiState.value = _uiState.value.copy(filterSubtitlesByLanguage = enabled)
@@ -990,7 +990,7 @@ class SettingsViewModel @Inject constructor(
     private fun setAutoPlayMinQuality(value: String) {
         val normalized = normalizeAutoPlayMinQuality(value)
         viewModelScope.launch {
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[autoPlayMinQualityKey()] = normalized
             }
             _uiState.value = _uiState.value.copy(autoPlayMinQuality = normalized)
@@ -1010,7 +1010,7 @@ class SettingsViewModel @Inject constructor(
     fun setCardLayoutMode(mode: String) {
         val normalized = normalizeCardLayoutMode(mode)
         viewModelScope.launch {
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[cardLayoutModeKey()] = normalized
             }
             _uiState.value = _uiState.value.copy(cardLayoutMode = normalized)
@@ -1021,12 +1021,12 @@ class SettingsViewModel @Inject constructor(
     /** Set content/metadata language for TMDB (e.g. "en-US", "fr-FR", "nl-NL"). */
     fun setContentLanguage(lang: String) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[contentLanguageKey()] = lang
                 prefs[LAST_APP_LANGUAGE_KEY] = lang
             }
             // Mirror to SharedPreferences so attachBaseContext can read it synchronously on next launch
-            context.getSharedPreferences("app_locale", android.content.Context.MODE_PRIVATE)
+            preferenceStore.getSharedPreferences("app_locale")
                 .edit().putString("locale_tag", lang).apply()
             mediaRepository.contentLanguage = if (lang == "en-US") null else lang
             _uiState.value = _uiState.value.copy(contentLanguage = lang)
@@ -1037,13 +1037,12 @@ class SettingsViewModel @Inject constructor(
     /** Set UI mode override: "auto", "tv", "tablet", "phone". Requires app restart. */
     fun setDeviceModeOverride(mode: String) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[com.arflix.tv.util.DEVICE_MODE_OVERRIDE_KEY] = mode
             }
             // Mirror to SharedPreferences so the next cold start's
             // pre-onCreate detectDeviceType() read picks it up synchronously.
-            com.arflix.tv.util.setDeviceModeOverrideCache(
-                context,
+            platformEnvironment.setDeviceModeOverrideCache(
                 if (mode == "auto") null else mode,
             )
             _uiState.value = _uiState.value.copy(deviceModeOverride = mode)
@@ -1052,7 +1051,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setSkipProfileSelection(skip: Boolean) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[com.arflix.tv.util.SKIP_PROFILE_SELECTION_KEY] = skip
             }
             _uiState.value = _uiState.value.copy(skipProfileSelection = skip)
@@ -1062,7 +1061,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setOledBlackBackground(enabled: Boolean) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[com.arflix.tv.util.OLED_BLACK_BACKGROUND_KEY] = enabled
             }
             _uiState.value = _uiState.value.copy(oledBlackBackground = enabled)
@@ -1083,7 +1082,7 @@ class SettingsViewModel @Inject constructor(
     fun setFrameRateMatchingMode(mode: String) {
         val normalized = normalizeFrameRateMode(mode)
         viewModelScope.launch {
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[frameRateMatchingModeKey()] = normalized
             }
             _uiState.value = _uiState.value.copy(frameRateMatchingMode = normalized)
@@ -1112,18 +1111,18 @@ class SettingsViewModel @Inject constructor(
 
     fun setSpoilerBlurEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { it[spoilerBlurKey()] = enabled }
+            preferenceStore.settings.edit { it[spoilerBlurKey()] = enabled }
             _uiState.value = _uiState.value.copy(spoilerBlurEnabled = enabled)
             syncLocalStateToCloud(silent = true)
         }
     }
 
     fun setTrailerAutoPlay(enabled: Boolean) {
-        viewModelScope.launch { context.settingsDataStore.edit { it[trailerAutoPlayKey()] = enabled }; _uiState.value = _uiState.value.copy(trailerAutoPlay = enabled); syncLocalStateToCloud(silent = true) }
+        viewModelScope.launch { preferenceStore.settings.edit { it[trailerAutoPlayKey()] = enabled }; _uiState.value = _uiState.value.copy(trailerAutoPlay = enabled); syncLocalStateToCloud(silent = true) }
     }
 
     fun setTrailerSoundEnabled(enabled: Boolean) {
-        viewModelScope.launch { context.settingsDataStore.edit { it[trailerSoundEnabledKey()] = enabled }; _uiState.value = _uiState.value.copy(trailerSoundEnabled = enabled); syncLocalStateToCloud(silent = true) }
+        viewModelScope.launch { preferenceStore.settings.edit { it[trailerSoundEnabledKey()] = enabled }; _uiState.value = _uiState.value.copy(trailerSoundEnabled = enabled); syncLocalStateToCloud(silent = true) }
     }
 
     fun cycleTrailerDelay() {
@@ -1135,7 +1134,7 @@ class SettingsViewModel @Inject constructor(
             else -> 0
         }
         viewModelScope.launch {
-            context.settingsDataStore.edit { it[trailerDelayKey()] = next.toString() }
+            preferenceStore.settings.edit { it[trailerDelayKey()] = next.toString() }
             _uiState.value = _uiState.value.copy(trailerDelaySeconds = next)
             syncLocalStateToCloud(silent = true)
         }
@@ -1143,7 +1142,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setShowBudget(enabled: Boolean) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { it[showBudgetKey()] = enabled }
+            preferenceStore.settings.edit { it[showBudgetKey()] = enabled }
             _uiState.value = _uiState.value.copy(showBudget = enabled)
             syncLocalStateToCloud(silent = true)
         }
@@ -1151,7 +1150,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setSmoothScrolling(enabled: Boolean) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { it[smoothScrollingKey()] = enabled }
+            preferenceStore.settings.edit { it[smoothScrollingKey()] = enabled }
             _uiState.value = _uiState.value.copy(smoothScrolling = enabled)
             syncLocalStateToCloud(silent = true)
         }
@@ -1159,7 +1158,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setShowLoadingStats(enabled: Boolean) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { it[showLoadingStatsKey()] = enabled }
+            preferenceStore.settings.edit { it[showLoadingStatsKey()] = enabled }
             _uiState.value = _uiState.value.copy(showLoadingStats = enabled)
             syncLocalStateToCloud(silent = true)
         }
@@ -1168,7 +1167,7 @@ class SettingsViewModel @Inject constructor(
     fun cycleClockFormat() {
         val next = if (_uiState.value.clockFormat == "24h") "12h" else "24h"
         viewModelScope.launch {
-            context.settingsDataStore.edit { it[clockFormatKey()] = next }
+            preferenceStore.settings.edit { it[clockFormatKey()] = next }
             _uiState.value = _uiState.value.copy(clockFormat = next)
             syncLocalStateToCloud(silent = true)
         }
@@ -1184,7 +1183,7 @@ class SettingsViewModel @Inject constructor(
         val nextIndex = (colors.indexOf(current) + 1) % colors.size
         val next = colors[nextIndex]
         viewModelScope.launch {
-            context.settingsDataStore.edit { it[com.arflix.tv.util.ACCENT_COLOR_KEY] = next }
+            preferenceStore.settings.edit { it[com.arflix.tv.util.ACCENT_COLOR_KEY] = next }
             _uiState.value = _uiState.value.copy(accentColor = next)
             syncLocalStateToCloud(silent = true)
         }
@@ -1207,7 +1206,7 @@ class SettingsViewModel @Inject constructor(
             else -> 0
         }
         viewModelScope.launch {
-            context.settingsDataStore.edit { it[volumeBoostDbKey()] = next.toString() }
+            preferenceStore.settings.edit { it[volumeBoostDbKey()] = next.toString() }
             _uiState.value = _uiState.value.copy(volumeBoostDb = next)
             syncLocalStateToCloud(silent = true)
         }
@@ -1215,28 +1214,28 @@ class SettingsViewModel @Inject constructor(
 
     fun cycleSubtitleSize() {
         val next = when (_uiState.value.subtitleSize) { "Small" -> "Medium"; "Medium" -> "Large"; "Large" -> "Extra Large"; else -> "Small" }
-        viewModelScope.launch { context.settingsDataStore.edit { it[subtitleSizeKey()] = next }; _uiState.value = _uiState.value.copy(subtitleSize = next); syncLocalStateToCloud(silent = true) }
+        viewModelScope.launch { preferenceStore.settings.edit { it[subtitleSizeKey()] = next }; _uiState.value = _uiState.value.copy(subtitleSize = next); syncLocalStateToCloud(silent = true) }
     }
 
     fun cycleSubtitleColor() {
         val next = when (_uiState.value.subtitleColor) { "White" -> "Yellow"; "Yellow" -> "Green"; "Green" -> "Cyan"; else -> "White" }
-        viewModelScope.launch { context.settingsDataStore.edit { it[subtitleColorKey()] = next }; _uiState.value = _uiState.value.copy(subtitleColor = next); syncLocalStateToCloud(silent = true) }
+        viewModelScope.launch { preferenceStore.settings.edit { it[subtitleColorKey()] = next }; _uiState.value = _uiState.value.copy(subtitleColor = next); syncLocalStateToCloud(silent = true) }
     }
 
     fun cycleSubtitleOffset() {
         val next = when (_uiState.value.subtitleOffset) { "Bottom" -> "Low"; "Low" -> "Medium"; "Medium" -> "High"; else -> "Bottom" }
-        viewModelScope.launch { context.settingsDataStore.edit { it[subtitleOffsetKey()] = next }; _uiState.value = _uiState.value.copy(subtitleOffset = next); syncLocalStateToCloud(silent = true) }
+        viewModelScope.launch { preferenceStore.settings.edit { it[subtitleOffsetKey()] = next }; _uiState.value = _uiState.value.copy(subtitleOffset = next); syncLocalStateToCloud(silent = true) }
     }
 
     fun cycleSubtitleStyle() {
         val next = when (_uiState.value.subtitleStyle) { "Bold" -> "Normal"; "Normal" -> "Background"; else -> "Bold" }
-        viewModelScope.launch { context.settingsDataStore.edit { it[subtitleStyleKey()] = next }; _uiState.value = _uiState.value.copy(subtitleStyle = next); syncLocalStateToCloud(silent = true) }
+        viewModelScope.launch { preferenceStore.settings.edit { it[subtitleStyleKey()] = next }; _uiState.value = _uiState.value.copy(subtitleStyle = next); syncLocalStateToCloud(silent = true) }
     }
 
     fun toggleSubtitleStylized() {
         val next = !_uiState.value.subtitleStylized
         viewModelScope.launch {
-            context.settingsDataStore.edit { it[subtitleStylizedKey()] = next }
+            preferenceStore.settings.edit { it[subtitleStylizedKey()] = next }
             _uiState.value = _uiState.value.copy(subtitleStylized = next)
             syncLocalStateToCloud(silent = true)
         }
@@ -1246,7 +1245,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setSubtitleAiEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { it[subtitleAiEnabledKey] = enabled }
+            preferenceStore.settings.edit { it[subtitleAiEnabledKey] = enabled }
             _uiState.value = _uiState.value.copy(subtitleAiEnabled = enabled)
             syncLocalStateToCloud(silent = true)
         }
@@ -1254,7 +1253,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setSubtitleAiAutoSelect(enabled: Boolean) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { it[subtitleAiAutoSelectKey] = enabled }
+            preferenceStore.settings.edit { it[subtitleAiAutoSelectKey] = enabled }
             _uiState.value = _uiState.value.copy(subtitleAiAutoSelect = enabled)
             syncLocalStateToCloud(silent = true)
         }
@@ -1262,7 +1261,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setSubtitleRemoveHearingImpaired(enabled: Boolean) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { it[subtitleRemoveHearingImpairedKey] = enabled }
+            preferenceStore.settings.edit { it[subtitleRemoveHearingImpairedKey] = enabled }
             _uiState.value = _uiState.value.copy(subtitleRemoveHearingImpaired = enabled)
             syncLocalStateToCloud(silent = true)
         }
@@ -1270,7 +1269,7 @@ class SettingsViewModel @Inject constructor(
 
     fun saveSubtitleAiApiKey(key: String) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { it[subtitleAiApiKeyKey] = key.trim() }
+            preferenceStore.settings.edit { it[subtitleAiApiKeyKey] = key.trim() }
             _uiState.value = _uiState.value.copy(subtitleAiApiKey = key.trim())
             syncLocalStateToCloud(silent = true)
         }
@@ -1278,7 +1277,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setSubtitleAiModel(model: SubtitleAiModel) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { it[subtitleAiModelKey] = model.name }
+            preferenceStore.settings.edit { it[subtitleAiModelKey] = model.name }
             _uiState.value = _uiState.value.copy(subtitleAiModel = model)
             syncLocalStateToCloud(silent = true)
         }
@@ -1301,7 +1300,7 @@ class SettingsViewModel @Inject constructor(
                 }
             ) ?: return@launch
             aiKeyServer = server
-            val ip = DeviceIpAddress.get(context) ?: "device-ip"
+            val ip = platformEnvironment.getDeviceIpAddress() ?: "device-ip"
             // Include the one-time pairing token as query param so the QR (scanned
             // by a phone) encodes the token and the server can validate it.
             val url = "http://$ip:${server.listeningPort}?t=${server.currentPairingToken}"
@@ -1364,7 +1363,7 @@ class SettingsViewModel @Inject constructor(
                 // so the first image request doesn't block
                 runCatching { OkHttpProvider.dns.lookup("image.tmdb.org") }
             }
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[dnsProviderKey] = value
             }
             _uiState.value = _uiState.value.copy(
@@ -1373,8 +1372,8 @@ class SettingsViewModel @Inject constructor(
             syncLocalStateToCloud(silent = true)
 
             // Replace Coil image loader with one using the new DNS
-            val imageLoader = withContext(Dispatchers.IO) {
-                OkHttpProvider.createCoilImageLoader(context)
+            val imageLoader = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.arflix.tv.network.OkHttpProvider.createCoilImageLoader(platformEnvironment.coilContext as android.content.Context)
             }
             coil3.SingletonImageLoader.setSafe { imageLoader }
         }
@@ -1383,7 +1382,7 @@ class SettingsViewModel @Inject constructor(
     fun setCustomUserAgent(value: String) {
         val trimmed = value.trim()
         viewModelScope.launch {
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 if (trimmed.isBlank()) {
                     prefs.remove(customUserAgentKey)
                 } else {
@@ -1400,7 +1399,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setIncludeSpecials(enabled: Boolean) {
         viewModelScope.launch {
-            context.settingsDataStore.edit { prefs ->
+            preferenceStore.settings.edit { prefs ->
                 prefs[includeSpecialsKey()] = enabled
             }
             _uiState.value = _uiState.value.copy(includeSpecials = enabled)
@@ -1485,7 +1484,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     private suspend fun saveQualityFilters(filters: List<QualityFilterConfig>) {
-        context.settingsDataStore.edit { prefs ->
+        preferenceStore.settings.edit { prefs ->
             prefs[qualityFiltersKey] = gson.toJson(filters)
         }
         // Device-scoped capability filter: intentionally local and not cloud-synced.
@@ -2771,7 +2770,7 @@ class SettingsViewModel @Inject constructor(
             updateStatusManager.updateStatus(com.arflix.tv.updater.UpdateStatus.Downloading(0f, update))
 
             val safeName = update.assetName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-            val dest = File(File(context.cacheDir, "updates"), safeName)
+            val dest = File(File(platformEnvironment.cacheDir, "updates"), safeName)
 
             val result = withContext(Dispatchers.IO) {
                 apkDownloader.download(update.assetUrl, dest) { downloaded, total ->
@@ -2816,18 +2815,18 @@ class SettingsViewModel @Inject constructor(
             return
         }
 
-        if (!ApkInstaller.canRequestPackageInstalls(context)) {
+        if (!platformEnvironment.canRequestPackageInstalls()) {
             _uiState.value = _uiState.value.copy(showUnknownSourcesDialog = true, showAppUpdateDialog = false)
             return
         }
 
-        val conflictMsg = ApkInstaller.checkSignatureConflict(context, apkFile)
+        val conflictMsg = platformEnvironment.checkSignatureConflict(apkFile)
         if (conflictMsg != null) {
             updateStatusManager.updateStatus(com.arflix.tv.updater.UpdateStatus.Failure(conflictMsg, update))
             return
         }
 
-        ApkInstaller.launchInstall(context, apkFile)
+        platformEnvironment.launchInstall(apkFile)
         updateStatusManager.updateStatus(com.arflix.tv.updater.UpdateStatus.Installing(update))
 
         viewModelScope.launch {
@@ -2836,9 +2835,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun openUnknownSourcesSettings() {
-        ApkInstaller.buildUnknownSourcesSettingsIntent(context)?.let { intent ->
-            context.startActivity(intent)
-        }
+        platformEnvironment.launchUnknownSourcesSettings()
     }
 
     // ========== Trakt Authentication ==========

@@ -1,6 +1,8 @@
 package com.arflix.tv.ui.screens.search
 
 import androidx.lifecycle.ViewModel
+import com.arflix.tv.data.repository.PreferenceStore
+import com.arflix.tv.data.repository.PlatformEnvironment
 import androidx.lifecycle.viewModelScope
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType

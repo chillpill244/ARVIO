@@ -1,10 +1,11 @@
 package com.arflix.tv.ui.screens.player
 
-import android.content.Context
 import android.util.Log
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.ViewModel
+import com.arflix.tv.data.repository.PreferenceStore
+import com.arflix.tv.data.repository.PlatformEnvironment
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
 import com.arflix.tv.BuildConfig
@@ -41,7 +42,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey as globalStringP
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -157,7 +157,7 @@ private object PlayerRegexes {
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+    private val preferenceStore: PreferenceStore, private val platformEnvironment: PlatformEnvironment,
     private val profileManager: ProfileManager,
     private val mediaRepository: MediaRepository,
     private val streamRepository: StreamRepository,
@@ -392,7 +392,7 @@ class PlayerViewModel @Inject constructor(
             // Explicit source navigation still passes preferred fields or a URL below.
             val preferredAudioLanguage = resolvePreferredAudioLanguage()
             val frameRateMatchingMode = resolveFrameRateMatchingMode()
-            val prefs = context.settingsDataStore.data.first()
+            val prefs = preferenceStore.settings.data.first()
             val subSize = prefs[profileManager.profileStringKey("subtitle_size")] ?: "Medium"
             val subColor = prefs[profileManager.profileStringKey("subtitle_color")] ?: "White"
             val subStyle = prefs[profileManager.profileStringKey("subtitle_style")] ?: "Bold"
@@ -1191,7 +1191,7 @@ class PlayerViewModel @Inject constructor(
 
     private suspend fun getDefaultSubtitle(): String {
         return try {
-            val prefs = context.settingsDataStore.data.first()
+            val prefs = preferenceStore.settings.data.first()
             val raw = prefs[defaultSubtitleKey()]?.trim().orEmpty()
             if (isSubtitleDisabledPreference(raw)) "Off" else raw
         } catch (_: Exception) {
@@ -1202,7 +1202,7 @@ class PlayerViewModel @Inject constructor(
     // Returns subs filtered to the preferred language(s) when the setting is enabled.
     // Tries primary language first; if nothing matches, tries secondary; falls back to full list.
     private suspend fun filterSubsByPreferredLanguage(subs: List<Subtitle>): List<Subtitle> {
-        val prefs = runCatching { context.settingsDataStore.data.first() }.getOrNull() ?: return subs
+        val prefs = runCatching { preferenceStore.settings.data.first() }.getOrNull() ?: return subs
         val enabled = prefs[filterSubtitlesByLanguageKey()] ?: true
         if (!enabled) return subs
         val preferred = prefs[defaultSubtitleKey()]?.trim().orEmpty()
@@ -1241,7 +1241,7 @@ class PlayerViewModel @Inject constructor(
 
     private suspend fun resolveFrameRateMatchingMode(): String {
         return try {
-            val prefs = context.settingsDataStore.data.first()
+            val prefs = preferenceStore.settings.data.first()
             when (prefs[frameRateMatchingModeKey()]?.trim()?.lowercase()) {
                 "off" -> "Off"
                 "seamless", "seamless only", "only if seamless", "only_if_seamless" -> "Seamless only"
@@ -1630,7 +1630,7 @@ class PlayerViewModel @Inject constructor(
 
     private suspend fun resolvePreferredAudioLanguage(): String {
         val setting = runCatching {
-            context.settingsDataStore.data.first()[defaultAudioLanguageKey()]
+            preferenceStore.settings.data.first()[defaultAudioLanguageKey()]
         }.getOrNull().orEmpty().trim()
 
         // "None" disables language preference entirely: no forced audio language and
@@ -2297,7 +2297,7 @@ class PlayerViewModel @Inject constructor(
             val key = normalizeLanguage(raw)
             if (key.isBlank()) return@launch
 
-            val prefs = context.settingsDataStore.data.first()
+            val prefs = preferenceStore.settings.data.first()
             val json = prefs[subtitleUsageKey()]
             val type = TypeToken.getParameterized(MutableMap::class.java, String::class.java, Int::class.javaObjectType).type
             val map: MutableMap<String, Int> = if (!json.isNullOrBlank()) {
@@ -2307,7 +2307,7 @@ class PlayerViewModel @Inject constructor(
             }
 
             map[key] = (map[key] ?: 0) + 1
-            context.settingsDataStore.edit { it[subtitleUsageKey()] = gson.toJson(map) }
+            preferenceStore.settings.edit { it[subtitleUsageKey()] = gson.toJson(map) }
         }
     }
 

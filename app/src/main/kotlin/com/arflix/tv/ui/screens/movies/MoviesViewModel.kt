@@ -1,21 +1,21 @@
 package com.arflix.tv.ui.screens.movies
 
-import android.content.Context
+import com.arflix.tv.data.repository.PreferenceStore
+import com.arflix.tv.data.repository.PlatformEnvironment
+
 import com.arflix.tv.data.api.TmdbApi
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.repository.IptvRepository
 import com.arflix.tv.ui.screens.shared.MediaCategoryViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
 @HiltViewModel
 class MoviesViewModel @Inject constructor(
     iptvRepository: IptvRepository,
     private val tmdbApi: TmdbApi,
-    @ApplicationContext context: Context
-) : MediaCategoryViewModel(MediaType.MOVIE, iptvRepository, context) {
+    preferenceStore: PreferenceStore, platformEnvironment: PlatformEnvironment,) : MediaCategoryViewModel(MediaType.MOVIE, iptvRepository, preferenceStore, platformEnvironment) {
 
     override suspend fun fetchCategoriesAndItems(): Pair<List<String>, Map<String, List<MediaItem>>> {
         val catalog = iptvRepository.getVodCatalog()

@@ -1,7 +1,8 @@
 package com.arflix.tv.data.api
 
 import androidx.annotation.Keep
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import retrofit2.http.GET
 import retrofit2.http.Path
 
@@ -24,15 +25,17 @@ interface JikanApi {
 }
 
 @Keep
+@Serializable
 data class JikanAnimeResponse(
-    @SerializedName("data") val data: JikanAnimeData?
+    @SerialName("data") val data: JikanAnimeData?
 )
 
 @Keep
+@Serializable
 data class JikanAnimeData(
-    @SerializedName("mal_id") val malId: Int?,
-    @SerializedName("title") val title: String?,
+    @SerialName("mal_id") val malId: Int?,
+    @SerialName("title") val title: String?,
     /** Community score 0-10 with 2 decimal places. Null if the entry is too new or unscored. */
-    @SerializedName("score") val score: Double?,
-    @SerializedName("scored_by") val scoredBy: Int?
+    @SerialName("score") val score: Double?,
+    @SerialName("scored_by") val scoredBy: Int?
 )

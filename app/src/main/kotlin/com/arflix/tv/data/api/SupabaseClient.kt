@@ -1,7 +1,8 @@
 package com.arflix.tv.data.api
 
 import com.arflix.tv.util.Constants
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
@@ -280,131 +281,140 @@ interface SupabaseApi {
 
 // ========== Data Models ==========
 
+@Serializable
 data class WatchHistoryRecord(
     val id: String? = null,
-    @SerializedName("user_id") val userId: String,
-    @SerializedName("profile_id") val profileId: String? = null,
-    @SerializedName("media_type") val mediaType: String, // "movie" or "tv"
-    @SerializedName("show_tmdb_id") val showTmdbId: Int? = null,
-    @SerializedName("show_trakt_id") val showTraktId: Int? = null,
+    @SerialName("user_id") val userId: String,
+    @SerialName("profile_id") val profileId: String? = null,
+    @SerialName("media_type") val mediaType: String, // "movie" or "tv"
+    @SerialName("show_tmdb_id") val showTmdbId: Int? = null,
+    @SerialName("show_trakt_id") val showTraktId: Int? = null,
     val season: Int? = null,
     val episode: Int? = null,
-    @SerializedName("trakt_episode_id") val traktEpisodeId: Int? = null,
-    @SerializedName("tmdb_episode_id") val tmdbEpisodeId: Int? = null,
+    @SerialName("trakt_episode_id") val traktEpisodeId: Int? = null,
+    @SerialName("tmdb_episode_id") val tmdbEpisodeId: Int? = null,
     val progress: Float, // 0.0 - 1.0
-    @SerializedName("position_seconds") val positionSeconds: Long,
-    @SerializedName("duration_seconds") val durationSeconds: Long,
-    @SerializedName("paused_at") val pausedAt: String? = null,
-    @SerializedName("updated_at") val updatedAt: String? = null,
+    @SerialName("position_seconds") val positionSeconds: Long,
+    @SerialName("duration_seconds") val durationSeconds: Long,
+    @SerialName("paused_at") val pausedAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
     val source: String? = null, // "trakt" or "arvio"
     val title: String? = null,
-    @SerializedName("episode_title") val episodeTitle: String? = null,
-    @SerializedName("backdrop_path") val backdropPath: String? = null,
-    @SerializedName("poster_path") val posterPath: String? = null,
-    @SerializedName("stream_key") val streamKey: String? = null,
-    @SerializedName("stream_addon_id") val streamAddonId: String? = null,
-    @SerializedName("stream_title") val streamTitle: String? = null,
-    @SerializedName("created_at") val createdAt: String? = null
+    @SerialName("episode_title") val episodeTitle: String? = null,
+    @SerialName("backdrop_path") val backdropPath: String? = null,
+    @SerialName("poster_path") val posterPath: String? = null,
+    @SerialName("stream_key") val streamKey: String? = null,
+    @SerialName("stream_addon_id") val streamAddonId: String? = null,
+    @SerialName("stream_title") val streamTitle: String? = null,
+    @SerialName("created_at") val createdAt: String? = null
 )
 
+@Serializable
 data class UserProfile(
     val id: String,
     val email: String?,
-    @SerializedName("trakt_token") val traktToken: com.google.gson.JsonObject?,
-    @SerializedName("default_subtitle") val defaultSubtitle: String?,
-    @SerializedName("auto_play_next") val autoPlayNext: Boolean?,
+    @SerialName("trakt_token") val traktToken: kotlinx.serialization.json.JsonObject?,
+    @SerialName("default_subtitle") val defaultSubtitle: String?,
+    @SerialName("auto_play_next") val autoPlayNext: Boolean?,
     val addons: String?, // JSON string of addon configs
-    @SerializedName("created_at") val createdAt: String?,
-    @SerializedName("updated_at") val updatedAt: String?
+    @SerialName("created_at") val createdAt: String?,
+    @SerialName("updated_at") val updatedAt: String?
 )
 
+@Serializable
 data class UserProfileUpdate(
-    @SerializedName("trakt_token") val traktToken: com.google.gson.JsonObject? = null,
-    @SerializedName("default_subtitle") val defaultSubtitle: String? = null,
-    @SerializedName("auto_play_next") val autoPlayNext: Boolean? = null,
+    @SerialName("trakt_token") val traktToken: kotlinx.serialization.json.JsonObject? = null,
+    @SerialName("default_subtitle") val defaultSubtitle: String? = null,
+    @SerialName("auto_play_next") val autoPlayNext: Boolean? = null,
     val addons: String? = null
 )
 
+@Serializable
 data class WatchlistRecord(
-    @SerializedName("user_id") val userId: String,
-    @SerializedName("tmdb_id") val tmdbId: Int,
-    @SerializedName("media_type") val mediaType: String,
-    @SerializedName("added_at") val addedAt: String? = null
+    @SerialName("user_id") val userId: String,
+    @SerialName("tmdb_id") val tmdbId: Int,
+    @SerialName("media_type") val mediaType: String,
+    @SerialName("added_at") val addedAt: String? = null
 )
 
+@Serializable
 data class WatchedMovieRecord(
-    @SerializedName("user_id") val userId: String,
-    @SerializedName("profile_id") val profileId: String? = null,
-    @SerializedName("tmdb_id") val tmdbId: Int,
-    @SerializedName("trakt_id") val traktId: Int? = null,
-    @SerializedName("watched_at") val watchedAt: String? = null
+    @SerialName("user_id") val userId: String,
+    @SerialName("profile_id") val profileId: String? = null,
+    @SerialName("tmdb_id") val tmdbId: Int,
+    @SerialName("trakt_id") val traktId: Int? = null,
+    @SerialName("watched_at") val watchedAt: String? = null
 )
 
+@Serializable
 data class WatchedEpisodeRecord(
-    @SerializedName("user_id") val userId: String,
-    @SerializedName("profile_id") val profileId: String? = null,
-    @SerializedName("tmdb_id") val showTmdbId: Int, // Show TMDB ID
+    @SerialName("user_id") val userId: String,
+    @SerialName("profile_id") val profileId: String? = null,
+    @SerialName("tmdb_id") val showTmdbId: Int, // Show TMDB ID
     val season: Int,
     val episode: Int,
-    @SerializedName("trakt_episode_id") val traktEpisodeId: Int? = null,
-    @SerializedName("tmdb_episode_id") val tmdbEpisodeId: Int? = null,
-    @SerializedName("show_trakt_id") val showTraktId: Int? = null,
-    @SerializedName("watched") val watched: Boolean? = true,
-    @SerializedName("watched_at") val watchedAt: String? = null,
+    @SerialName("trakt_episode_id") val traktEpisodeId: Int? = null,
+    @SerialName("tmdb_episode_id") val tmdbEpisodeId: Int? = null,
+    @SerialName("show_trakt_id") val showTraktId: Int? = null,
+    @SerialName("watched") val watched: Boolean? = true,
+    @SerialName("watched_at") val watchedAt: String? = null,
     val source: String? = null, // "trakt" or "arvio"
-    @SerializedName("updated_at") val updatedAt: String? = null
+    @SerialName("updated_at") val updatedAt: String? = null
 )
 
 /** Parameters for the mark_episode_watched RPC function */
+@Serializable
 data class MarkEpisodeWatchedParams(
-    @SerializedName("p_user_id") val userId: String,
-    @SerializedName("p_tmdb_id") val tmdbId: Int,
-    @SerializedName("p_season") val season: Int,
-    @SerializedName("p_episode") val episode: Int,
-    @SerializedName("p_show_trakt_id") val showTraktId: Int? = null,
-    @SerializedName("p_source") val source: String = "arvio"
+    @SerialName("p_user_id") val userId: String,
+    @SerialName("p_tmdb_id") val tmdbId: Int,
+    @SerialName("p_season") val season: Int,
+    @SerialName("p_episode") val episode: Int,
+    @SerialName("p_show_trakt_id") val showTraktId: Int? = null,
+    @SerialName("p_source") val source: String = "arvio"
 )
 
 /**
  * Episode progress record - tracks in-progress playback
  * Unique constraint: (user_id, tmdb_id, season, episode)
  */
+@Serializable
 data class EpisodeProgressRecord(
-    @SerializedName("user_id") val userId: String,
-    @SerializedName("tmdb_id") val tmdbId: Int, // Show TMDB ID (or movie TMDB ID)
-    @SerializedName("media_type") val mediaType: String, // "movie" or "tv"
+    @SerialName("user_id") val userId: String,
+    @SerialName("tmdb_id") val tmdbId: Int, // Show TMDB ID (or movie TMDB ID)
+    @SerialName("media_type") val mediaType: String, // "movie" or "tv"
     val season: Int? = null,
     val episode: Int? = null,
-    @SerializedName("trakt_id") val traktId: Int? = null, // Trakt episode ID
-    @SerializedName("show_trakt_id") val showTraktId: Int? = null, // Trakt show ID
+    @SerialName("trakt_id") val traktId: Int? = null, // Trakt episode ID
+    @SerialName("show_trakt_id") val showTraktId: Int? = null, // Trakt show ID
     val progress: Float, // 0.0-1.0
-    @SerializedName("position_seconds") val positionSeconds: Long,
-    @SerializedName("duration_seconds") val durationSeconds: Long,
-    @SerializedName("paused_at") val pausedAt: String? = null,
-    @SerializedName("last_updated_at") val lastUpdatedAt: String? = null,
+    @SerialName("position_seconds") val positionSeconds: Long,
+    @SerialName("duration_seconds") val durationSeconds: Long,
+    @SerialName("paused_at") val pausedAt: String? = null,
+    @SerialName("last_updated_at") val lastUpdatedAt: String? = null,
     val source: String? = null, // "trakt" or "arvio"
     val title: String? = null,
-    @SerializedName("episode_title") val episodeTitle: String? = null,
-    @SerializedName("backdrop_path") val backdropPath: String? = null,
-    @SerializedName("poster_path") val posterPath: String? = null
+    @SerialName("episode_title") val episodeTitle: String? = null,
+    @SerialName("backdrop_path") val backdropPath: String? = null,
+    @SerialName("poster_path") val posterPath: String? = null
 )
 
 /**
  * Sync state record - tracks Trakt sync status per user
  * Unique constraint: (user_id)
  */
+@Serializable
 data class SyncStateRecord(
-    @SerializedName("user_id") val userId: String,
-    @SerializedName("profile_id") val profileId: String? = null,
-    @SerializedName("last_sync_at") val lastSyncAt: String? = null,
-    @SerializedName("last_full_sync_at") val lastFullSyncAt: String? = null,
-    @SerializedName("last_trakt_activities") val lastTraktActivities: String? = null, // JSON string (legacy)
-    @SerializedName("last_trakt_activities_json") val lastTraktActivitiesJson: String? = null,
-    @SerializedName("movies_synced") val moviesSynced: Int = 0,
-    @SerializedName("episodes_synced") val episodesSynced: Int = 0,
-    @SerializedName("sync_in_progress") val syncInProgress: Boolean = false,
-    @SerializedName("last_error") val lastError: String? = null,
-    @SerializedName("updated_at") val updatedAt: String? = null
+    @SerialName("user_id") val userId: String,
+    @SerialName("profile_id") val profileId: String? = null,
+    @SerialName("last_sync_at") val lastSyncAt: String? = null,
+    @SerialName("last_full_sync_at") val lastFullSyncAt: String? = null,
+    @SerialName("last_trakt_activities") val lastTraktActivities: String? = null, // JSON string (legacy)
+    @SerialName("last_trakt_activities_json") val lastTraktActivitiesJson: String? = null,
+    @SerialName("movies_synced") val moviesSynced: Int = 0,
+    @SerialName("episodes_synced") val episodesSynced: Int = 0,
+    @SerialName("sync_in_progress") val syncInProgress: Boolean = false,
+    @SerialName("last_error") val lastError: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null
 )
 
 

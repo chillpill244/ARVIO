@@ -1,12 +1,15 @@
 package com.arflix.tv.data.model
 
-import java.util.UUID
+import kotlinx.serialization.Serializable
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /**
  * User profile - each profile has independent settings, Trakt, addons, etc.
  */
-data class Profile(
-    val id: String = UUID.randomUUID().toString(),
+@Serializable
+data class Profile @OptIn(ExperimentalUuidApi::class) constructor(
+    val id: String = Uuid.random().toString(),
     val name: String,
     val avatarColor: Long = ProfileColors.random(),
     val avatarId: Int = 0, // 0 = legacy letter+color, 1-24 = Compose-drawn avatar

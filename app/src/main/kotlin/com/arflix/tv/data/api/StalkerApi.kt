@@ -2,7 +2,8 @@ package com.arflix.tv.data.api
 
 import com.arflix.tv.data.model.IptvChannel
 import com.google.gson.Gson
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
@@ -121,26 +122,35 @@ class StalkerApi(
 
     // ── Response models ──
 
+@Serializable
     data class StalkerHandshakeResponse(val js: StalkerToken?)
+@Serializable
     data class StalkerToken(val token: String?)
 
+@Serializable
     data class StalkerGenreResponse(val js: List<StalkerGenre>?)
+@Serializable
     data class StalkerGenre(val id: String?, val title: String?)
 
+@Serializable
     data class StalkerChannelResponse(val js: StalkerChannelData?)
+@Serializable
     data class StalkerChannelData(
         val data: List<StalkerChannel>?,
-        @SerializedName("total_items") val totalItems: Int?,
-        @SerializedName("max_page_items") val maxPageItems: Int?
+        @SerialName("total_items") val totalItems: Int?,
+        @SerialName("max_page_items") val maxPageItems: Int?
     )
+@Serializable
     data class StalkerChannel(
         val id: Int?,
         val name: String?,
         val logo: String?,
         val cmd: String?,
-        @SerializedName("tv_genre_id") val tvGenreId: String?
+        @SerialName("tv_genre_id") val tvGenreId: String?
     )
 
+@Serializable
     data class StalkerLinkResponse(val js: StalkerLink?)
+@Serializable
     data class StalkerLink(val cmd: String?)
 }

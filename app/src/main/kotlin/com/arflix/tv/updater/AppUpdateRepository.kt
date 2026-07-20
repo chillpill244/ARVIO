@@ -5,7 +5,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import com.arflix.tv.BuildConfig
 import com.google.gson.Gson
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import dagger.hilt.android.qualifiers.ApplicationContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -14,14 +15,15 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Serializable
 private data class GitHubReleaseDto(
-    @SerializedName("tag_name") val tagName: String?,
-    @SerializedName("name") val name: String?,
-    @SerializedName("body") val body: String?,
-    @SerializedName("html_url") val htmlUrl: String?,
-    @SerializedName("draft") val draft: Boolean,
-    @SerializedName("prerelease") val prerelease: Boolean,
-    @SerializedName("assets") val assets: List<GitHubAssetDto>
+    @SerialName("tag_name") val tagName: String?,
+    @SerialName("name") val name: String?,
+    @SerialName("body") val body: String?,
+    @SerialName("html_url") val htmlUrl: String?,
+    @SerialName("draft") val draft: Boolean,
+    @SerialName("prerelease") val prerelease: Boolean,
+    @SerialName("assets") val assets: List<GitHubAssetDto>
 )
 
 @Singleton

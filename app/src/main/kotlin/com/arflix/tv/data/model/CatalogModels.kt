@@ -1,7 +1,9 @@
 package com.arflix.tv.data.model
 
-import java.io.Serializable
+import kotlinx.serialization.Serializable
 
+
+@Serializable
 enum class CatalogSourceType {
     PREINSTALLED,
     TRAKT,
@@ -10,12 +12,14 @@ enum class CatalogSourceType {
     HOME_SERVER
 }
 
+@Serializable
 enum class CatalogKind {
     STANDARD,
     COLLECTION,
     COLLECTION_RAIL
 }
 
+@Serializable
 enum class CollectionGroupKind {
     FEATURED,
     SERVICE,
@@ -25,11 +29,13 @@ enum class CollectionGroupKind {
     NETWORK
 }
 
+@Serializable
 enum class CollectionTileShape {
     LANDSCAPE,
     POSTER
 }
 
+@Serializable
 enum class CollectionSourceKind {
     ADDON_CATALOG,
     TMDB_GENRE,
@@ -56,6 +62,7 @@ enum class CollectionSourceKind {
     MDBLIST_PUBLIC
 }
 
+@Serializable
 data class CollectionSourceConfig(
     val kind: CollectionSourceKind,
     val mediaType: String? = null,
@@ -75,8 +82,9 @@ data class CollectionSourceConfig(
     // Path component after /lists/, e.g. "jxduffy/star-wars-chronological-order".
     // Resolved against the public mdblist JSON endpoint at runtime.
     val mdblistSlug: String? = null
-) : Serializable
+)
 
+@Serializable
 data class CatalogConfig(
     val id: String,
     val title: String,
@@ -101,8 +109,9 @@ data class CatalogConfig(
     val collectionHideTitle: Boolean = false,
     val collectionSources: List<CollectionSourceConfig> = emptyList(),
     val requiredAddonUrls: List<String> = emptyList()
-) : Serializable
+)
 
+@Serializable
 data class CatalogDiscoveryResult(
     val id: String,
     val title: String,
@@ -117,6 +126,7 @@ data class CatalogDiscoveryResult(
     val previewPosterUrls: List<String> = emptyList()
 )
 
+@Serializable
 data class CatalogValidationResult(
     val isValid: Boolean,
     val normalizedUrl: String? = null,

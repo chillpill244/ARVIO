@@ -1,10 +1,12 @@
 package com.arflix.tv.data.model
 
-import java.time.Instant
+import kotlinx.serialization.Serializable
+
 
 /**
  * IPTV channel parsed from an M3U playlist.
  */
+@Serializable
 data class IptvChannel(
     val id: String,
     val name: String,
@@ -29,6 +31,7 @@ data class IptvChannel(
 /**
  * Compact now/next program slice for a channel.
  */
+@Serializable
 data class IptvNowNext(
     val now: IptvProgram? = null,
     val next: IptvProgram? = null,
@@ -40,6 +43,7 @@ data class IptvNowNext(
 /**
  * EPG program row.
  */
+@Serializable
 data class IptvProgram(
     val title: String,
     val description: String? = null,
@@ -54,6 +58,7 @@ data class IptvProgram(
 /**
  * Loaded IPTV snapshot used by UI.
  */
+@Serializable
 data class IptvSnapshot(
     val channels: List<IptvChannel> = emptyList(),
     val grouped: Map<String, List<IptvChannel>> = emptyMap(),
@@ -63,7 +68,7 @@ data class IptvSnapshot(
     val hiddenGroups: List<String> = emptyList(),
     val groupOrder: List<String> = emptyList(),
     val epgWarning: String? = null,
-    val loadedAt: Instant = Instant.now()
+    val loadedAt: Long = System.currentTimeMillis()
 )
 
 /**

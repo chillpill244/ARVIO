@@ -7,11 +7,12 @@ import com.arflix.tv.data.model.Profile
 import com.arflix.tv.data.model.ProfileColors
 import com.arflix.tv.util.profilesDataStore
 import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
@@ -24,8 +25,8 @@ class ProfileRepository @Inject constructor(
     private val profileAvatarImageManager: ProfileAvatarImageManager,
     private val invalidationBus: CloudSyncInvalidationBus
 ) {
-    private val gson = Gson()
-    private val profileListType = TypeToken.getParameterized(List::class.java, Profile::class.java).type
+    private val gson = Gson() // Kept for org.json interoperability if needed, but we use Json for Profiles
+    private val json = Json { ignoreUnknownKeys = true }
 
     companion object {
         private val PROFILES_KEY = stringPreferencesKey("profiles")
@@ -184,7 +185,7 @@ class ProfileRepository @Inject constructor(
         }
 
         context.profilesDataStore.edit { prefs ->
-            prefs[PROFILES_KEY] = gson.toJson(mergedProfiles)
+            prefs[PROFILES_KEY] = json.encodeToString(mergedProfiles)
             if (!activeProfileId.isNullOrBlank() && mergedProfiles.any { it.id == activeProfileId }) {
                 prefs[ACTIVE_PROFILE_KEY] = activeProfileId
             } else if (mergedProfiles.isNotEmpty()) {
@@ -204,7 +205,7 @@ class ProfileRepository @Inject constructor(
         val activeProfileId = getActiveProfileId()
         authRepository.mutateAccountSyncPayload { root ->
             root.put("activeProfileId", activeProfileId ?: JSONObject.NULL)
-            root.put("profiles", JSONArray(gson.toJson(profiles)))
+            root.put("profiles", JSONArray(json.encodeToString(profiles)))
             root.put(
                 "profileAvatarImagesById",
                 profileAvatarImageManager.buildInlineAvatarImagesJson(
@@ -227,16 +228,16 @@ class ProfileRepository @Inject constructor(
         )
     }
 
-    private fun decodeProfiles(json: String?): List<Profile> {
-        if (json.isNullOrBlank()) return emptyList()
+    private fun decodeProfiles(jsonString: String?): List<Profile> {
+        if (jsonString.isNullOrBlank()) return emptyList()
         return try {
-            gson.fromJson<List<Profile>>(json, profileListType) ?: emptyList()
+            json.decodeFromString<List<Profile>>(jsonString)
         } catch (_: Exception) {
             emptyList()
         }
     }
 
     private fun encodeProfiles(profiles: List<Profile>): String {
-        return gson.toJson(profiles, profileListType)
+        return json.encodeToString(profiles)
     }
 }

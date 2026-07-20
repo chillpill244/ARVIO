@@ -1,13 +1,14 @@
 package com.arflix.tv.ui.screens.home
 
 import android.app.ActivityManager
-import android.content.Context
 import com.arflix.tv.util.settingsDataStore
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import android.os.SystemClock
 import androidx.lifecycle.ViewModel
+import com.arflix.tv.data.repository.PreferenceStore
+import com.arflix.tv.data.repository.PlatformEnvironment
 import androidx.lifecycle.viewModelScope
 import coil3.ImageLoader
 import coil3.imageLoader
@@ -40,7 +41,6 @@ import com.arflix.tv.util.DeviceType
 import com.arflix.tv.util.LAST_APP_LANGUAGE_KEY
 import com.arflix.tv.util.detectDeviceType
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -135,10 +135,9 @@ class HomeViewModel @Inject constructor(
     private val updatePreferences: com.arflix.tv.updater.UpdatePreferences,
     private val updateStatusManager: com.arflix.tv.updater.UpdateStatusManager,
     private val youTubeExtractor: com.arflix.tv.data.api.InAppYouTubeExtractor,
-    @ApplicationContext private val context: Context
-) : ViewModel() {
+    private val preferenceStore: PreferenceStore, private val platformEnvironment: PlatformEnvironment,) : ViewModel() {
     private val imageLoader: ImageLoader by lazy(LazyThreadSafetyMode.NONE) {
-        context.imageLoader
+        platformEnvironment.imageLoader
     }
 
     private data class HeroDetailsSnapshot(
@@ -216,7 +215,7 @@ class HomeViewModel @Inject constructor(
     private suspend fun isCatalogPosterMode(catalogId: String): Boolean {
         return withContext(Dispatchers.IO) {
             try {
-                val prefs = context.settingsDataStore.data.first()
+                val prefs = preferenceStore.settings.data.first()
                 val profileId = profileManager.getProfileIdSync().ifBlank { "default" }
                 
                 // 1. Check specific row layout mode
@@ -257,7 +256,7 @@ class HomeViewModel @Inject constructor(
         
         if (isCatalogPosterMode(catalog.id)) {
             // Dynamic limit calculation for portrait (poster) catalogs
-            val screenWidthDp = context.resources.configuration.screenWidthDp
+            val screenWidthDp = platformEnvironment.screenWidthDp
             val posterWidth = if (isTvDevice) 119 else 124
             val posterSpacing = if (isTvDevice) 14 else 10
             val padding = 16
@@ -275,7 +274,7 @@ class HomeViewModel @Inject constructor(
     private suspend fun getCategoryPageSize(categoryId: String): Int {
         if (isCatalogPosterMode(categoryId)) {
             // Dynamic limit calculation for portrait (poster) catalogs
-            val screenWidthDp = context.resources.configuration.screenWidthDp
+            val screenWidthDp = platformEnvironment.screenWidthDp
             val posterWidth = if (isTvDevice) 119 else 124
             val posterSpacing = if (isTvDevice) 14 else 10
             val padding = 16
@@ -794,12 +793,12 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private val isTvDevice = detectDeviceType(context) == DeviceType.TV
-    private val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+    private val isTvDevice = platformEnvironment.isTvDevice
+    private val memoryStatus = platformEnvironment.getMemoryStatus()
     private val isLowRamDevice =
-        activityManager.isLowRamDevice ||
-            activityManager.memoryClass <= 256 ||
-            (isTvDevice && activityManager.memoryClass <= 384)
+        memoryStatus.isLowRamDevice ||
+            memoryStatus.memoryClass <= 256 ||
+            (isTvDevice && memoryStatus.memoryClass <= 384)
     private val gson = com.google.gson.Gson()
 
     // Disk cache key for the home categories — profile-scoped so each profile gets
@@ -816,11 +815,11 @@ class HomeViewModel @Inject constructor(
             .replace(HomeVMRegexes.ALPHANUMERIC_REGEX, "_")
         val language = (mediaRepository.contentLanguage ?: "en-US")
             .replace(HomeVMRegexes.ALPHANUMERIC_REGEX, "_")
-        return java.io.File(context.cacheDir, "home_categories_cache_${profileId}_$language.json")
+        return java.io.File(platformEnvironment.cacheDir, "home_categories_cache_${profileId}_$language.json")
     }
 
     private suspend fun applyContentLanguageFromPrefs(): String {
-        val prefs = context.settingsDataStore.data.first()
+        val prefs = preferenceStore.settings.data.first()
         val profileId = profileManager.getProfileId()
         val fallbackLanguage = prefs[LAST_APP_LANGUAGE_KEY] ?: "en-US"
         val language = prefs[profileManager.profileStringKeyFor(profileId, "content_language")]
@@ -909,13 +908,13 @@ class HomeViewModel @Inject constructor(
     private val homeLandscapeCardWidthDp = 210
     private val homeLogoWidthDp = 220
     private val homeLogoHeightDp = 64
-    private val logoPreloadWidth = (homeLogoWidthDp * context.resources.displayMetrics.density)
+    private val logoPreloadWidth = (homeLogoWidthDp * platformEnvironment.density)
         .toInt()
         .coerceAtLeast(1)
-    private val logoPreloadHeight = (homeLogoHeightDp * context.resources.displayMetrics.density)
+    private val logoPreloadHeight = (homeLogoHeightDp * platformEnvironment.density)
         .toInt()
         .coerceAtLeast(1)
-    private val cardBackdropWidth = (homeLandscapeCardWidthDp * context.resources.displayMetrics.density)
+    private val cardBackdropWidth = (homeLandscapeCardWidthDp * platformEnvironment.density)
         .toInt()
         .coerceAtLeast(1)
     private val cardBackdropHeight = (cardBackdropWidth / (16f / 9f))
@@ -953,7 +952,7 @@ class HomeViewModel @Inject constructor(
     private val logoCache = LinkedHashMap<String, String>(maxLogoCacheEntries + 32, 0.75f, true)
     private var logoCacheRevision: Long = 0L
     private var lastPublishedLogoCacheRevision: Long = -1L
-    private val logoCachePrefs = context.getSharedPreferences("logo_cache", Context.MODE_PRIVATE)
+    private val logoCachePrefs = preferenceStore.getSharedPreferences("logo_cache")
     private var logoCacheDiskWriteJob: Job? = null
     private val logoFetchInFlight = Collections.synchronizedSet(mutableSetOf<String>())
     private val heroDetailsCache = ConcurrentHashMap<String, HeroDetailsSnapshot>()
@@ -1264,7 +1263,7 @@ class HomeViewModel @Inject constructor(
         // Load top-level UI preferences used on Home
         viewModelScope.launch {
             try {
-                val prefs = context.settingsDataStore.data.first()
+                val prefs = preferenceStore.settings.data.first()
                 // Search for any profile key that matches trailer_auto_play
                 val trailerEnabled = prefs.asMap().any { (key, value) ->
                     key.name.endsWith("_trailer_auto_play") && value == true
@@ -2829,7 +2828,7 @@ class HomeViewModel @Inject constructor(
             val requestWidth = width.coerceAtLeast(1)
             val requestHeight = height.coerceAtLeast(1)
             val cacheKey = "$url|${requestWidth}x$requestHeight"
-            val request = ImageRequest.Builder(context)
+            val request = coil3.request.ImageRequest.Builder(platformEnvironment.coilContext)
                 .data(url)
                 .size(requestWidth, requestHeight)
                 .precision(Precision.INEXACT)
@@ -4227,7 +4226,7 @@ class HomeViewModel @Inject constructor(
             updateStatusManager.updateStatus(com.arflix.tv.updater.UpdateStatus.Downloading(0f, update))
 
             val safeName = update.assetName.replace(HomeVMRegexes.FILE_NAME_REGEX, "_")
-            val dest = java.io.File(java.io.File(context.cacheDir, "updates"), safeName)
+            val dest = java.io.File(java.io.File(platformEnvironment.cacheDir, "updates"), safeName)
 
             val result = kotlinx.coroutines.withContext(Dispatchers.IO) {
                 apkDownloader.download(update.assetUrl, dest) { downloaded, total ->
@@ -4273,18 +4272,18 @@ class HomeViewModel @Inject constructor(
             return
         }
 
-        if (!com.arflix.tv.updater.ApkInstaller.canRequestPackageInstalls(context)) {
+        if (!platformEnvironment.canRequestPackageInstalls()) {
             // If we can't request package installs, we should let the user know, but for now
             // launchInstall handles falling back to Intent.ACTION_VIEW
         }
 
-        val conflictMsg = com.arflix.tv.updater.ApkInstaller.checkSignatureConflict(context, apkFile)
+        val conflictMsg = platformEnvironment.checkSignatureConflict(apkFile)
         if (conflictMsg != null) {
             updateStatusManager.updateStatus(com.arflix.tv.updater.UpdateStatus.Failure(conflictMsg, update))
             return
         }
 
-        com.arflix.tv.updater.ApkInstaller.launchInstall(context, apkFile)
+        platformEnvironment.launchInstall(apkFile)
         updateStatusManager.updateStatus(com.arflix.tv.updater.UpdateStatus.Installing(update))
 
         // Mark this release as ignored so it doesn't pop up again if the user cancels the install

@@ -1330,7 +1330,7 @@ class IptvRepository @Inject constructor(
                     nowNext = emptyMap(),
                     favoriteGroups = observeFavoriteGroups().first(),
                     favoriteChannels = observeFavoriteChannels().first(),
-                    loadedAt = Instant.now()
+                    loadedAt = System.currentTimeMillis()
                 )
             }
 
@@ -1339,7 +1339,7 @@ class IptvRepository @Inject constructor(
                 onProgress(IptvLoadProgress("Connecting to Stalker portal...", 10))
                 val stalker = com.arflix.tv.data.api.StalkerApi(config.stalkerPortalUrl, config.stalkerMacAddress)
                 if (!stalker.handshake()) {
-                    return@withContext IptvSnapshot(epgWarning = "Stalker handshake failed. Check Portal URL and MAC.", loadedAt = Instant.now())
+                    return@withContext IptvSnapshot(epgWarning = "Stalker handshake failed. Check Portal URL and MAC.", loadedAt = System.currentTimeMillis())
                 }
                 onProgress(IptvLoadProgress("Loading channels from portal...", 30))
                 stalker.getProfile()
@@ -1361,7 +1361,7 @@ class IptvRepository @Inject constructor(
                     favoriteChannels = favChannels,
                     hiddenGroups = hiddenGroups,
                     groupOrder = groupOrder,
-                    loadedAt = Instant.now()
+                    loadedAt = System.currentTimeMillis()
                 )
                 onProgress(IptvLoadProgress("Done", 100))
                 return@withContext snapshot
@@ -1693,7 +1693,7 @@ class IptvRepository @Inject constructor(
             }
 
             val loadedAtMillis = if (cachedPlaylistAt > 0L) cachedPlaylistAt else now
-            val loadedAtInstant = Instant.ofEpochMilli(loadedAtMillis)
+            val loadedAtInstant = loadedAtMillis
 
             val hiddenGroups = observeHiddenGroups().first()
             val groupOrder = observeGroupOrder().first()
@@ -1778,7 +1778,7 @@ class IptvRepository @Inject constructor(
                         nowNext = emptyMap(),
                         favoriteGroups = observeFavoriteGroups().first(),
                         favoriteChannels = observeFavoriteChannels().first(),
-                        loadedAt = Instant.now()
+                        loadedAt = System.currentTimeMillis()
                     )
                 }
 
@@ -1805,14 +1805,14 @@ class IptvRepository @Inject constructor(
                     favoriteGroups = favoriteGroups,
                     favoriteChannels = favoriteChannels,
                     epgWarning = null,
-                    loadedAt = Instant.ofEpochMilli(loadedAtMillis)
+                    loadedAt = loadedAtMillis
                 )
             }
         }
     }
 
     fun isSnapshotStale(snapshot: IptvSnapshot): Boolean {
-        val ageMs = System.currentTimeMillis() - snapshot.loadedAt.toEpochMilli()
+        val ageMs = System.currentTimeMillis() - snapshot.loadedAt
         return ageMs > staleAfterMs
     }
 
@@ -1844,7 +1844,7 @@ class IptvRepository @Inject constructor(
             favoriteGroups = favoriteGroups,
             favoriteChannels = favoriteChannels,
             epgWarning = null,
-            loadedAt = Instant.ofEpochMilli(loadedAtMillis)
+            loadedAt = loadedAtMillis
         )
     }
 

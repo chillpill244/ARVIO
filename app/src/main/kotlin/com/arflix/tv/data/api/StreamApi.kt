@@ -1,6 +1,7 @@
 package com.arflix.tv.data.api
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import retrofit2.http.GET
 import retrofit2.http.Url
 
@@ -108,6 +109,7 @@ interface StreamApi {
  * Stremio addon manifest response - matches Stremio protocol
  * https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/manifest.md
  */
+@Serializable
 data class StremioManifestResponse(
     val id: String,
     val name: String,
@@ -116,18 +118,20 @@ data class StremioManifestResponse(
     val logo: String? = null,
     val background: String? = null,
     val types: List<String>? = null,
-    val resources: List<Any>? = null,  // Can be String or StremioResourceDescriptor
+    val resources: List<kotlinx.serialization.json.JsonElement>? = null,  // Can be String or StremioResourceDescriptor
     val catalogs: List<StremioCatalog>? = null,
     val idPrefixes: List<String>? = null,
     val behaviorHints: StremioAddonBehaviorHints? = null
 )
 
+@Serializable
 data class StremioResourceDescriptor(
     val name: String,
     val types: List<String>? = null,
     val idPrefixes: List<String>? = null
 )
 
+@Serializable
 data class StremioCatalog(
     val type: String,
     val id: String,
@@ -136,12 +140,14 @@ data class StremioCatalog(
     val extra: List<StremioCatalogExtra>? = null
 )
 
+@Serializable
 data class StremioCatalogExtra(
     val name: String,
     val isRequired: Boolean? = null,
     val options: List<String>? = null
 )
 
+@Serializable
 data class StremioAddonBehaviorHints(
     val adult: Boolean? = null,
     val p2p: Boolean? = null,
@@ -151,28 +157,33 @@ data class StremioAddonBehaviorHints(
 
 // ========== Stremio Stream Models ==========
 
+@Serializable
 data class StremioStreamResponse(
     val streams: List<StremioStream>? = null
 )
 
+@Serializable
 data class StremioCatalogResponse(
     val metas: List<StremioMetaPreview>? = null,
     val items: List<StremioMetaPreview>? = null
 )
 
+@Serializable
 data class StremioMetaPreview(
     val id: String? = null,
     val type: String? = null,
     val name: String? = null,
-    @SerializedName("imdb_id") val imdbId: String? = null,
-    @SerializedName("tmdb_id") val tmdbId: String? = null,
-    @SerializedName("moviedb_id") val moviedbId: String? = null
+    @SerialName("imdb_id") val imdbId: String? = null,
+    @SerialName("tmdb_id") val tmdbId: String? = null,
+    @SerialName("moviedb_id") val moviedbId: String? = null
 )
 
+@Serializable
 data class StremioMetaResponse(
     val meta: StremioMetaPreview? = null
 )
 
+@Serializable
 data class StremioStream(
     val name: String? = null,
     val title: String? = null,
@@ -182,7 +193,7 @@ data class StremioStream(
     val fileIdx: Int? = null,
     val ytId: String? = null,              // YouTube video ID
     val externalUrl: String? = null,        // External URL to open
-    @SerializedName("headers") val headers: Map<String, String>? = null,
+    @SerialName("headers") val headers: Map<String, String>? = null,
     val behaviorHints: StreamBehaviorHints? = null,
     val sources: List<String>? = null,
     val subtitles: List<StremioSubtitle>? = null
@@ -328,23 +339,26 @@ data class StremioStream(
 /**
  * Stream behavior hints - enhanced to match full Stremio protocol
  */
+@Serializable
 data class StreamBehaviorHints(
     val notWebReady: Boolean? = null,       // Stream needs transcoding
     val cached: Boolean? = null,             // Already cached in debrid
     val bingeGroup: String? = null,          // Group for binge watching
     val countryWhitelist: List<String>? = null,
     val proxyHeaders: StremioProxyHeaders? = null,
-    @SerializedName("headers") val headers: Map<String, String>? = null,
+    @SerialName("headers") val headers: Map<String, String>? = null,
     val videoHash: String? = null,
     val videoSize: Long? = null,
     val filename: String? = null
 )
 
+@Serializable
 data class StremioProxyHeaders(
     val request: Map<String, String>? = null,
     val response: Map<String, String>? = null
 )
 
+@Serializable
 data class StremioSubtitle(
     val id: String? = null,
     val url: String? = null,
@@ -352,22 +366,26 @@ data class StremioSubtitle(
     val label: String? = null
 )
 
+@Serializable
 data class StremioSubtitleResponse(
     val subtitles: List<StremioSubtitle>? = null
 )
 
 // ========== Kitsu API Models ==========
 
+@Serializable
 data class KitsuSearchResponse(
     val data: List<KitsuAnime>?
 )
 
+@Serializable
 data class KitsuAnime(
     val id: String,
     val type: String?,
     val attributes: KitsuAnimeAttributes?
 )
 
+@Serializable
 data class KitsuAnimeAttributes(
     val canonicalTitle: String?,
     val titles: Map<String, String>?,
@@ -378,11 +396,13 @@ data class KitsuAnimeAttributes(
 
 // ========== Kitsu Mapping API Models ==========
 
+@Serializable
 data class KitsuMappingResponse(
     val data: List<KitsuMapping>?,
     val included: List<KitsuIncludedItem>?
 )
 
+@Serializable
 data class KitsuMapping(
     val id: String,
     val type: String?,
@@ -390,24 +410,29 @@ data class KitsuMapping(
     val relationships: KitsuMappingRelationships?
 )
 
+@Serializable
 data class KitsuMappingAttributes(
     val externalSite: String?,
     val externalId: String?
 )
 
+@Serializable
 data class KitsuMappingRelationships(
     val item: KitsuRelationshipData?
 )
 
+@Serializable
 data class KitsuRelationshipData(
     val data: KitsuRelationshipItem?
 )
 
+@Serializable
 data class KitsuRelationshipItem(
     val id: String?,
     val type: String?
 )
 
+@Serializable
 data class KitsuIncludedItem(
     val id: String,
     val type: String?,
@@ -416,10 +441,12 @@ data class KitsuIncludedItem(
 
 // ========== Kitsu Anime Detail API Models ==========
 
+@Serializable
 data class KitsuAnimeDetailResponse(
     val data: KitsuAnimeDetail?
 )
 
+@Serializable
 data class KitsuAnimeDetail(
     val id: String,
     val type: String?,
@@ -428,11 +455,13 @@ data class KitsuAnimeDetail(
 
 // ========== Kitsu Media Relationships API Models ==========
 
+@Serializable
 data class KitsuMediaRelationshipsResponse(
     val data: List<KitsuMediaRelationship>?,
     val included: List<KitsuIncludedAnime>?
 )
 
+@Serializable
 data class KitsuMediaRelationship(
     val id: String,
     val type: String?,
@@ -440,14 +469,17 @@ data class KitsuMediaRelationship(
     val relationships: KitsuMediaRelationshipRels?
 )
 
+@Serializable
 data class KitsuMediaRelationshipAttributes(
     val role: String?  // "sequel", "prequel", "side_story", "alternative_setting", etc.
 )
 
+@Serializable
 data class KitsuMediaRelationshipRels(
     val destination: KitsuRelationshipData?
 )
 
+@Serializable
 data class KitsuIncludedAnime(
     val id: String,
     val type: String?,
@@ -460,15 +492,16 @@ data class KitsuIncludedAnime(
  * ARM API mapping entry - maps between anime database IDs
  * Each entry represents one season/entry in different databases
  */
+@Serializable
 data class ArmMappingEntry(
     val kitsu: Int? = null,
     val anilist: Int? = null,
     val myanimelist: Int? = null,
     val anidb: Int? = null,
-    @SerializedName("anime-planet") val animePlanet: String? = null,
+    @SerialName("anime-planet") val animePlanet: String? = null,
     val anisearch: Int? = null,
     val livechart: Int? = null,
-    @SerializedName("notify-moe") val notifyMoe: String? = null,
+    @SerialName("notify-moe") val notifyMoe: String? = null,
     val imdb: String? = null,
     val themoviedb: Int? = null,
     val thetvdb: Int? = null

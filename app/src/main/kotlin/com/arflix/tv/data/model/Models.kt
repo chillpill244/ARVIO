@@ -1,12 +1,14 @@
 package com.arflix.tv.data.model
 
+import kotlinx.serialization.Serializable
+
 import androidx.compose.runtime.Immutable
-import java.io.Serializable
 
 /**
  * Media item - represents a movie or TV show
  * Matches webapp's MediaItem type
  */
+@Serializable
 @Immutable
 data class MediaItem(
     val id: Int,
@@ -62,8 +64,9 @@ data class MediaItem(
     // MDBList-sourced scores (only populated for items loaded from MDBList catalogs)
     val rtScore: String? = null,
     val popcornScore: String? = null,
-) : Serializable
+)
 
+@Serializable
 enum class MediaType {
     MOVIE, TV
 }
@@ -71,6 +74,7 @@ enum class MediaType {
 /**
  * Next episode to watch
  */
+@Serializable
 @Immutable
 data class NextEpisode(
     val id: Int,
@@ -78,11 +82,12 @@ data class NextEpisode(
     val episodeNumber: Int,
     val name: String,
     val overview: String = ""
-) : Serializable
+)
 
 /**
  * Episode details
  */
+@Serializable
 @Immutable
 data class Episode(
     val id: Int,
@@ -96,22 +101,24 @@ data class Episode(
     val runtime: Int = 0,
     val airDate: String = "",
     val isWatched: Boolean = false
-) : Serializable
+)
 
 /**
  * Cast member
  */
+@Serializable
 @Immutable
 data class CastMember(
     val id: Int,
     val name: String,
     val character: String = "",
     val profilePath: String? = null
-) : Serializable
+)
 
 /**
  * Community review shown on details pages.
  */
+@Serializable
 @Immutable
 data class Review(
     val id: String,
@@ -121,11 +128,12 @@ data class Review(
     val content: String,
     val rating: Float? = null,
     val createdAt: String = ""
-) : Serializable
+)
 
 /**
  * Person details (for cast modal)
  */
+@Serializable
 @Immutable
 data class PersonDetails(
     val id: Int,
@@ -135,17 +143,18 @@ data class PersonDetails(
     val birthday: String? = null,
     val profilePath: String? = null,
     val knownFor: List<MediaItem> = emptyList()
-) : Serializable
+)
 
 /**
  * Category/Row of media items
  */
+@Serializable
 @Immutable
 data class Category(
     val id: String,
     val title: String,
     val items: List<MediaItem>
-) : Serializable
+)
 
 /**
  * Stream source from addons - enhanced with behavior hints.
@@ -155,6 +164,7 @@ data class Category(
  * immutable types (StreamBehaviorHints is also @Immutable; subtitles/sources
  * lists are constructed once and treated as immutable by convention).
  */
+@Serializable
 @Immutable
 data class StreamSource(
     val source: String,
@@ -172,12 +182,13 @@ data class StreamSource(
     // across more addons.
     val sources: List<String> = emptyList(),
     val description: String? = null
-) : Serializable
+)
 
 /**
  * Stream behavior hints - all primitive / immutable fields, safe for
  * @Immutable so it composes stably inside a StreamSource list.
  */
+@Serializable
 @Immutable
 data class StreamBehaviorHints(
     val notWebReady: Boolean = false,
@@ -188,16 +199,18 @@ data class StreamBehaviorHints(
     val videoHash: String? = null,
     val videoSize: Long? = null,
     val filename: String? = null
-) : Serializable
+)
 
+@Serializable
 data class ProxyHeaders(
     val request: Map<String, String>? = null,
     val response: Map<String, String>? = null
-) : Serializable
+)
 
 /**
  * Subtitle track
  */
+@Serializable
 data class Subtitle(
     val id: String,
     val url: String,
@@ -208,12 +221,13 @@ data class Subtitle(
     val groupIndex: Int? = null,
     val trackIndex: Int? = null,
     val isForced: Boolean = false,
-) : Serializable
+)
 
 /**
  * Stremio Addon Manifest - full support for any Stremio addon
  * Based on: https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/manifest.md
  */
+@Serializable
 data class AddonManifest(
     val id: String,
     val name: String,
@@ -226,44 +240,49 @@ data class AddonManifest(
     val catalogs: List<AddonCatalog> = emptyList(),
     val idPrefixes: List<String>? = null,          // ["tt"] for IMDB, ["kitsu:"] for Kitsu
     val behaviorHints: AddonBehaviorHints? = null
-) : Serializable
+)
 
 /**
  * Addon resource descriptor
  */
+@Serializable
 data class AddonResource(
     val name: String,                              // "stream", "meta", "catalog", "subtitles"
     val types: List<String> = emptyList(),         // ["movie", "series"]
     val idPrefixes: List<String>? = null           // ID prefix filter
-) : Serializable
+)
 
 /**
  * Addon catalog descriptor
  */
+@Serializable
 data class AddonCatalog(
     val type: String,                              // "movie", "series"
     val id: String,                                // catalog ID
     val name: String = "",
     val genres: List<String>? = null,
     val extra: List<AddonCatalogExtra>? = null
-) : Serializable
+)
 
+@Serializable
 data class AddonCatalogExtra(
     val name: String,                              // "search", "genre", "skip"
     val isRequired: Boolean = false,
     val options: List<String>? = null
-) : Serializable
+)
 
+@Serializable
 data class AddonBehaviorHints(
     val adult: Boolean = false,
     val p2p: Boolean = false,
     val configurable: Boolean = false,
     val configurationRequired: Boolean = false
-) : Serializable
+)
 
 /**
  * Installed addon with manifest data
  */
+@Serializable
 data class Addon(
     val id: String,
     val name: String,
@@ -280,14 +299,17 @@ data class Addon(
     val transportUrl: String? = null               // Base URL for API calls (without manifest.json)
 )
 
+@Serializable
 enum class AddonType {
     OFFICIAL, COMMUNITY, SUBTITLE, METADATA, CUSTOM
 }
 
+@Serializable
 enum class RuntimeKind {
     STREMIO
 }
 
+@Serializable
 enum class AddonInstallSource {
     DIRECT_URL
 }
@@ -300,7 +322,7 @@ data class AddonStreamResult(
     val addonId: String,
     val addonName: String,
     val error: Exception? = null
-) : Serializable
+)
 
 /**
  * Quality filter entry - device-scoped regex patterns to exclude quality tiers.
@@ -310,6 +332,7 @@ data class AddonStreamResult(
  * 
  * Example: 1080p TV with regex "4K|2160p" excludes 4K streams for all users
  */
+@Serializable
 @Immutable
 data class QualityFilterConfig(
     val id: String = "", // UUID for unique identification
@@ -317,8 +340,9 @@ data class QualityFilterConfig(
     val regexPattern: String = "", // Regex pattern to EXCLUDE matching qualities (e.g., "4K|2160p")
     val enabled: Boolean = true, // Enable/disable filter without deleting
     val createdAt: Long = System.currentTimeMillis()
-) : Serializable
+)
 
+@Serializable
 @Immutable
 data class IptvSeriesFullInfo(
     val seriesId: Int,
@@ -334,8 +358,9 @@ data class IptvSeriesFullInfo(
     val seasons: List<IptvSeasonInfo>,
     val episodes: List<IptvEpisodeInfo>,
     val tmdbId: Int = 0
-) : Serializable
+)
 
+@Serializable
 @Immutable
 data class IptvSeasonInfo(
     val seasonNumber: Int,
@@ -344,8 +369,9 @@ data class IptvSeasonInfo(
     val episodeCount: Int,
     val coverUrl: String?,
     val airDate: String?
-) : Serializable
+)
 
+@Serializable
 @Immutable
 data class IptvEpisodeInfo(
     val streamId: Int,
@@ -358,4 +384,4 @@ data class IptvEpisodeInfo(
     val stillPath: String?,
     val containerExtension: String?,
     val rating: Float = 0f
-) : Serializable
+)

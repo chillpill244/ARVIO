@@ -1,7 +1,8 @@
 package com.arflix.tv.ui.startup
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
+import com.arflix.tv.data.repository.PreferenceStore
+import com.arflix.tv.data.repository.PlatformEnvironment
 import androidx.lifecycle.viewModelScope
 import coil3.ImageLoader
 import coil3.imageLoader
@@ -13,7 +14,6 @@ import com.arflix.tv.data.repository.MediaRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,10 +41,9 @@ data class StartupState(
 @OptIn(ExperimentalCoroutinesApi::class)
 class StartupViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
-    @ApplicationContext private val context: Context
-) : ViewModel() {
+    private val preferenceStore: PreferenceStore, private val platformEnvironment: PlatformEnvironment,) : ViewModel() {
     private val imageLoader: ImageLoader by lazy(LazyThreadSafetyMode.NONE) {
-        context.imageLoader
+        platformEnvironment.imageLoader
     }
 
     private val networkDispatcher = Dispatchers.IO.limitedParallelism(8)
@@ -99,7 +98,7 @@ class StartupViewModel @Inject constructor(
 
         val backdropUrl = heroItem.backdrop ?: heroItem.image
         if (!backdropUrl.isNullOrBlank()) {
-            val request = ImageRequest.Builder(context)
+            val request = coil3.request.ImageRequest.Builder(platformEnvironment.coilContext)
                 .data(backdropUrl)
                 .size(heroBackdropPreloadWidth, heroBackdropPreloadHeight)
                 .precision(Precision.INEXACT)
@@ -112,7 +111,7 @@ class StartupViewModel @Inject constructor(
             try {
                 val logoUrl = mediaRepository.getLogoUrl(heroItem.mediaType, heroItem.id)
                 if (!logoUrl.isNullOrBlank()) {
-                    val request = ImageRequest.Builder(context)
+                    val request = coil3.request.ImageRequest.Builder(platformEnvironment.coilContext)
                         .data(logoUrl)
                         .size(heroLogoPreloadWidth, heroLogoPreloadHeight)
                         .precision(Precision.INEXACT)

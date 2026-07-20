@@ -1,6 +1,7 @@
 package com.arflix.tv.data.api
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -436,23 +437,27 @@ interface TraktApi {
 
 // ========== Request Bodies ==========
 
+@Serializable
 data class DeviceCodeRequest(
-    @SerializedName("client_id") val clientId: String
+    @SerialName("client_id") val clientId: String
 )
 
+@Serializable
 data class TokenPollRequest(
-    @SerializedName("code") val code: String,
-    @SerializedName("client_id") val clientId: String,
-    @SerializedName("client_secret") val clientSecret: String
+    @SerialName("code") val code: String,
+    @SerialName("client_id") val clientId: String,
+    @SerialName("client_secret") val clientSecret: String
 )
 
+@Serializable
 data class RefreshTokenRequest(
-    @SerializedName("refresh_token") val refreshToken: String,
-    @SerializedName("client_id") val clientId: String,
-    @SerializedName("client_secret") val clientSecret: String,
-    @SerializedName("grant_type") val grantType: String = "refresh_token"
+    @SerialName("refresh_token") val refreshToken: String,
+    @SerialName("client_id") val clientId: String,
+    @SerialName("client_secret") val clientSecret: String,
+    @SerialName("grant_type") val grantType: String = "refresh_token"
 )
 
+@Serializable
 data class TraktHistoryBody(
     val movies: List<TraktMovieId>? = null,
     val shows: List<TraktHistoryShowWithSeasons>? = null,
@@ -462,25 +467,30 @@ data class TraktHistoryBody(
 // For adding shows/episodes to history
 // - With seasons: marks specific episodes
 // - Without seasons (null): marks entire show
+@Serializable
 data class TraktHistoryShowWithSeasons(
     val ids: TraktIds,
     val seasons: List<TraktHistorySeason>? = null
 )
 
+@Serializable
 data class TraktHistorySeason(
     val number: Int,
     val episodes: List<TraktHistoryEpisodeNumber>
 )
 
+@Serializable
 data class TraktHistoryEpisodeNumber(
     val number: Int
 )
 
+@Serializable
 data class TraktWatchlistBody(
     val movies: List<TraktMovieId>? = null,
     val shows: List<TraktShowId>? = null
 )
 
+@Serializable
 data class TraktScrobbleBody(
     val movie: TraktMovieId? = null,
     val episode: TraktEpisodeId? = null,
@@ -488,20 +498,24 @@ data class TraktScrobbleBody(
     val progress: Float
 )
 
+@Serializable
 data class TraktMovieId(
     val ids: TraktIds
 )
 
+@Serializable
 data class TraktShowId(
     val ids: TraktIds
 )
 
+@Serializable
 data class TraktEpisodeId(
     val ids: TraktIds? = null,
     val season: Int? = null,
     val number: Int? = null
 )
 
+@Serializable
 data class TraktIds(
     val trakt: Int? = null,
     val tmdb: Int? = null,
@@ -512,26 +526,29 @@ data class TraktIds(
 
 // ========== Response Models ==========
 
+@Serializable
 data class TraktDeviceCode(
-    @SerializedName("device_code") val deviceCode: String,
-    @SerializedName("user_code") val userCode: String,
-    @SerializedName("verification_url") val verificationUrl: String,
-    @SerializedName("expires_in") val expiresIn: Int,
+    @SerialName("device_code") val deviceCode: String,
+    @SerialName("user_code") val userCode: String,
+    @SerialName("verification_url") val verificationUrl: String,
+    @SerialName("expires_in") val expiresIn: Int,
     val interval: Int
 )
 
+@Serializable
 data class TraktToken(
-    @SerializedName("access_token") val accessToken: String,
-    @SerializedName("refresh_token") val refreshToken: String,
-    @SerializedName("expires_in") val expiresIn: Int,
-    @SerializedName("created_at") val createdAt: Long,
-    @SerializedName("token_type") val tokenType: String
+    @SerialName("access_token") val accessToken: String,
+    @SerialName("refresh_token") val refreshToken: String,
+    @SerialName("expires_in") val expiresIn: Int,
+    @SerialName("created_at") val createdAt: Long,
+    @SerialName("token_type") val tokenType: String
 )
 
 /**
  * Last activities response for incremental sync
  * Each timestamp indicates when that activity type was last updated
  */
+@Serializable
 data class TraktLastActivities(
     val all: String?, // Overall last activity
     val movies: TraktActivityTimestamps?,
@@ -545,85 +562,96 @@ data class TraktLastActivities(
     val recommendations: TraktActivityTimestamps?,
     val collaborations: TraktActivityTimestamps?,
     val account: TraktActivityTimestamps?,
-    @SerializedName("saved_filters") val savedFilters: TraktActivityTimestamps?
+    @SerialName("saved_filters") val savedFilters: TraktActivityTimestamps?
 )
 
+@Serializable
 data class TraktActivityTimestamps(
-    @SerializedName("watched_at") val watchedAt: String? = null,
-    @SerializedName("collected_at") val collectedAt: String? = null,
-    @SerializedName("rated_at") val ratedAt: String? = null,
-    @SerializedName("watchlisted_at") val watchlistedAt: String? = null,
-    @SerializedName("favorited_at") val favoritedAt: String? = null,
-    @SerializedName("commented_at") val commentedAt: String? = null,
-    @SerializedName("paused_at") val pausedAt: String? = null,
-    @SerializedName("hidden_at") val hiddenAt: String? = null,
-    @SerializedName("updated_at") val updatedAt: String? = null
+    @SerialName("watched_at") val watchedAt: String? = null,
+    @SerialName("collected_at") val collectedAt: String? = null,
+    @SerialName("rated_at") val ratedAt: String? = null,
+    @SerialName("watchlisted_at") val watchlistedAt: String? = null,
+    @SerialName("favorited_at") val favoritedAt: String? = null,
+    @SerialName("commented_at") val commentedAt: String? = null,
+    @SerialName("paused_at") val pausedAt: String? = null,
+    @SerialName("hidden_at") val hiddenAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null
 )
 
+@Serializable
 data class TraktShowActivityTimestamps(
-    @SerializedName("watched_at") val watchedAt: String? = null,
-    @SerializedName("collected_at") val collectedAt: String? = null,
-    @SerializedName("rated_at") val ratedAt: String? = null,
-    @SerializedName("watchlisted_at") val watchlistedAt: String? = null,
-    @SerializedName("favorited_at") val favoritedAt: String? = null,
-    @SerializedName("commented_at") val commentedAt: String? = null,
-    @SerializedName("hidden_at") val hiddenAt: String? = null
+    @SerialName("watched_at") val watchedAt: String? = null,
+    @SerialName("collected_at") val collectedAt: String? = null,
+    @SerialName("rated_at") val ratedAt: String? = null,
+    @SerialName("watchlisted_at") val watchlistedAt: String? = null,
+    @SerialName("favorited_at") val favoritedAt: String? = null,
+    @SerialName("commented_at") val commentedAt: String? = null,
+    @SerialName("hidden_at") val hiddenAt: String? = null
 )
 
+@Serializable
 data class TraktWatchedMovie(
     val plays: Int,
-    @SerializedName("last_watched_at") val lastWatchedAt: String?,
-    @SerializedName("last_updated_at") val lastUpdatedAt: String?,
+    @SerialName("last_watched_at") val lastWatchedAt: String?,
+    @SerialName("last_updated_at") val lastUpdatedAt: String?,
     val movie: TraktMovieInfo
 )
 
+@Serializable
 data class TraktWatchedShow(
     val plays: Int,
-    @SerializedName("last_watched_at") val lastWatchedAt: String?,
-    @SerializedName("last_updated_at") val lastUpdatedAt: String?,
+    @SerialName("last_watched_at") val lastWatchedAt: String?,
+    @SerialName("last_updated_at") val lastUpdatedAt: String?,
     val show: TraktShowInfo,
     val seasons: List<TraktWatchedSeason>?
 )
 
+@Serializable
 data class TraktWatchedSeason(
     val number: Int,
     val episodes: List<TraktWatchedEpisode>
 )
 
+@Serializable
 data class TraktWatchedEpisode(
     val number: Int,
     val plays: Int,
-    @SerializedName("last_watched_at") val lastWatchedAt: String?
+    @SerialName("last_watched_at") val lastWatchedAt: String?
 )
 
+@Serializable
 data class TraktPlaybackItem(
     val id: Long,
     val progress: Float,
-    @SerializedName("paused_at") val pausedAt: String?,
+    @SerialName("paused_at") val pausedAt: String?,
     val type: String,
     val movie: TraktMovieInfo?,
     val episode: TraktEpisodeInfo?,
     val show: TraktShowInfo?
 )
 
+@Serializable
 data class TraktMovieInfo(
     val title: String,
     val year: Int?,
     val ids: TraktIds
 )
 
+@Serializable
 data class TraktShowInfo(
     val title: String,
     val year: Int?,
     val ids: TraktIds
 )
 
+@Serializable
 data class TraktHiddenItem(
-    @SerializedName("hidden_at") val hiddenAt: String?,
+    @SerialName("hidden_at") val hiddenAt: String?,
     val type: String?,
     val show: TraktShowInfo?
 )
 
+@Serializable
 data class TraktEpisodeInfo(
     val season: Int,
     val number: Int,
@@ -631,23 +659,26 @@ data class TraktEpisodeInfo(
     val ids: TraktIds
 )
 
+@Serializable
 data class TraktWatchlistItem(
     val rank: Int,
-    @SerializedName("listed_at") val listedAt: String,
+    @SerialName("listed_at") val listedAt: String,
     val type: String,
     val movie: TraktMovieInfo?,
     val show: TraktShowInfo?
 )
 
+@Serializable
 data class TraktShowProgress(
     val aired: Int,
     val completed: Int,
-    @SerializedName("last_watched_at") val lastWatchedAt: String?,
-    @SerializedName("reset_at") val resetAt: String?,
-    @SerializedName("next_episode") val nextEpisode: TraktNextEpisode?,
+    @SerialName("last_watched_at") val lastWatchedAt: String?,
+    @SerialName("reset_at") val resetAt: String?,
+    @SerialName("next_episode") val nextEpisode: TraktNextEpisode?,
     val seasons: List<TraktProgressSeason>?
 )
 
+@Serializable
 data class TraktNextEpisode(
     val season: Int,
     val number: Int,
@@ -655,6 +686,7 @@ data class TraktNextEpisode(
     val ids: TraktIds
 )
 
+@Serializable
 data class TraktProgressSeason(
     val number: Int,
     val aired: Int,
@@ -662,23 +694,27 @@ data class TraktProgressSeason(
     val episodes: List<TraktProgressEpisode>?
 )
 
+@Serializable
 data class TraktProgressEpisode(
     val number: Int,
     val completed: Boolean,
-    @SerializedName("last_watched_at") val lastWatchedAt: String?
+    @SerialName("last_watched_at") val lastWatchedAt: String?
 )
 
+@Serializable
 data class TraktListItem(
     val rank: Int,
     val type: String,
     val show: TraktShowInfo?
 )
 
+@Serializable
 data class TraktPublicListSummary(
     val name: String,
     val description: String? = null
 )
 
+@Serializable
 data class TraktPublicListItem(
     val rank: Int? = null,
     val type: String,
@@ -686,25 +722,29 @@ data class TraktPublicListItem(
     val show: TraktShowInfo? = null
 )
 
+@Serializable
 data class TraktSyncResponse(
     val added: TraktSyncCounts?,
     val deleted: TraktSyncCounts?,
     val existing: TraktSyncCounts?,
-    @SerializedName("not_found") val notFound: TraktSyncNotFound?
+    @SerialName("not_found") val notFound: TraktSyncNotFound?
 )
 
+@Serializable
 data class TraktSyncCounts(
     val movies: Int = 0,
     val shows: Int = 0,
     val episodes: Int = 0
 )
 
+@Serializable
 data class TraktSyncNotFound(
     val movies: List<TraktMovieId>?,
     val shows: List<TraktShowId>?,
     val episodes: List<TraktEpisodeId>?
 )
 
+@Serializable
 data class TraktScrobbleResponse(
     val id: Long,
     val action: String,
@@ -716,6 +756,7 @@ data class TraktScrobbleResponse(
 
 // ========== Search Models ==========
 
+@Serializable
 data class TraktSearchResult(
     val type: String,
     val score: Float?,
@@ -723,106 +764,122 @@ data class TraktSearchResult(
     val show: TraktShowInfo?
 )
 
+@Serializable
 data class TraktListSearchResult(
     val type: String,
     val score: Float?,
     val list: TraktSearchList?
 )
 
+@Serializable
 data class TraktSearchList(
     val name: String? = null,
     val description: String? = null,
     val privacy: String? = null,
     val type: String? = null,
-    @SerializedName("created_at") val createdAt: String? = null,
-    @SerializedName("updated_at") val updatedAt: String? = null,
-    @SerializedName("item_count") val itemCount: Int? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+    @SerialName("item_count") val itemCount: Int? = null,
     val likes: Int? = null,
     val ids: TraktSearchListIds? = null,
     val user: TraktSearchListUser? = null,
     val images: TraktSearchListImages? = null
 )
 
+@Serializable
 data class TraktSearchListIds(
     val trakt: Int? = null,
     val slug: String? = null
 )
 
+@Serializable
 data class TraktSearchListUser(
     val username: String? = null,
     val name: String? = null,
     val ids: TraktSearchListUserIds? = null
 )
 
+@Serializable
 data class TraktSearchListUserIds(
     val slug: String? = null,
     val trakt: Int? = null
 )
 
+@Serializable
 data class TraktSearchListImages(
     val posters: List<String> = emptyList()
 )
 
 // ========== Collection Models ==========
 
+@Serializable
 data class TraktCollectionBody(
     val movies: List<TraktMovieId>? = null,
     val shows: List<TraktShowId>? = null
 )
 
+@Serializable
 data class TraktCollectionMovie(
-    @SerializedName("collected_at") val collectedAt: String?,
-    @SerializedName("updated_at") val updatedAt: String?,
+    @SerialName("collected_at") val collectedAt: String?,
+    @SerialName("updated_at") val updatedAt: String?,
     val movie: TraktMovieInfo
 )
 
+@Serializable
 data class TraktCollectionShow(
-    @SerializedName("collected_at") val collectedAt: String?,
-    @SerializedName("updated_at") val updatedAt: String?,
+    @SerialName("collected_at") val collectedAt: String?,
+    @SerialName("updated_at") val updatedAt: String?,
     val show: TraktShowInfo,
     val seasons: List<TraktCollectionSeason>?
 )
 
+@Serializable
 data class TraktCollectionSeason(
     val number: Int,
     val episodes: List<TraktCollectionEpisode>
 )
 
+@Serializable
 data class TraktCollectionEpisode(
     val number: Int,
-    @SerializedName("collected_at") val collectedAt: String?
+    @SerialName("collected_at") val collectedAt: String?
 )
 
 // ========== Rating Models ==========
 
+@Serializable
 data class TraktRatingBody(
     val movies: List<TraktRatingMovieItem>? = null,
     val shows: List<TraktRatingShowItem>? = null,
     val episodes: List<TraktRatingEpisodeItem>? = null
 )
 
+@Serializable
 data class TraktRatingMovieItem(
     val rating: Int,
-    @SerializedName("rated_at") val ratedAt: String? = null,
+    @SerialName("rated_at") val ratedAt: String? = null,
     val ids: TraktIds
 )
 
+@Serializable
 data class TraktRatingShowItem(
     val rating: Int,
-    @SerializedName("rated_at") val ratedAt: String? = null,
+    @SerialName("rated_at") val ratedAt: String? = null,
     val ids: TraktIds
 )
 
+@Serializable
 data class TraktRatingEpisodeItem(
     val rating: Int,
-    @SerializedName("rated_at") val ratedAt: String? = null,
+    @SerialName("rated_at") val ratedAt: String? = null,
     val ids: TraktIds? = null,
     val season: Int? = null,
     val number: Int? = null
 )
 
+@Serializable
 data class TraktRatingItem(
-    @SerializedName("rated_at") val ratedAt: String?,
+    @SerialName("rated_at") val ratedAt: String?,
     val rating: Int,
     val type: String,
     val movie: TraktMovieInfo?,
@@ -832,44 +889,49 @@ data class TraktRatingItem(
 
 // ========== Comment Models ==========
 
+@Serializable
 data class TraktComment(
     val id: Long,
-    @SerializedName("parent_id") val parentId: Long?,
+    @SerialName("parent_id") val parentId: Long?,
     val comment: String,
     val spoiler: Boolean,
     val review: Boolean,
     val replies: Int,
     val likes: Int,
-    @SerializedName("user_stats") val userStats: TraktCommentUserStats?,
-    @SerializedName("created_at") val createdAt: String,
-    @SerializedName("updated_at") val updatedAt: String?,
+    @SerialName("user_stats") val userStats: TraktCommentUserStats?,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String?,
     val user: TraktUser?
 )
 
+@Serializable
 data class TraktCommentUserStats(
     val rating: Int?,
-    @SerializedName("play_count") val playCount: Int?,
-    @SerializedName("completed_count") val completedCount: Int?
+    @SerialName("play_count") val playCount: Int?,
+    @SerialName("completed_count") val completedCount: Int?
 )
 
+@Serializable
 data class TraktUser(
     val username: String,
     val private: Boolean,
     val name: String?,
     val vip: Boolean?,
-    @SerializedName("vip_ep") val vipEp: Boolean?,
+    @SerialName("vip_ep") val vipEp: Boolean?,
     val ids: TraktUserIds?
 )
 
+@Serializable
 data class TraktUserIds(
     val slug: String?
 )
 
 // ========== History Models ==========
 
+@Serializable
 data class TraktHistoryItem(
     val id: Long,
-    @SerializedName("watched_at") val watchedAt: String,
+    @SerialName("watched_at") val watchedAt: String,
     val action: String,
     val type: String,
     val movie: TraktMovieInfo?,
@@ -877,6 +939,7 @@ data class TraktHistoryItem(
     val episode: TraktEpisodeInfo?
 )
 
+@Serializable
 data class TraktHistoryRemoveBody(
     val ids: List<Long>? = null,
     val movies: List<TraktMovieId>? = null,
@@ -885,39 +948,46 @@ data class TraktHistoryRemoveBody(
     val seasons: List<TraktSeasonId>? = null
 )
 
+@Serializable
 data class TraktSeasonId(
     val ids: TraktIds? = null,
     val seasons: List<TraktSeasonNumber>? = null
 )
 
+@Serializable
 data class TraktSeasonNumber(
     val number: Int,
     val episodes: List<TraktEpisodeNumber>? = null
 )
 
+@Serializable
 data class TraktEpisodeNumber(
     val number: Int
 )
 
 // ========== Bulk Watch Models ==========
 
+@Serializable
 data class TraktBulkShowBody(
     val shows: List<TraktBulkShowItem>
 )
 
+@Serializable
 data class TraktBulkShowItem(
     val ids: TraktIds,
     val seasons: List<TraktBulkSeasonItem>? = null
 )
 
+@Serializable
 data class TraktBulkSeasonItem(
     val number: Int,
     val episodes: List<TraktBulkEpisodeItem>? = null
 )
 
+@Serializable
 data class TraktBulkEpisodeItem(
     val number: Int,
-    @SerializedName("watched_at") val watchedAt: String? = null
+    @SerialName("watched_at") val watchedAt: String? = null
 )
 
 

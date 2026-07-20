@@ -1,12 +1,14 @@
 package com.arflix.tv.updater
 
 import android.os.Build
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class GitHubAssetDto(
-    @SerializedName("name") val name: String,
-    @SerializedName("browser_download_url") val browserDownloadUrl: String,
-    @SerializedName("size") val size: Long?
+    @SerialName("name") val name: String,
+    @SerialName("browser_download_url") val browserDownloadUrl: String,
+    @SerialName("size") val size: Long?
 )
 
 object AbiSelector {

@@ -1,15 +1,15 @@
 package com.arflix.tv.ui.screens.shared
 
-import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
+import com.arflix.tv.data.repository.PreferenceStore
+import com.arflix.tv.data.repository.PlatformEnvironment
 import androidx.lifecycle.viewModelScope
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.repository.IptvRepository
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-val Context.mediaCategoryPreferences by preferencesDataStore(name = "media_category_preferences")
 
 /**
  * Base ViewModel for Movies and Series category screens.
@@ -26,8 +25,7 @@ val Context.mediaCategoryPreferences by preferencesDataStore(name = "media_categ
 abstract class MediaCategoryViewModel(
     protected val mediaType: MediaType,
     protected val iptvRepository: IptvRepository,
-    @ApplicationContext protected val context: Context
-) : ViewModel() {
+    protected val preferenceStore: PreferenceStore, protected val platformEnvironment: PlatformEnvironment,) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MediaCategoryUiState())
     val uiState: StateFlow<MediaCategoryUiState> = _uiState.asStateFlow()
@@ -60,7 +58,7 @@ abstract class MediaCategoryViewModel(
             try {
                 // Load favorites from DataStore (scoped by media type)
                 val favorites = try {
-                    context.mediaCategoryPreferences.data.first()[favoritesKey] ?: emptySet()
+                    preferenceStore.mediaCategory.data.first()[favoritesKey] ?: emptySet()
                 } catch (e: Exception) {
                     emptySet()
                 }
@@ -116,7 +114,7 @@ abstract class MediaCategoryViewModel(
             } else {
                 current.add(categoryName)
             }
-            context.mediaCategoryPreferences.edit { prefs ->
+            preferenceStore.mediaCategory.edit { prefs ->
                 prefs[favoritesKey] = current
             }
             _uiState.value = _uiState.value.copy(favoriteCategories = current)

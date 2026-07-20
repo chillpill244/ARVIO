@@ -1,8 +1,9 @@
 package com.arflix.tv.ui.screens.details
 
-import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import com.arflix.tv.data.repository.PreferenceStore
+import com.arflix.tv.data.repository.PlatformEnvironment
 import androidx.lifecycle.viewModelScope
 import com.arflix.tv.data.model.CastMember
 import com.arflix.tv.data.model.Episode
@@ -28,7 +29,6 @@ import com.arflix.tv.data.repository.WatchlistRepository
 import com.arflix.tv.util.Constants
 import com.arflix.tv.util.settingsDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -180,7 +180,7 @@ private fun isSupplementalStream(stream: StreamSource): Boolean =
 
 @HiltViewModel
 class DetailsViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+    private val preferenceStore: PreferenceStore, private val platformEnvironment: PlatformEnvironment,
     private val mediaRepository: MediaRepository,
     private val profileManager: ProfileManager,
     private val traktRepository: TraktRepository,
@@ -276,7 +276,7 @@ class DetailsViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val prefs = context.settingsDataStore.data.first()
+                val prefs = preferenceStore.settings.data.first()
                 val autoPlaySingleSource = prefs[autoPlaySingleSourceKey()] ?: true
                 val autoPlayMinQuality = normalizeAutoPlayMinQuality(prefs[autoPlayMinQualityKey()])
                 val showBudget = prefs[showBudgetKey()] ?: true
