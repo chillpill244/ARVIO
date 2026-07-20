@@ -4,9 +4,9 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import com.arflix.tv.BuildConfig
-import com.google.gson.Gson
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import dagger.hilt.android.qualifiers.ApplicationContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -31,7 +31,7 @@ class AppUpdateRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val okHttpClient: OkHttpClient
 ) {
-    private val gson = Gson()
+    private val json = Json { ignoreUnknownKeys = true }
 
     fun isPlayStoreInstall(): Boolean {
         val installer = getInstallerPackageName()
@@ -68,7 +68,7 @@ class AppUpdateRepository @Inject constructor(
                         error("GitHub API error: ${response.code}")
                     }
                     val body = response.body?.string().orEmpty()
-                    val dto = gson.fromJson(body, GitHubReleaseDto::class.java)
+                    val dto = json.decodeFromString<GitHubReleaseDto>(body)
                         ?: error("Empty GitHub release response")
 
                     if (dto.draft || dto.prerelease) {
