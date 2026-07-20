@@ -187,11 +187,11 @@ dependencies {
     // Core Android
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.core:core-splashscreen:1.0.1")  // Android 12+ Splash Screen
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.3")
     // Provides collectAsStateWithLifecycle — pauses Flow collection while the
-    // screen is off so we don't drive recompositions on invisible UI.
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    // UI is in the background, saving critical network/CPU resources.
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
     implementation("androidx.activity:activity-compose:1.8.2")
 
     // Compose BOM — bumped alongside Kotlin 2.1. Staying on the 2024.06
@@ -270,7 +270,7 @@ dependencies {
     implementation("io.ktor:ktor-client-android:2.3.7")
 
     // DataStore for preferences
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Google Cast SDK — mobile-only at runtime (guarded by DeviceType check), harmless on TV
     implementation("com.google.android.gms:play-services-cast-framework:21.4.0")
