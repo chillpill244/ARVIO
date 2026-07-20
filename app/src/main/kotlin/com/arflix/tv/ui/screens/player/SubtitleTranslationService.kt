@@ -1,6 +1,6 @@
 package com.arflix.tv.ui.screens.player
 
-import android.util.Log
+import com.arflix.tv.util.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -66,7 +66,7 @@ class SubtitleTranslationService(
         if (lines.isEmpty()) return TranslationResult(lines, true)
         val apiKey = apiKeyProvider()
         if (apiKey.isBlank()) {
-            Log.e(TAG, "API key is blank — translation skipped")
+            Logger.e(TAG, "API key is blank — translation skipped")
             return TranslationResult(lines, false, "API key missing")
         }
 
@@ -108,7 +108,7 @@ class SubtitleTranslationService(
             try {
                 val response = client.newCall(request).execute()
                 val responseBody = response.body?.string() ?: run {
-                    Log.e(TAG, "Empty response body (HTTP ${response.code})")
+                    Logger.e(TAG, "Empty response body (HTTP ${response.code})")
                     return@withContext TranslationResult(lines, false, "Empty response (${response.code})")
                 }
                 if (!response.isSuccessful) {
@@ -126,7 +126,7 @@ class SubtitleTranslationService(
 
                 parseTranslationResult(lines, targetLanguage, rawText, NL)
             } catch (e: Exception) {
-                Log.e(TAG, "translateGroq exception: ${e.message}", e)
+                Logger.e(TAG, "translateGroq exception: ${e.message}", e)
                 TranslationResult(lines, false, e.message)
             }
         }
@@ -173,7 +173,7 @@ class SubtitleTranslationService(
             try {
                 val response = client.newCall(request).execute()
                 val responseBody = response.body?.string() ?: run {
-                    Log.e(TAG, "Empty Gemini response body (HTTP ${response.code})")
+                    Logger.e(TAG, "Empty Gemini response body (HTTP ${response.code})")
                     return@withContext TranslationResult(lines, false, "Empty response (${response.code})")
                 }
                 if (!response.isSuccessful) {
@@ -193,7 +193,7 @@ class SubtitleTranslationService(
 
                 parseTranslationResult(lines, targetLanguage, rawText, NL)
             } catch (e: Exception) {
-                Log.e(TAG, "translateGemini exception: ${e.message}", e)
+                Logger.e(TAG, "translateGemini exception: ${e.message}", e)
                 TranslationResult(lines, false, e.message)
             }
         }
@@ -204,7 +204,7 @@ class SubtitleTranslationService(
             ?: return TranslationResult(lines, false, "No valid JSON array in response")
 
         if (resultArray.length() != lines.size) {
-            Log.w(TAG, "Line count mismatch: sent ${lines.size}, got ${resultArray.length()}")
+            Logger.w(TAG, "Line count mismatch: sent ${lines.size}, got ${resultArray.length()}")
             return TranslationResult(lines, false, "Line count mismatch")
         }
 

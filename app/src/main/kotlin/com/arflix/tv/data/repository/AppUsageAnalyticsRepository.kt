@@ -19,7 +19,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.util.UUID
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -86,7 +87,8 @@ class AppUsageAnalyticsRepository @Inject constructor(
         val existing = context.settingsDataStore.data.first()[key]
         if (!existing.isNullOrBlank()) return existing
 
-        val created = UUID.randomUUID().toString()
+        @OptIn(ExperimentalUuidApi::class)
+        val created = Uuid.random().toString()
         var resolved = created
         context.settingsDataStore.edit { prefs ->
             val stored = prefs[key]

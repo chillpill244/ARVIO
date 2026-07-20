@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
-import android.util.Log
+import com.arflix.tv.util.Logger
 import android.widget.Toast
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -42,7 +42,7 @@ class ApkInstallReceiver : BroadcastReceiver() {
                 }
 
                 if (confirmIntent == null) {
-                    Log.e(TAG, "STATUS_PENDING_USER_ACTION without EXTRA_INTENT — cannot prompt user.")
+                    Logger.e(TAG, "STATUS_PENDING_USER_ACTION without EXTRA_INTENT — cannot prompt user.")
                     return
                 }
 
@@ -61,13 +61,13 @@ class ApkInstallReceiver : BroadcastReceiver() {
                 } catch (e: Exception) {
                     // Some Android TV forks (particularly Chinese AOSP variants) don't
                     // handle the system confirm intent correctly. Log but don't crash.
-                    Log.e(TAG, "Failed to launch install confirmation Activity: ${e.message}", e)
+                    Logger.e(TAG, "Failed to launch install confirmation Activity: ${e.message}", e)
                     showToast(context, "Update install requires manual confirmation. Please install from Downloads.")
                 }
             }
 
             PackageInstaller.STATUS_SUCCESS -> {
-                Log.i(TAG, "Update installed successfully.")
+                Logger.i(TAG, "Update installed successfully.")
                 updateStatusManager.updateStatus(UpdateStatus.Success)
                 // No toast needed — the new APK is installing/replacing the running process.
             }
@@ -79,7 +79,7 @@ class ApkInstallReceiver : BroadcastReceiver() {
             PackageInstaller.STATUS_FAILURE_INCOMPATIBLE,
             PackageInstaller.STATUS_FAILURE_INVALID,
             PackageInstaller.STATUS_FAILURE_STORAGE -> {
-                Log.e(TAG, "Update install failed: status=$status message=$message")
+                Logger.e(TAG, "Update install failed: status=$status message=$message")
                 val userMessage = when (status) {
                     PackageInstaller.STATUS_FAILURE_ABORTED -> "Update cancelled."
                     PackageInstaller.STATUS_FAILURE_BLOCKED -> "Update blocked by system policy."
@@ -94,7 +94,7 @@ class ApkInstallReceiver : BroadcastReceiver() {
             }
 
             else -> {
-                Log.w(TAG, "Unexpected PackageInstaller status=$status message=$message")
+                Logger.w(TAG, "Unexpected PackageInstaller status=$status message=$message")
             }
         }
     }

@@ -1,7 +1,7 @@
 package com.arflix.tv.data.api
 
 import android.net.Uri
-import android.util.Log
+import com.arflix.tv.util.Logger
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -177,14 +177,14 @@ class InAppYouTubeExtractor @Inject constructor() {
                 extractPlaybackSourceInternal(videoId)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "[$videoId] extraction failed: ${e.message}")
+            Logger.w(TAG, "[$videoId] extraction failed: ${e.message}")
             null
         }
 
         if (source != null) {
             urlCache[videoId] = source to System.currentTimeMillis()
         } else {
-            Log.w(TAG, "[$videoId] no playable source found")
+            Logger.w(TAG, "[$videoId] no playable source found")
         }
         source
     }
@@ -281,7 +281,7 @@ class InAppYouTubeExtractor @Inject constructor() {
         // If hardcoded key was rejected and we got nothing, scrape a fresh key and retry once
         val noStreams = manifestUrls.isEmpty() && progressive.isEmpty() && adaptiveVideo.isEmpty()
         if (noStreams && keyRejected) {
-            Log.w(TAG, "[$videoId] hardcoded key rejected with no streams — retrying with scraped key")
+            Logger.w(TAG, "[$videoId] hardcoded key rejected with no streams — retrying with scraped key")
             refreshWatchConfigFromPage(videoId)
             return extractPlaybackSourceInternal(videoId)
         }

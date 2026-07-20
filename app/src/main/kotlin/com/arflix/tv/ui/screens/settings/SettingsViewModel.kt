@@ -71,7 +71,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
@@ -1412,6 +1415,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    @OptIn(ExperimentalUuidApi::class)
     fun addQualityFilter(deviceName: String, regexPattern: String) {
         val trimmedRegex = regexPattern.trim()
         if (trimmedRegex.isBlank()) return
@@ -1419,7 +1423,7 @@ class SettingsViewModel @Inject constructor(
 
         viewModelScope.launch {
             val next = _uiState.value.qualityFilters + QualityFilterConfig(
-                id = java.util.UUID.randomUUID().toString(),
+                id = Uuid.random().toString(),
                 deviceName = deviceName.trim(),
                 regexPattern = trimmedRegex,
                 enabled = true

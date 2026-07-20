@@ -65,6 +65,7 @@ import java.util.Collections
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
+import com.arflix.tv.util.Logger
 
 data class HomeUiState(
     val isLoading: Boolean = false,
@@ -2959,7 +2960,7 @@ class HomeViewModel @Inject constructor(
             // This ensures the cloud has our latest state before we pull the other
             // device's state on top of it — preventing stale overwrites.
             if (cloudSyncRepository.isPushDirty) {
-                android.util.Log.i("HomeViewModel", "Retrying dirty push before pull")
+                Logger.i("HomeViewModel", "Retrying dirty push before pull")
                 runCatching { cloudSyncRepository.pushToCloud() }
             }
             val result = runCatching {
@@ -2979,7 +2980,7 @@ class HomeViewModel @Inject constructor(
                     restartContinueWatchingFetch()
                 }
             }.onFailure {
-                android.util.Log.w("HomeViewModel", "ON_RESUME cloud pull failed: ${it.message}")
+                Logger.w("HomeViewModel", "ON_RESUME cloud pull failed: ${it.message}")
             }
         }
     }

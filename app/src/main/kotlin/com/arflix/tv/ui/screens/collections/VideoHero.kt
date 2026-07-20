@@ -17,6 +17,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.arflix.tv.util.Logger
 
 /**
  * Plays a collection's hero video once with sound and invokes [onEnded]
@@ -66,7 +67,7 @@ fun VideoHero(
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                android.util.Log.w(
+                Logger.w(
                     "VideoHero",
                     "hero video playback error — falling back to static: ${error.message}"
                 )

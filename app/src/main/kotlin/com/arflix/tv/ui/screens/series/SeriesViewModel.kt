@@ -10,6 +10,7 @@ import com.arflix.tv.data.repository.IptvRepository
 import com.arflix.tv.ui.screens.shared.MediaCategoryViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import com.arflix.tv.util.Logger
 
 @HiltViewModel
 class SeriesViewModel @Inject constructor(
@@ -61,7 +62,7 @@ class SeriesViewModel @Inject constructor(
                         status = tvDetails.status,
                         genreIds = tvDetails.genres.map { it.id }
                     )
-                    android.util.Log.d("SeriesViewModel", "Enriched item with TMDB data: ${enrichedItem.title} (ID: ${enrichedItem.id}, genres: ${tvDetails.genres.map { it.name }})")
+                    Logger.d("SeriesViewModel", "Enriched item with TMDB data: ${enrichedItem.title} (ID: ${enrichedItem.id}, genres: ${tvDetails.genres.map { it.name }})")
                     enrichedItem
                 } else {
                     // TMDB fetch failed, return item with iptvSeriesId only

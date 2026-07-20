@@ -211,6 +211,7 @@ import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.content.ContextCompat
+import com.arflix.tv.util.Logger
 
 private const val PIP_ACTION_REWIND = "com.arflix.tv.pip.REWIND"
 private const val PIP_ACTION_PLAY_PAUSE = "com.arflix.tv.pip.PLAY_PAUSE"
@@ -2010,7 +2011,7 @@ fun PlayerScreen(
                     // reject audio-session effects (particularly when passthrough is
                     // enabled for DTS/AC3). Fail silently — user gets unboosted audio
                     // but playback still works.
-                    android.util.Log.w("PlayerScreen", "LoudnessEnhancer unavailable on this device: ${e.message}")
+                    Logger.w("PlayerScreen", "LoudnessEnhancer unavailable on this device: ${e.message}")
                     null
                 }
             } else {
@@ -4002,14 +4003,14 @@ private fun applyAudioTrackSelection(
     } catch (e: IllegalArgumentException) {
         // Stale track/group index after a player re-prepare. Leave the current
         // selection alone instead of crashing; user can retry the menu.
-        android.util.Log.w("PlayerScreen", "applyAudioTrackSelection rejected stale index: ${e.message}")
+        Logger.w("PlayerScreen", "applyAudioTrackSelection rejected stale index: ${e.message}")
         null
     } catch (e: IllegalStateException) {
         // Player released or in an invalid state.
-        android.util.Log.w("PlayerScreen", "applyAudioTrackSelection on invalid player: ${e.message}")
+        Logger.w("PlayerScreen", "applyAudioTrackSelection on invalid player: ${e.message}")
         null
     } catch (e: Exception) {
-        android.util.Log.e("PlayerScreen", "applyAudioTrackSelection unexpected error", e)
+        Logger.e("PlayerScreen", "applyAudioTrackSelection unexpected error", e)
         null
     }
 }

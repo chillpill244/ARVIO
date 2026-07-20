@@ -1,7 +1,7 @@
 package com.arflix.tv.data.repository
 
 import android.content.Context
-import android.util.Log
+import com.arflix.tv.util.Logger
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -1276,13 +1276,13 @@ class StreamRepository @Inject constructor(
                 } else {
                     "$baseUrl/stream/movie/$imdbId.json"
                 }
-                Log.d(
+                Logger.d(
                     TAG,
                     "[StreamFetch][Movie] request addon=${addon.name} addonId=${addon.id} url=${sanitizeLogUrl(url)}"
                 )
                 val response = streamApi.getAddonStreams(url)
                 val streams = processStreams(response.streams ?: emptyList(), addon)
-                Log.d(
+                Logger.d(
                     TAG,
                     "[StreamFetch][Movie] response addon=${addon.name} addonId=${addon.id} streams=${streams.size} elapsedMs=${System.currentTimeMillis() - startedAt}"
                 )
@@ -1294,7 +1294,7 @@ class StreamRepository @Inject constructor(
                 streams
             }
         } catch (timeout: TimeoutCancellationException) {
-            Log.w(
+            Logger.w(
                 TAG,
                 "[StreamFetch][Movie] timeout addon=${addon.name} addonId=${addon.id} elapsedMs=${System.currentTimeMillis() - startedAt}"
             )
@@ -1310,7 +1310,7 @@ class StreamRepository @Inject constructor(
             )
             emptyList()
         } catch (error: Exception) {
-            Log.w(
+            Logger.w(
                 TAG,
                 "[StreamFetch][Movie] failure addon=${addon.name} addonId=${addon.id} elapsedMs=${System.currentTimeMillis() - startedAt} error=${error.toShortLogMessage()}"
             )
@@ -1397,33 +1397,33 @@ class StreamRepository @Inject constructor(
                 // episodes like TMDB S4E29 to Kitsu E7 and surface the wrong debrid files.
                 val url = streamUrl(seriesId)
 
-                Log.d(
+                Logger.d(
                     TAG,
                     "[StreamFetch][Episode] request addon=${addon.name} addonId=${addon.id} url=${sanitizeLogUrl(url)} kitsu=false"
                 )
 
                 val response = streamApi.getAddonStreams(url)
                 var addonStreams = processStreams(response.streams ?: emptyList(), addon)
-                Log.d(
+                Logger.d(
                     TAG,
                     "[StreamFetch][Episode] response addon=${addon.name} addonId=${addon.id} streams=${addonStreams.size} elapsedMs=${System.currentTimeMillis() - startedAt}"
                 )
 
                 if (addonStreams.isEmpty() && useKitsuFallback) {
                     val fallbackUrl = streamUrl(animeQuery)
-                    Log.d(
+                    Logger.d(
                         TAG,
                         "[StreamFetch][Episode] kitsu fallback request addon=${addon.name} addonId=${addon.id} url=${sanitizeLogUrl(fallbackUrl)}"
                     )
                     try {
                         val fallbackResponse = streamApi.getAddonStreams(fallbackUrl)
                         addonStreams = processStreams(fallbackResponse.streams ?: emptyList(), addon)
-                        Log.d(
+                        Logger.d(
                             TAG,
                             "[StreamFetch][Episode] kitsu fallback response addon=${addon.name} addonId=${addon.id} streams=${addonStreams.size}"
                         )
                     } catch (fallbackError: Exception) {
-                        Log.w(
+                        Logger.w(
                             TAG,
                             "[StreamFetch][Episode] kitsu fallback failure addon=${addon.name} addonId=${addon.id} error=${fallbackError.toShortLogMessage()}"
                         )
@@ -1454,13 +1454,13 @@ class StreamRepository @Inject constructor(
                                 } else {
                                     "$baseUrl/stream/series/$airDateId.json"
                                 }
-                                Log.d(
+                                Logger.d(
                                     TAG,
                                     "[StreamFetch][Episode] airDate request addon=${addon.name} addonId=${addon.id} url=${sanitizeLogUrl(airDateUrl)}"
                                 )
                                 val airDateResponse = streamApi.getAddonStreams(airDateUrl)
                                 val airDateStreams = processStreams(airDateResponse.streams ?: emptyList(), addon)
-                                Log.d(
+                                Logger.d(
                                     TAG,
                                     "[StreamFetch][Episode] airDate response addon=${addon.name} addonId=${addon.id} streams=${airDateStreams.size}"
                                 )
@@ -1470,7 +1470,7 @@ class StreamRepository @Inject constructor(
                             }
                         }
                     } catch (airDateError: Exception) {
-                        Log.w(
+                        Logger.w(
                             TAG,
                             "[StreamFetch][Episode] airDate failure addon=${addon.name} addonId=${addon.id} error=${airDateError.toShortLogMessage()}"
                         )
@@ -1490,7 +1490,7 @@ class StreamRepository @Inject constructor(
                 addonStreams
             }
         } catch (timeout: TimeoutCancellationException) {
-            Log.w(
+            Logger.w(
                 TAG,
                 "[StreamFetch][Episode] timeout addon=${addon.name} addonId=${addon.id} elapsedMs=${System.currentTimeMillis() - startedAt}"
             )
@@ -1506,7 +1506,7 @@ class StreamRepository @Inject constructor(
             )
             emptyList()
         } catch (error: Exception) {
-            Log.w(
+            Logger.w(
                 TAG,
                 "[StreamFetch][Episode] failure addon=${addon.name} addonId=${addon.id} elapsedMs=${System.currentTimeMillis() - startedAt} error=${error.toShortLogMessage()}"
             )
@@ -1613,7 +1613,7 @@ class StreamRepository @Inject constructor(
 
             val prioritizedAddons = streamAddons.sortedByDescending { getAddonHealthBias(it.id) }
             if (prioritizedAddons.isEmpty()) {
-                Log.w(
+                Logger.w(
                     TAG,
                     "[StreamFetch][Movie] no enabled streaming addons imdbId=$imdbId"
                 )
@@ -1635,7 +1635,7 @@ class StreamRepository @Inject constructor(
                 return@launch
             }
 
-            Log.d(
+            Logger.d(
                 TAG,
                 "[StreamFetch][Movie] querying addons imdbId=$imdbId stremio=${prioritizedAddons.size}"
             )
@@ -1649,7 +1649,7 @@ class StreamRepository @Inject constructor(
                     val addonStreams = try {
                         fetchMovieStreamsFromAddon(addon, imdbId)
                     } catch (e: Exception) {
-                        Log.e(TAG, "[StreamFetch][Movie] stremio addon ${addon.id} failed", e)
+                        Logger.e(TAG, "[StreamFetch][Movie] stremio addon ${addon.id} failed", e)
                         AppLogger.recordException(
                             throwable = e,
                             context = mapOf(
@@ -1982,7 +1982,7 @@ class StreamRepository @Inject constructor(
 
             val prioritizedAddons = streamAddons.sortedByDescending { getAddonHealthBias(it.id) }
             if (prioritizedAddons.isEmpty()) {
-                Log.w(
+                Logger.w(
                     TAG,
                     "[StreamFetch][Episode] no enabled streaming addons imdbId=$imdbId season=$season episode=$episode"
                 )
@@ -2004,7 +2004,7 @@ class StreamRepository @Inject constructor(
                 return@launch
             }
 
-            Log.d(
+            Logger.d(
                 TAG,
                 "[StreamFetch][Episode] querying addons imdbId=$imdbId season=$season episode=$episode stremio=${prioritizedAddons.size}"
             )
@@ -2029,7 +2029,7 @@ class StreamRepository @Inject constructor(
                             airDate = airDate
                         )
                     } catch (e: Exception) {
-                        Log.e(TAG, "[StreamFetch][Episode] stremio addon ${addon.id} failed", e)
+                        Logger.e(TAG, "[StreamFetch][Episode] stremio addon ${addon.id} failed", e)
                         AppLogger.recordException(
                             throwable = e,
                             context = mapOf(
@@ -2379,7 +2379,7 @@ class StreamRepository @Inject constructor(
         val health = playbackHostHealth.getOrPut(host) { PlaybackHostHealth() }
         health.failures += 1
         health.lastFailureAtMs = System.currentTimeMillis()
-        Log.w(TAG, "Playback host failure host=$host failures=${health.failures} reason=$reason")
+        Logger.w(TAG, "Playback host failure host=$host failures=${health.failures} reason=$reason")
     }
 
     fun notePlaybackHostSuccess(stream: StreamSource?) {

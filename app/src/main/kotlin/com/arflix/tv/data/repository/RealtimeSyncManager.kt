@@ -1,6 +1,6 @@
 package com.arflix.tv.data.repository
 
-import android.util.Log
+import com.arflix.tv.util.Logger
 import com.arflix.tv.util.Constants
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -122,7 +122,7 @@ class RealtimeSyncManager @Inject constructor(
 
     fun start() {
         if (isRunning.getAndSet(true)) return
-        Log.i(TAG, "Starting realtime sync")
+        Logger.i(TAG, "Starting realtime sync")
         _syncStatusFlow.value = CloudSyncStatus.RECONNECTING
         connectWebSocket()
         startPeriodicSync()
@@ -131,7 +131,7 @@ class RealtimeSyncManager @Inject constructor(
 
     fun stop() {
         if (!isRunning.getAndSet(false)) return
-        Log.i(TAG, "Stopping realtime sync")
+        Logger.i(TAG, "Stopping realtime sync")
         webSocket?.close(1000, "App stopping")
         webSocket = null
         heartbeatJob?.cancel()
@@ -150,7 +150,7 @@ class RealtimeSyncManager @Inject constructor(
 
         val userId = authRepository.getCurrentUserId()
         if (userId.isNullOrBlank()) {
-            Log.w(TAG, "Not logged in, skipping WebSocket connection")
+            Logger.w(TAG, "Not logged in, skipping WebSocket connection")
             _syncStatusFlow.value = CloudSyncStatus.NOT_SIGNED_IN
             scheduleReconnect()
             return
@@ -160,7 +160,7 @@ class RealtimeSyncManager @Inject constructor(
         scope.launch {
             val accessToken = authRepository.getAccessToken()
             if (accessToken.isNullOrBlank()) {
-                Log.w(TAG, "No access token, skipping WebSocket connection")
+                Logger.w(TAG, "No access token, skipping WebSocket connection")
                 _syncStatusFlow.value = CloudSyncStatus.NOT_SIGNED_IN
                 scheduleReconnect()
                 return@launch
@@ -182,7 +182,7 @@ class RealtimeSyncManager @Inject constructor(
 
         webSocket = wsClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.i(TAG, "WebSocket connected")
+                Logger.i(TAG, "WebSocket connected")
                 // Reset backoff on successful connection
                 currentReconnectDelay = INITIAL_RECONNECT_DELAY_MS
                 _syncStatusFlow.value = CloudSyncStatus.CONNECTED
@@ -195,13 +195,13 @@ class RealtimeSyncManager @Inject constructor(
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.w(TAG, "WebSocket failure: ${t.message}")
+                Logger.w(TAG, "WebSocket failure: ${t.message}")
                 _syncStatusFlow.value = CloudSyncStatus.RECONNECTING
                 scheduleReconnect()
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                Log.i(TAG, "WebSocket closing: $code $reason")
+                Logger.i(TAG, "WebSocket closing: $code $reason")
                 webSocket.close(1000, null)
                 if (isRunning.get()) {
                     _syncStatusFlow.value = CloudSyncStatus.RECONNECTING
@@ -210,7 +210,7 @@ class RealtimeSyncManager @Inject constructor(
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                Log.i(TAG, "WebSocket closed: $code")
+                Logger.i(TAG, "WebSocket closed: $code")
                 if (isRunning.get()) {
                     _syncStatusFlow.value = CloudSyncStatus.RECONNECTING
                     scheduleReconnect()
@@ -321,7 +321,7 @@ class RealtimeSyncManager @Inject constructor(
         }
         ws.send(watchedTablesJoin.toString())
 
-        Log.i(TAG, "Joined account_sync + watch_history + watched_status channels for user $userId")
+        Logger.i(TAG, "Joined account_sync + watch_history + watched_status channels for user $userId")
     }
 
     private fun handleMessage(text: String) {
@@ -334,74 +334,74 @@ class RealtimeSyncManager @Inject constructor(
                 "postgres_changes" -> {
                     when (topic) {
                         "realtime:account_sync" -> {
-                            Log.i(TAG, "Received account_sync change")
+                            Logger.i(TAG, "Received account_sync change")
                             debouncedPull()
                         }
                         "realtime:watch_history" -> {
-                            Log.i(TAG, "Received watch_history change")
+                            Logger.i(TAG, "Received watch_history change")
                             debouncedWatchHistoryEmit()
                         }
                         "realtime:watched_status" -> {
                             // watched_movies or watched_episodes changed on another device
                             // (e.g., Trakt sync completed). Trigger CW refresh so watched
                             // badges update and completed items leave the CW row.
-                            Log.i(TAG, "Received watched_status change (movies/episodes)")
+                            Logger.i(TAG, "Received watched_status change (movies/episodes)")
                             debouncedWatchHistoryEmit()
                         }
                         else -> {
-                            Log.w(TAG, "postgres_changes on unknown topic: $topic")
+                            Logger.w(TAG, "postgres_changes on unknown topic: $topic")
                         }
                     }
                 }
                 "phx_reply" -> {
                     val status = msg.optJSONObject("payload")?.optString("status")
-                    Log.d(TAG, "Channel reply ($topic): $status")
+                    Logger.d(TAG, "Channel reply ($topic): $status")
                 }
                 "phx_error" -> {
-                    Log.w(TAG, "Channel error: $text")
+                    Logger.w(TAG, "Channel error: $text")
                 }
                 "system" -> {
                     val payload = msg.optJSONObject("payload")
                     if (payload?.optString("status") == "ok") {
-                        Log.i(TAG, "Subscription confirmed ($topic)")
+                        Logger.i(TAG, "Subscription confirmed ($topic)")
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse realtime message: ${e.message}")
+            Logger.w(TAG, "Failed to parse realtime message: ${e.message}")
         }
     }
 
     private fun debouncedPull() {
         if (System.currentTimeMillis() - lastPushTimestamp < 3_000L) {
-            Log.d(TAG, "Skipping pull - recent push detected")
+            Logger.d(TAG, "Skipping pull - recent push detected")
             return
         }
 
         pendingPullJob?.cancel()
         pendingPullJob = scope.launch {
             delay(DEBOUNCE_MS)
-            Log.i(TAG, "Pulling cloud state after realtime notification")
+            Logger.i(TAG, "Pulling cloud state after realtime notification")
             runCatching { cloudSyncRepository.pullFromCloud() }
                 .onSuccess { result ->
                     if (result == CloudSyncRepository.RestoreResult.RESTORED) {
                         _accountSyncEvents.tryEmit(Unit)
                     }
                 }
-                .onFailure { Log.w(TAG, "Realtime pull failed: ${it.message}") }
+                .onFailure { Logger.w(TAG, "Realtime pull failed: ${it.message}") }
         }
     }
 
     private fun debouncedWatchHistoryEmit() {
         if (System.currentTimeMillis() - lastLocalWatchHistoryWriteTimestamp < WATCH_HISTORY_SELF_ECHO_GUARD_MS) {
-            Log.d(TAG, "Skipping watch_history emit - recent local write")
+            Logger.d(TAG, "Skipping watch_history emit - recent local write")
             return
         }
 
         pendingWatchHistoryEmitJob?.cancel()
         pendingWatchHistoryEmitJob = scope.launch {
             delay(WATCH_HISTORY_DEBOUNCE_MS)
-            Log.i(TAG, "Emitting watch_history event for Home refresh")
+            Logger.i(TAG, "Emitting watch_history event for Home refresh")
             _watchHistoryEvents.tryEmit(Unit)
         }
     }
@@ -438,7 +438,7 @@ class RealtimeSyncManager @Inject constructor(
             // Exponential backoff: 5s → 10s → 20s → 40s cap
             currentReconnectDelay = (currentReconnectDelay * 2).coerceAtMost(MAX_RECONNECT_DELAY_MS)
             if (isRunning.get()) {
-                Log.i(TAG, "Reconnecting WebSocket (backoff: ${currentReconnectDelay / 1000}s next)...")
+                Logger.i(TAG, "Reconnecting WebSocket (backoff: ${currentReconnectDelay / 1000}s next)...")
                 connectWebSocket()
             }
         }
@@ -458,13 +458,13 @@ class RealtimeSyncManager @Inject constructor(
                 // change. The dirty flag is cleared on success inside
                 // pushToCloud, so there's no retry loop risk.
                 if (cloudSyncRepository.isPushDirty) {
-                    Log.i(TAG, "Periodic sync: retrying dirty push")
+                    Logger.i(TAG, "Periodic sync: retrying dirty push")
                     runCatching { cloudSyncRepository.pushToCloud() }
-                        .onFailure { Log.w(TAG, "Dirty push retry failed: ${it.message}") }
+                        .onFailure { Logger.w(TAG, "Dirty push retry failed: ${it.message}") }
                 }
-                Log.d(TAG, "Periodic sync tick")
+                Logger.d(TAG, "Periodic sync tick")
                 runCatching { cloudSyncRepository.pullFromCloud() }
-                    .onFailure { Log.w(TAG, "Periodic sync failed: ${it.message}") }
+                    .onFailure { Logger.w(TAG, "Periodic sync failed: ${it.message}") }
             }
         }
     }
@@ -487,7 +487,7 @@ class RealtimeSyncManager @Inject constructor(
                 try {
                     val freshToken = authRepository.getAccessToken()
                     if (!freshToken.isNullOrBlank() && freshToken != currentAccessToken) {
-                        Log.i(TAG, "Access token changed, reconnecting WebSocket with fresh token")
+                        Logger.i(TAG, "Access token changed, reconnecting WebSocket with fresh token")
                         webSocket?.close(1000, "Token refresh")
                         webSocket = null
                         heartbeatJob?.cancel()
@@ -495,7 +495,7 @@ class RealtimeSyncManager @Inject constructor(
                         connectWebSocket()
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Token refresh check failed: ${e.message}")
+                    Logger.w(TAG, "Token refresh check failed: ${e.message}")
                 }
             }
         }

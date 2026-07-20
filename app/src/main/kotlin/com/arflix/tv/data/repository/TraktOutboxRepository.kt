@@ -10,7 +10,8 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
-import java.util.UUID
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,7 +26,8 @@ enum class TraktOutboxAction {
 
 @Keep
 data class TraktOutboxItem(
-    val id: String = UUID.randomUUID().toString(),
+    @OptIn(ExperimentalUuidApi::class)
+    val id: String = Uuid.random().toString(),
     val action: TraktOutboxAction,
     val tmdbId: Int? = null,
     val showTraktId: Int? = null,

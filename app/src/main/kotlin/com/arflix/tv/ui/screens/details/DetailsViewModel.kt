@@ -1,6 +1,6 @@
 package com.arflix.tv.ui.screens.details
 
-import android.util.Log
+import com.arflix.tv.util.Logger
 import androidx.lifecycle.ViewModel
 import com.arflix.tv.data.repository.PreferenceStore
 import com.arflix.tv.data.repository.PlatformEnvironment
@@ -330,7 +330,7 @@ class DetailsViewModel @Inject constructor(
 
                 fun logDetailsLoadFailure(label: String, throwable: Throwable) {
                     if (throwable is CancellationException) throw throwable
-                    Log.w(TAG, "Failed to load details $label", throwable)
+                    Logger.w(TAG, "Failed to load details $label", throwable)
                 }
 
                 suspend fun <T> loadDetailsPart(label: String, block: suspend () -> T): T? {
@@ -1442,7 +1442,7 @@ class DetailsViewModel @Inject constructor(
 
             if (requestMediaType == MediaType.MOVIE) {
                 val title = _uiState.value.item?.title.orEmpty()
-                Log.d(
+                Logger.d(
                     TAG,
                     "[MovieSources] loadStreams start requestId=$requestId mediaId=$requestMediaId imdbId=${resolvedImdbId ?: "null"} title=$title"
                 )
@@ -1488,23 +1488,23 @@ class DetailsViewModel @Inject constructor(
                     val enabledStreamingAddons = enabledAddons.size
                     val stremioCount = enabledAddons.count { it.runtimeKind == com.arflix.tv.data.model.RuntimeKind.STREMIO }
                     val enabledAddonNames = enabledAddons.take(4).joinToString(",") { it.name }
-                    Log.d(
+                    Logger.d(
                         TAG,
                         "[MovieSources] enabledStreamingAddons=$enabledStreamingAddons requestId=$requestId mediaId=$requestMediaId"
                     )
-                    Log.d(
+                    Logger.d(
                         TAG,
                         "[MovieSources] addonBreakdown stremio=$stremioCount names=$enabledAddonNames"
                     )
                     if (enabledStreamingAddons == 0) {
-                        Log.w(
+                        Logger.w(
                             TAG,
                             "[MovieSources] no streaming addons enabled. Install/enable sources in Settings > Addons."
                         )
                     }
 
                     if (effectiveStreamId.isNullOrBlank()) {
-                        Log.w(
+                        Logger.w(
                             TAG,
                             "[MovieSources] loadStreams skipped (missing imdbId) requestId=$requestId mediaId=$requestMediaId"
                         )
@@ -1529,7 +1529,7 @@ class DetailsViewModel @Inject constructor(
                             (progressive.streams + existingVod)
                                 .distinctBy { "${it.url?.trim().orEmpty()}|${it.source}" }
                         )
-                        Log.d(
+                        Logger.d(
                             TAG,
                             "[MovieSources] progressive requestId=$requestId final=${progressive.isFinal} " +
                                 "incoming=${progressive.streams.size} merged=${mergedStreams.size} subtitles=${progressive.subtitles.size}"
@@ -1549,7 +1549,7 @@ class DetailsViewModel @Inject constructor(
                         )
                         prewarmVisibleStreams(mergedStreams)
                         if (progressive.isFinal) {
-                            Log.d(
+                            Logger.d(
                                 TAG,
                                 "[MovieSources] loadStreams completed requestId=$requestId mediaId=$requestMediaId totalStreams=${mergedStreams.size}"
                             )
@@ -1610,7 +1610,7 @@ class DetailsViewModel @Inject constructor(
             } catch (e: Exception) {
                 if (!isCurrentRequest()) return@launch
                 if (requestMediaType == MediaType.MOVIE) {
-                    Log.e(
+                    Logger.e(
                         TAG,
                         "[MovieSources] loadStreams failed requestId=$requestId mediaId=$requestMediaId message=${e.message}",
                         e

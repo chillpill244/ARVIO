@@ -2,7 +2,7 @@ package com.arflix.tv.network
 
 import android.app.ActivityManager
 import android.content.Context
-import android.util.Log
+import com.arflix.tv.util.Logger
 import coil3.ImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
@@ -164,7 +164,7 @@ object OkHttpProvider {
 
                 try {
                     val fallback = systemDns.lookup(hostname)
-                    Log.w(TAG, "DNS provider=$provider failed for $hostname, using system DNS fallback")
+                    Logger.w(TAG, "DNS provider=$provider failed for $hostname, using system DNS fallback")
                     fallback
                 } catch (_: UnknownHostException) {
                     throw selectedFailure
@@ -175,7 +175,7 @@ object OkHttpProvider {
 
     private val apiDnsLoggingInterceptor = Interceptor { chain ->
         val request = chain.request()
-        Log.i(
+        Logger.i(
             TAG,
             "API request dnsProvider=$selectedDnsProvider method=${request.method} host=${request.url.host} url=${request.url}"
         )
@@ -397,11 +397,11 @@ object OkHttpProvider {
 
     fun setDnsProvider(provider: AppDnsProvider) {
         selectedDnsProvider = provider
-        Log.i(TAG, "Using DNS provider=$provider")
+        Logger.i(TAG, "Using DNS provider=$provider")
         dnsScope.launch {
             appConnectionPool.evictAll()
             playbackConnectionPool.evictAll()
-            Log.i(TAG, "Evicted pooled app connections after DNS change")
+            Logger.i(TAG, "Evicted pooled app connections after DNS change")
         }
     }
 

@@ -28,6 +28,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import com.arflix.tv.util.Logger
 
 data class HttpLocalScraperInstallCandidate(
     val name: String,
@@ -703,7 +704,7 @@ class HttpLocalScraperRuntime @Inject constructor(
         val m3u8Regex = Regex("""(?:file|src|source)\s*[:=]\s*["'](https?://[^"']*\.m3u8[^"']*)["']""")
         val m3u8 = m3u8Regex.find(text)?.groupValues?.get(1) ?: return null
         val host = runCatching { java.net.URI(url).host }.getOrNull() ?: ""
-        android.util.Log.d("Toonstream", "m3u8 found at $host: $m3u8")
+        Logger.d("Toonstream", "m3u8 found at $host: $m3u8")
         return HttpResolvedStream("Toonstream", host, m3u8, "Auto",
             mapOf("Referer" to url))
     }
@@ -725,7 +726,7 @@ class HttpLocalScraperRuntime @Inject constructor(
         } ?: return null
         val data = runCatching { gson.fromJson(responseText, JsonObject::class.java) }.getOrNull() ?: return null
         val m3u8 = data.string("videoSource")?.takeIf { it.isNotBlank() } ?: return null
-        android.util.Log.d("Toonstream", "AWS m3u8 at ${uri.host}: $m3u8")
+        Logger.d("Toonstream", "AWS m3u8 at ${uri.host}: $m3u8")
         return HttpResolvedStream("Toonstream", uri.host, m3u8, "Auto")
     }
 

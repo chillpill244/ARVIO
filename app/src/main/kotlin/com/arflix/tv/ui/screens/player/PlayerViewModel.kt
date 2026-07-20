@@ -1,6 +1,6 @@
 package com.arflix.tv.ui.screens.player
 
-import android.util.Log
+import com.arflix.tv.util.Logger
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.ViewModel
@@ -929,7 +929,7 @@ class PlayerViewModel @Inject constructor(
                                 }
                                 if (snapshot.isNotEmpty()) {
                                     autoplaySelected = true
-                                    Log.i(
+                                    Logger.i(
                                         TAG,
                                         "Autoplay selecting after quality window streams=${snapshot.size} elapsedMs=${System.currentTimeMillis() - collectionStartMs}"
                                     )
@@ -957,7 +957,7 @@ class PlayerViewModel @Inject constructor(
                         autoplaySelected = true
                         autoplayDeferredJob?.cancel()
                         autoplayDeferredJob = null
-                        Log.i(
+                        Logger.i(
                             TAG,
                             "Autoplay selecting streams=${mergedStreams.size} completed=$completed/$total final=${progressive.isFinal} cached=$hasCachedReadyStream preferred=$hasRequestedPreferredStream elapsedMs=$elapsedMs top=${topStream?.quality}/${topStream?.size}"
                         )
@@ -1562,7 +1562,7 @@ class PlayerViewModel @Inject constructor(
         if (addonId.isNotBlank()) {
             streamRepository.noteAddonPlaybackStarted(addonId, startupMs)
         }
-        Log.i(
+        Logger.i(
             TAG,
             "Playback started addonId=${addonId.ifBlank { "unknown" }} " +
                 "source=${_uiState.value.selectedStream?.source ?: currentPreferredSourceName ?: "unknown"} " +
@@ -1972,7 +1972,7 @@ class PlayerViewModel @Inject constructor(
                 )
                 return@launch
             }
-            Log.i(
+            Logger.i(
                 TAG,
                 "Selected stream resolvedMs=$resolveMs addon=${resolvedStream.addonId} quality=${resolvedStream.quality} size=${resolvedStream.size} cached=${resolvedStream.behaviorHints?.cached == true} host=${runCatching { java.net.URI(url).host }.getOrNull().orEmpty()}"
             )

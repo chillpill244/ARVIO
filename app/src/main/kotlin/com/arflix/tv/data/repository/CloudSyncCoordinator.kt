@@ -1,6 +1,6 @@
 package com.arflix.tv.data.repository
 
-import android.util.Log
+import com.arflix.tv.util.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -59,7 +59,7 @@ class CloudSyncCoordinator @Inject constructor(
                 if (userId.isNullOrBlank()) return@launch
                 runCatching { cloudSyncRepository.pushToCloud() }
                     .onFailure { error ->
-                        Log.w("CloudSyncCoordinator", "Cloud push failed after ${invalidation.scope}: ${error.message}")
+                        Logger.w("CloudSyncCoordinator", "Cloud push failed after ${invalidation.scope}: ${error.message}")
                         cloudSyncRepository.markLocalStateDirty()
                     }
             }
