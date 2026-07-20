@@ -1,6 +1,7 @@
 package com.arflix.tv.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.background
@@ -64,6 +65,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
 import com.arflix.tv.R
+import com.arflix.tv.ui.theme.AccentGreen
 import com.arflix.tv.ui.theme.appBackgroundDark
 
 data class BottomBarItem(
@@ -146,7 +148,7 @@ fun AppBottomBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(CircleShape)
-                .background(Color(0xFF141414).copy(alpha = 0.95f))
+                .background(Color(0xFF1C1C1E).copy(alpha = 0.82f))
                 .padding(horizontal = 6.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
@@ -162,10 +164,13 @@ fun AppBottomBar(
                     showAsDownloads -> "Downloads"
                     else -> stringResource(item.labelRes)
                 }
-                val iconTint = when {
-                    isFocused || isSelected -> Color.White
-                    else -> Color.White.copy(alpha = 0.55f)
-                }
+                val iconTint by animateColorAsState(
+                    targetValue = when {
+                        isFocused || isSelected -> Color.White
+                        else -> Color.White.copy(alpha = 0.55f)
+                    },
+                    label = "iconTint"
+                )
                 val icon = when {
                     showAsDownloads && isSelected -> Icons.Rounded.Download
                     showAsDownloads -> Icons.Outlined.Download
@@ -173,7 +178,10 @@ fun AppBottomBar(
                     else -> item.unselectedIcon
                 }
                 val iconScale = if (showAsDownloads || item.route == "search") 1.12f else 1f
-                val selectedBgColor = if (isSelected) Color.White.copy(alpha = 0.12f) else Color.Transparent
+                val selectedBgColor by animateColorAsState(
+                    targetValue = if (isSelected) Color.White.copy(alpha = 0.12f) else Color.Transparent,
+                    label = "bgColor"
+                )
 
                 Column(
                     modifier = Modifier
