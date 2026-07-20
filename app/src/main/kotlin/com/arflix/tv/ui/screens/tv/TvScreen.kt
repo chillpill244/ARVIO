@@ -132,6 +132,7 @@ import com.arflix.tv.util.LocalDeviceType
 import com.arflix.tv.ui.components.SidebarItem
 import com.arflix.tv.ui.components.topBarFocusedItem
 import com.arflix.tv.ui.components.topBarMaxIndex
+import com.arflix.tv.ui.components.LocalAppBottomBarPadding
 import com.arflix.tv.ui.theme.AccentGreen
 import com.arflix.tv.ui.theme.ArflixTypography
 import com.arflix.tv.ui.theme.BackgroundCard
@@ -1842,7 +1843,7 @@ private fun ChannelGrid(
                 start = 10.dp,
                 end = 10.dp,
                 top = if (isMobile) 8.dp else 20.dp,
-                bottom = 8.dp
+                bottom = 8.dp + LocalAppBottomBarPadding.current
             ),
             modifier = Modifier.fillMaxSize()
         ) {

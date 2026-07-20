@@ -64,6 +64,7 @@ import com.arflix.tv.ui.components.LoadingIndicator
 import com.arflix.tv.ui.components.MediaCard
 import com.arflix.tv.ui.components.MediaCategoryRail
 import com.arflix.tv.ui.components.TopBarClock
+import com.arflix.tv.ui.components.LocalAppBottomBarPadding
 import androidx.compose.material.icons.filled.LiveTv
 import com.arflix.tv.ui.theme.ArflixTypography
 import com.arflix.tv.ui.theme.BackgroundCard
@@ -631,7 +632,7 @@ fun MediaCategoryContent(
                                 state = itemsGridState,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                                contentPadding = PaddingValues(top = 10.dp, start = 4.dp, end = 4.dp, bottom = 4.dp),
+                                contentPadding = PaddingValues(top = 10.dp, start = 4.dp, end = 4.dp, bottom = 4.dp + LocalAppBottomBarPadding.current),
                                 modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp)
                             ) {
                                 itemsIndexed(
