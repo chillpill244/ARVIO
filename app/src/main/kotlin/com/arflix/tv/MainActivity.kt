@@ -23,7 +23,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxWidth
 
 import androidx.compose.foundation.layout.height
@@ -617,7 +620,7 @@ fun ArflixApp(
     val bottomBarScrollState = rememberAppBottomBarScrollState()
 
     CompositionLocalProvider(
-        LocalAppBottomBarPadding provides if (showBottomBar) 84.dp else 0.dp
+        LocalAppBottomBarPadding provides if (showBottomBar) 72.dp else 0.dp
     ) {
         Box(
         modifier = Modifier

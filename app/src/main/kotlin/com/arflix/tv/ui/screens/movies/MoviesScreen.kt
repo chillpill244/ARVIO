@@ -77,6 +77,7 @@ import com.arflix.tv.ui.components.rememberCardLayoutMode
 import com.arflix.tv.ui.components.topBarFocusedItem
 import com.arflix.tv.ui.components.topBarMaxIndex
 import com.arflix.tv.ui.components.topBarSelectedIndex
+import com.arflix.tv.ui.components.LocalAppBottomBarPadding
 import com.arflix.tv.ui.screens.shared.IptvNotConfiguredPanel
 import com.arflix.tv.ui.screens.shared.MediaCategoryContent
 import com.arflix.tv.ui.theme.BackgroundDark
@@ -495,7 +496,7 @@ private fun MobileMoviesLayout(
                             columns = GridCells.Fixed(3),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
-                            contentPadding = PaddingValues(top = 32.dp, bottom = 4.dp),
+                            contentPadding = PaddingValues(top = 32.dp, bottom = 4.dp + LocalAppBottomBarPadding.current),
                             modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp)
                         ) {
                             items(uiState.displayedItems, key = { "${it.iptvMovieId ?: it.id}_${it.title}" }) { item ->
