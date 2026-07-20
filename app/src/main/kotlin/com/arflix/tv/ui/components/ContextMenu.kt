@@ -272,7 +272,7 @@ fun ContextMenu(
                                 indication = null,
                                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                             ) { /* consume click so backdrop handler doesn't fire */ }
-                            .padding(top = 16.dp, bottom = 24.dp)
+                            .padding(top = 16.dp, bottom = 24.dp + LocalAppBottomBarPadding.current)
                     ) {
                         // Drag handle indicator
                         Box(

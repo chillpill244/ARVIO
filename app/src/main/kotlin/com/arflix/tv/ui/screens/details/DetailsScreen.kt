@@ -1953,7 +1953,7 @@ internal fun DetailsContent(
                 }
 
                 // Bottom spacing
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(32.dp + com.arflix.tv.ui.components.LocalAppBottomBarPadding.current))
             }
 
             // Persistent back button for phone users (hidden on tablet/TV).

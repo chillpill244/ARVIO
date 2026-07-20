@@ -682,7 +682,7 @@ fun StreamSelector(
                     } else {
                         LazyColumn(
                             state = mobileListState,
-                            contentPadding = PaddingValues(vertical = 8.dp),
+                            contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp + com.arflix.tv.ui.components.LocalAppBottomBarPadding.current),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier
                                 .fillMaxSize()
