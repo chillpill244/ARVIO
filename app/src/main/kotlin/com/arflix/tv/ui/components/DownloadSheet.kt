@@ -217,7 +217,7 @@ fun DownloadSheet(
                     .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                     .background(Color(0xFF1A1A1A))
                     .navigationBarsPadding()
-                    .padding(bottom = 16.dp)
+                    .padding(bottom = 16.dp + LocalAppBottomBarPadding.current)
             ) {
                 // Handle
                 Box(

@@ -3,6 +3,7 @@ package com.arflix.tv.ui.screens.downloads
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import com.arflix.tv.ui.components.LocalAppBottomBarPadding
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -173,7 +174,7 @@ fun DownloadsTab(
                         )
                     }
                 }
-                Spacer(Modifier.height(48.dp))
+                Spacer(Modifier.height(48.dp + com.arflix.tv.ui.components.LocalAppBottomBarPadding.current))
             }
         }
 
@@ -454,7 +455,7 @@ private fun SeriesActionsSheet(
                     .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                     .background(Color(0xFF1A1A1A))
                     .navigationBarsPadding()
-                    .padding(bottom = 8.dp)
+                    .padding(bottom = 8.dp + LocalAppBottomBarPadding.current)
             ) {
                 Box(
                     modifier = Modifier

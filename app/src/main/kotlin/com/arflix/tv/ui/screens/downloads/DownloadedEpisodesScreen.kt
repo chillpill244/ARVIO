@@ -104,7 +104,7 @@ fun DownloadedEpisodesScreen(
             }
 
             LazyColumn(
-                contentPadding = PaddingValues(bottom = 48.dp)
+                contentPadding = PaddingValues(bottom = 48.dp + com.arflix.tv.ui.components.LocalAppBottomBarPadding.current)
             ) {
                 bySeason.forEach { (season, seasonEps) ->
                     stickyHeader(key = "season_$season") {
