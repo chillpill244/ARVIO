@@ -51,7 +51,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import retrofit2.HttpException
 import java.text.Normalizer
-import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -181,11 +180,8 @@ class TraktRepository @Inject constructor(
      */
     suspend fun getTokenExpirationDate(): String? {
         val expiresAt = getTokenExpiration() ?: return null
-        val expirationDate = java.time.Instant.ofEpochSecond(expiresAt)
-        val formatter = java.time.format.DateTimeFormatter
-            .ofPattern("MMM dd, yyyy")
-            .withZone(java.time.ZoneId.systemDefault())
-        return formatter.format(expirationDate)
+        val expirationDateMs = expiresAt * 1000L
+        return com.arflix.tv.util.KmpDateUtils.formatSyncTime(expirationDateMs).substringBefore(" at")
     }
 
     suspend fun getDeviceCode(): TraktDeviceCode {
@@ -2260,7 +2256,7 @@ class TraktRepository @Inject constructor(
 
     private fun parseIso8601(dateString: String): Long {
         return try {
-            java.time.Instant.parse(dateString).toEpochMilli()
+            com.arflix.tv.util.KmpDateUtils.parseIsoDate(dateString)
         } catch (e: Exception) {
             0L
         }
@@ -2676,7 +2672,7 @@ class TraktRepository @Inject constructor(
 
     private fun parseTraktListedAtMs(value: String?): Long {
         if (value.isNullOrBlank()) return 0L
-        return runCatching { java.time.Instant.parse(value).toEpochMilli() }.getOrDefault(0L)
+        return com.arflix.tv.util.KmpDateUtils.parseIsoDate(value)
     }
 
     private suspend fun resolveWatchlistMovieTmdbId(movie: TraktMovieInfo): Int? {
@@ -3971,10 +3967,8 @@ private fun isAlreadyAiredDate(rawDate: String?): Boolean {
     val value = rawDate?.trim().orEmpty()
     if (value.isEmpty()) return false
     return try {
-        val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        parser.isLenient = false
-        val parsed = parser.parse(value) ?: return false
-        parsed.time <= System.currentTimeMillis()
+        val parsedTime = com.arflix.tv.util.KmpDateUtils.parseIsoDate(value)
+        parsedTime != 0L && parsedTime <= com.arflix.tv.util.KmpDateUtils.nowEpochMillis()
     } catch (_: Exception) {
         false
     }
@@ -4032,14 +4026,7 @@ private data class ContinueWatchingCandidate(
  */
 private fun formatDateString(dateStr: String?): String {
     if (dateStr.isNullOrEmpty()) return ""
-    return try {
-        val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val outputFormat = SimpleDateFormat("MMMM d, yyyy", Locale.US)
-        val date = inputFormat.parse(dateStr)
-        date?.let { outputFormat.format(it) } ?: ""
-    } catch (e: Exception) {
-        ""
-    }
+    return com.arflix.tv.util.KmpDateUtils.formatLongDate(dateStr)
 }
 
 private fun buildEpisodeKey(

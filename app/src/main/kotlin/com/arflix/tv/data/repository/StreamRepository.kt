@@ -1446,12 +1446,8 @@ class StreamRepository @Inject constructor(
                             val month = dateParts[1].toIntOrNull()
                             val day = dateParts[2].toIntOrNull()
                             if (year != null && month != null && day != null) {
-                                val cal = java.util.Calendar.getInstance().apply {
-                                    set(java.util.Calendar.YEAR, year)
-                                    set(java.util.Calendar.MONTH, month - 1)
-                                    set(java.util.Calendar.DAY_OF_MONTH, day)
-                                }
-                                val dayOfYear = cal.get(java.util.Calendar.DAY_OF_YEAR)
+                                val d = kotlinx.datetime.LocalDate(year, month, day)
+                                val dayOfYear = d.dayOfYear
                                 val airDateId = "$imdbId:$year:$dayOfYear"
                                 val airDateUrl = if (queryParams != null) {
                                     "$baseUrl/stream/series/$airDateId.json?$queryParams"

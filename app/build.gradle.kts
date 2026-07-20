@@ -254,6 +254,7 @@ dependencies {
     
     // Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
 
     // HTML parsing for catalog discovery.
     implementation("com.fleeksoft.ksoup:ksoup:0.2.0")

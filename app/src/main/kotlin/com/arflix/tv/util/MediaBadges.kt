@@ -1,25 +1,24 @@
 package com.arflix.tv.util
 
+import kotlinx.datetime.todayIn
+
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import java.util.Locale
 
-private val releaseDateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 private val genreWordStartRegex = Regex("(^|[\\s/&-])([\\p{L}])")
 private val tvWordRegex = Regex("\\bTv\\b")
 
-fun isInCinema(item: MediaItem, now: LocalDate = LocalDate.now()): Boolean {
+fun isInCinema(item: MediaItem): Boolean {
     if (item.mediaType != MediaType.MOVIE) return false
     val releaseDate = item.releaseDate?.takeIf { it.isNotBlank() } ?: return false
     val parsedDate = kotlin.runCatching {
-        LocalDate.parse(releaseDate, releaseDateFormatter)
+        kotlinx.datetime.LocalDate.parse(releaseDate)
     }.getOrNull() ?: return false
 
-    if (parsedDate.isAfter(now)) return false
-    return ChronoUnit.DAYS.between(parsedDate, now) < 60
+    val now = kotlinx.datetime.Clock.System.todayIn(kotlinx.datetime.TimeZone.UTC)
+    if (parsedDate > now) return false
+    return (now.toEpochDays() - parsedDate.toEpochDays()) < 60
 }
 
 fun parseRatingValue(raw: String): Float {

@@ -31,7 +31,6 @@ import kotlinx.coroutines.delay
 import android.content.Context
 import android.text.format.DateFormat
 import androidx.compose.ui.platform.LocalContext
-import java.util.Date
 
 /**
  * Top bar clock display with optional profile indicator
@@ -123,5 +122,5 @@ private fun ProfileIndicator(
 
 private fun getCurrentTime(context: Context): String {
     val timeFormat = DateFormat.getTimeFormat(context)
-    return timeFormat.format(Date())
+    return timeFormat.format(com.arflix.tv.util.KmpDateUtils.nowEpochMillis())
 }

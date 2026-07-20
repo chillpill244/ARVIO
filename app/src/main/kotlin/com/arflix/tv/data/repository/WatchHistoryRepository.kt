@@ -5,7 +5,6 @@ import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.util.Constants
 import kotlinx.serialization.Serializable
 import retrofit2.HttpException
-import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Provider
@@ -173,7 +172,7 @@ class WatchHistoryRepository @Inject constructor(
         // trigger a redundant Home Continue Watching refresh. See issue #91 fix.
         if (saved) {
             val profileId = currentProfileId()
-            val nowIso = Instant.now().toString()
+            val nowIso = com.arflix.tv.util.KmpDateUtils.nowIsoString()
             val cachedEntry = entry.copy(
                 paused_at = nowIso,
                 updated_at = nowIso
@@ -413,7 +412,7 @@ class WatchHistoryRepository @Inject constructor(
     private fun parseEpoch(value: String?): Long {
         if (value.isNullOrBlank()) return 0L
         return try {
-            Instant.parse(value).toEpochMilli()
+            kotlinx.datetime.Instant.parse(value).toEpochMilliseconds()
         } catch (_: Exception) {
             0L
         }

@@ -176,8 +176,6 @@ import com.arflix.tv.util.LocalDeviceType
 import com.arflix.tv.util.formatGenreName
 import com.arflix.tv.util.isInCinema
 import com.arflix.tv.util.parseRatingValue
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 import androidx.compose.ui.res.stringResource
@@ -3815,10 +3813,7 @@ private fun formatEpisodeAirDateLabel(rawDate: String): String? {
     val value = rawDate.trim()
     if (value.isEmpty()) return null
     return try {
-        val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        parser.isLenient = false
-        val date = parser.parse(value) ?: return value
-        SimpleDateFormat("d MMM yyyy", Locale.US).format(date)
+        com.arflix.tv.util.KmpDateUtils.formatMediumDate(value)
     } catch (_: Exception) {
         value
     }
@@ -3828,10 +3823,8 @@ private fun isFutureEpisodeAirDate(rawDate: String): Boolean {
     val value = rawDate.trim()
     if (value.isEmpty()) return false
     return try {
-        val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        parser.isLenient = false
-        val date = parser.parse(value) ?: return false
-        date.after(Date())
+        val parsedMs = com.arflix.tv.util.KmpDateUtils.parseIsoDate(value)
+        parsedMs > com.arflix.tv.util.KmpDateUtils.nowEpochMillis()
     } catch (_: Exception) {
         false
     }

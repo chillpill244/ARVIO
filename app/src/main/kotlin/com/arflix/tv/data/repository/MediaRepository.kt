@@ -49,8 +49,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.URLDecoder
-import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import android.content.Context
@@ -1609,15 +1607,8 @@ class MediaRepository @Inject constructor(
             return (firstItems + secondItems).distinctBy { it.id }.take(40)
         }
 
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val calendar = Calendar.getInstance()
-        // Wider windows keep rows filled up to 40 items consistently.
-        calendar.add(Calendar.MONTH, -12)
-        val twelveMonthsAgo = dateFormat.format(calendar.time)
-        // Anime needs a wider horizon for slower seasonal cycles.
-        calendar.time = Calendar.getInstance().time
-        calendar.add(Calendar.MONTH, -18)
-        val eighteenMonthsAgo = dateFormat.format(calendar.time)
+        val twelveMonthsAgo = com.arflix.tv.util.KmpDateUtils.getIsoDateMonthsAgo(12)
+        val eighteenMonthsAgo = com.arflix.tv.util.KmpDateUtils.getIsoDateMonthsAgo(18)
 
         // Main trending - TMDB's daily trending for fresh content
         val trendingMovies = async { fetchUpTo40 { page -> tmdbApi.getTrendingMovies(apiKey, language = contentLanguage, page = page) } }
@@ -1680,13 +1671,8 @@ class MediaRepository @Inject constructor(
     ): CategoryPageResult {
         if (page < 1) return CategoryPageResult(emptyList(), hasMore = false)
 
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val calendar = Calendar.getInstance()
-        calendar.add(Calendar.MONTH, -12)
-        val twelveMonthsAgo = dateFormat.format(calendar.time)
-        calendar.time = Calendar.getInstance().time
-        calendar.add(Calendar.MONTH, -18)
-        val eighteenMonthsAgo = dateFormat.format(calendar.time)
+        val twelveMonthsAgo = com.arflix.tv.util.KmpDateUtils.getIsoDateMonthsAgo(12)
+        val eighteenMonthsAgo = com.arflix.tv.util.KmpDateUtils.getIsoDateMonthsAgo(18)
 
         val response = runCatching {
             when (categoryId) {
@@ -3190,7 +3176,7 @@ class MediaRepository @Inject constructor(
      */
     suspend fun loadDiscoverCategory(categoryId: String, title: String): Category? {
         return try {
-            val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+
             val items = when (categoryId) {
                 "trending_movies" -> {
                     val r1 = tmdbApi.getTrendingMovies(apiKey, language = contentLanguage, page = 1)
@@ -3209,10 +3195,8 @@ class MediaRepository @Inject constructor(
                     r1.results.map { it.toMediaItem(MediaType.MOVIE) }
                 }
                 "new_releases" -> {
-                    val cal = java.util.Calendar.getInstance()
-                    val today = dateFormat.format(cal.time)
-                    cal.add(java.util.Calendar.DAY_OF_YEAR, -30)
-                    val thirtyDaysAgo = dateFormat.format(cal.time)
+                    val today = com.arflix.tv.util.KmpDateUtils.getIsoDateDaysAgo(0)
+                    val thirtyDaysAgo = com.arflix.tv.util.KmpDateUtils.getIsoDateDaysAgo(30)
                     val r1 = tmdbApi.discoverMovies(apiKey, sortBy = "popularity.desc", language = contentLanguage, releaseDateGte = thirtyDaysAgo, releaseDateLte = today, page = 1)
                     r1.results.map { it.toMediaItem(MediaType.MOVIE) }
                 }
@@ -3858,14 +3842,7 @@ private fun TmdbPersonDetails.toPersonDetails(): PersonDetails {
 
 private fun formatDate(dateStr: String): String {
     if (dateStr.isEmpty()) return ""
-    return try {
-        val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val outputFormat = SimpleDateFormat("d MMM yyyy", Locale.US)  // "12 Jan 2025" format
-        val date = inputFormat.parse(dateStr)
-        date?.let { outputFormat.format(it) } ?: dateStr
-    } catch (e: Exception) {
-        dateStr
-    }
+    return com.arflix.tv.util.KmpDateUtils.formatMediumDate(dateStr)
 }
 
 private object MediaRegexes {

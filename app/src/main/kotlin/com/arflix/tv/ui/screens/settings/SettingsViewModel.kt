@@ -1,5 +1,7 @@
 package com.arflix.tv.ui.screens.settings
 
+import kotlinx.datetime.toLocalDateTime
+
 import android.graphics.Bitmap
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -651,11 +653,14 @@ class SettingsViewModel @Inject constructor(
     private fun formatSyncTime(isoTime: String?): String? {
         if (isoTime == null) return null
         return try {
-            val instant = java.time.Instant.parse(isoTime)
-            val formatter = java.time.format.DateTimeFormatter
-                .ofPattern("MMM dd, yyyy 'at' h:mm a")
-                .withZone(java.time.ZoneId.systemDefault())
-            formatter.format(instant)
+            val instant = kotlinx.datetime.Instant.parse(isoTime)
+            val local = instant.toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+            val monthNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+            val amPm = if (local.hour >= 12) "PM" else "AM"
+            val hour12 = if (local.hour % 12 == 0) 12 else local.hour % 12
+            val min = local.minute.toString().padStart(2, '0')
+            val day = local.dayOfMonth.toString().padStart(2, '0')
+            "${monthNames[local.monthNumber - 1]} $day, ${local.year} at $hour12:$min $amPm"
         } catch (e: Exception) {
             null
         }
@@ -724,7 +729,7 @@ class SettingsViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         syncedMovies = result.moviesSynced,
                         syncedEpisodes = result.episodesSynced,
-                        lastSyncTime = formatSyncTime(java.time.Instant.now().toString()),
+                        lastSyncTime = formatSyncTime(kotlinx.datetime.Clock.System.now().toString()),
                         toastMessage = "Synced ${result.moviesSynced} movies and ${result.episodesSynced} episodes",
                         toastType = ToastType.SUCCESS
                     )
@@ -752,7 +757,7 @@ class SettingsViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         syncedMovies = _uiState.value.syncedMovies + result.moviesSynced,
                         syncedEpisodes = _uiState.value.syncedEpisodes + result.episodesSynced,
-                        lastSyncTime = formatSyncTime(java.time.Instant.now().toString()),
+                        lastSyncTime = formatSyncTime(kotlinx.datetime.Clock.System.now().toString()),
                         toastMessage = if (result.moviesSynced == 0 && result.episodesSynced == 0)
                             "Already up to date"
                         else

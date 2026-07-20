@@ -446,9 +446,7 @@ internal fun formatTimeWindow(p: IptvProgram?): String {
 }
 
 internal fun formatClock(utcMillis: Long): String {
-    val c = java.util.Calendar.getInstance()
-    c.timeInMillis = utcMillis
-    return "%02d:%02d".format(c.get(java.util.Calendar.HOUR_OF_DAY), c.get(java.util.Calendar.MINUTE))
+    return com.arflix.tv.util.KmpDateUtils.formatTime24h(com.arflix.tv.util.KmpDateUtils.nowEpochMillis())
 }
 
 internal fun remainingLabel(p: IptvProgram?): String {

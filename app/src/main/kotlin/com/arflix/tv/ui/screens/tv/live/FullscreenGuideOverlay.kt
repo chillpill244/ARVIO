@@ -3,6 +3,7 @@
 package com.arflix.tv.ui.screens.tv.live
 
 import androidx.activity.compose.BackHandler
+import kotlinx.datetime.toLocalDateTime
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -71,9 +72,6 @@ import androidx.tv.material3.Text
 import com.arflix.tv.data.model.IptvNowNext
 import com.arflix.tv.data.model.IptvProgram
 import kotlinx.coroutines.delay
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private enum class GuideProgramState {
@@ -689,18 +687,19 @@ private fun GuideChip(label: String, fg: Color, bg: Color) {
     }
 }
 
-private val timelineDateFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault())
-
 private fun timelineDateLabel(program: IptvProgram, nowMillis: Long): String {
-    val zone = ZoneId.systemDefault()
-    val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
-    val programDate = Instant.ofEpochMilli(program.startUtcMillis).atZone(zone).toLocalDate()
-    return when (programDate) {
-        today.minusDays(1) -> "Yesterday"
-        today -> "Today"
-        today.plusDays(1) -> "Tomorrow"
-        else -> timelineDateFormatter.format(programDate)
+    val today = kotlinx.datetime.Instant.fromEpochMilliseconds(nowMillis).toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
+    val programDate = kotlinx.datetime.Instant.fromEpochMilliseconds(program.startUtcMillis).toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
+    val diff = programDate.toEpochDays() - today.toEpochDays()
+    return when (diff) {
+        -1 -> "Yesterday"
+        0 -> "Today"
+        1 -> "Tomorrow"
+        else -> {
+            val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+            val dayOfWeek = programDate.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() }
+            "$dayOfWeek ${programDate.dayOfMonth} ${months[programDate.monthNumber - 1]}"
+        }
     }
 }
 

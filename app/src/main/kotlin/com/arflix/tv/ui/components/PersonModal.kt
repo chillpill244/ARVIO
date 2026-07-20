@@ -71,7 +71,6 @@ import com.arflix.tv.ui.theme.ArflixTypography
 import com.arflix.tv.ui.theme.Pink
 import com.arflix.tv.ui.theme.TextPrimary
 import com.arflix.tv.ui.theme.TextSecondary
-import java.text.SimpleDateFormat
 import java.util.Locale
 
 /**
@@ -82,10 +81,7 @@ import java.util.Locale
 private fun formatBirthday(dateStr: String?): String {
     if (dateStr.isNullOrEmpty()) return ""
     return try {
-        val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val outputFormat = SimpleDateFormat("d MMM yyyy", Locale.US)
-        val date = inputFormat.parse(dateStr)
-        date?.let { outputFormat.format(it) } ?: dateStr
+        com.arflix.tv.util.KmpDateUtils.formatMediumDate(dateStr)
     } catch (e: Exception) {
         dateStr
     }

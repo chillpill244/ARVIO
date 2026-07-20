@@ -1,4 +1,4 @@
-﻿
+
 @file:Suppress("UnsafeOptInUsageError")
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 
@@ -144,9 +144,6 @@ import com.arflix.tv.ui.skin.ArvioSkin
 import com.arflix.tv.ui.skin.arvioFocusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 
 
@@ -1653,7 +1650,7 @@ private fun FullscreenEpgOverlay(
             }
             // Top right: Clock
             Text(
-                text = programTimeFormatter.format(java.time.LocalTime.now()),
+                text = com.arflix.tv.util.KmpDateUtils.formatSyncTime(com.arflix.tv.util.KmpDateUtils.nowEpochMillis()).substringAfter("at ").trim(),
                 style = ArflixTypography.sectionTitle.copy(fontSize = if (isMobile) 13.sp else 18.sp),
                 color = Color.White.copy(alpha = 0.8f),
                 modifier = Modifier.align(Alignment.TopEnd)
@@ -1986,8 +1983,6 @@ private tailrec fun android.content.Context.findTvActivity(): android.app.Activi
     else -> null
 }
 
-private val programTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
-
 private fun formatProgramTime(utcMillis: Long): String {
-    return programTimeFormatter.format(Instant.ofEpochMilli(utcMillis).atZone(ZoneId.systemDefault()))
+    return com.arflix.tv.util.KmpDateUtils.formatSyncTime(utcMillis).substringAfter("at ").trim()
 }

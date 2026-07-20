@@ -124,13 +124,9 @@ class SearchViewModel @Inject constructor(
                 val lang = state.selectedCountry?.code
                 val isAnime = type == DiscoverType.ANIME
 
-                val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
-                val cal = java.util.Calendar.getInstance()
-                cal.add(java.util.Calendar.DAY_OF_YEAR, -90)
-                val threeMonthsAgo = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(cal.time)
-                cal.time = java.util.Date()
-                cal.add(java.util.Calendar.YEAR, -1)
-                val oneYearAgo = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(cal.time)
+                val today = com.arflix.tv.util.KmpDateUtils.getIsoDateDaysAgo(0)
+                val threeMonthsAgo = com.arflix.tv.util.KmpDateUtils.getIsoDateDaysAgo(90)
+                val oneYearAgo = com.arflix.tv.util.KmpDateUtils.getIsoDateYearsAgo(1)
 
                 val categories = withContext(Dispatchers.IO) {
                     coroutineScope {

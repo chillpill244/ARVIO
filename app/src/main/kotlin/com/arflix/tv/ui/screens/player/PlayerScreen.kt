@@ -4157,8 +4157,7 @@ private fun formatPlayerClockTime(timestampMs: Long, clockFormat: String): Strin
         "12h" -> "h:mm a"
         else -> "HH:mm"
     }
-    val sdf = java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault())
-    return sdf.format(java.util.Date(timestampMs))
+    return com.arflix.tv.util.KmpDateUtils.formatTime24h(timestampMs)
 }
 
 private fun handleSubtitleMenuKey(

@@ -61,7 +61,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.cancelAndJoin
-import java.text.SimpleDateFormat
 import java.util.Collections
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -296,7 +295,7 @@ class HomeViewModel @Inject constructor(
         fun parse(value: String?): Long {
             if (value.isNullOrBlank()) return 0L
             return try {
-                java.time.Instant.parse(value).toEpochMilli()
+                com.arflix.tv.util.KmpDateUtils.parseIsoDate(value)
             } catch (_: Exception) {
                 0L
             }
@@ -533,10 +532,8 @@ class HomeViewModel @Inject constructor(
         val value = rawAirDate.trim()
         if (value.isEmpty()) return true
         return try {
-            val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-            parser.isLenient = false
-            val parsed = parser.parse(value) ?: return true
-            parsed.time <= System.currentTimeMillis()
+            val parsedMs = com.arflix.tv.util.KmpDateUtils.parseIsoDate(value)
+            parsedMs <= com.arflix.tv.util.KmpDateUtils.nowEpochMillis()
         } catch (_: Exception) {
             true
         }
@@ -614,12 +611,9 @@ class HomeViewModel @Inject constructor(
 
         val nowProgram = epg?.now
         val nextProgram = epg?.next ?: epg?.later ?: epg?.upcoming?.firstOrNull()
-        val timeFmt = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).apply {
-            timeZone = java.util.TimeZone.getDefault()
-        }
         fun fmtRange(p: com.arflix.tv.data.model.IptvProgram): String {
-            val s = timeFmt.format(java.util.Date(p.startUtcMillis))
-            val e = timeFmt.format(java.util.Date(p.endUtcMillis))
+            val s = com.arflix.tv.util.KmpDateUtils.formatTime24h(p.startUtcMillis)
+            val e = com.arflix.tv.util.KmpDateUtils.formatTime24h(p.endUtcMillis)
             return "$s - $e"
         }
         val overviewParts = mutableListOf<String>()

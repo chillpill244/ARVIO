@@ -2098,8 +2098,8 @@ private fun MobileHeroCarousel(
                 val rd = item.releaseDate
                 if (!rd.isNullOrBlank()) {
                     runCatching {
-                        val parsed = java.text.SimpleDateFormat("d MMM yyyy", java.util.Locale.ENGLISH).parse(rd)
-                        parsed?.let { java.text.SimpleDateFormat("d MMM", java.util.Locale.ENGLISH).format(it) }
+                        // handled by taking substring instead since we just want day and month
+                        rd.split(" ").take(2).joinToString(" ")
                     }.getOrNull() ?: item.year
                 } else {
                     item.year

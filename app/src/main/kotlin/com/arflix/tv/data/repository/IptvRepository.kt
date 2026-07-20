@@ -56,12 +56,9 @@ import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.File
 import java.nio.charset.StandardCharsets
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.OffsetDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeFormatterBuilder
+
+import kotlinx.datetime.toInstant
+import kotlinx.datetime.toLocalDateTime
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -859,6 +856,19 @@ class IptvRepository @Inject constructor(
             .toList()
     }
 
+    private fun formatXtreamTime(epochMs: Long, format: String): String {
+        val dt = kotlinx.datetime.Instant.fromEpochMilliseconds(epochMs).toLocalDateTime(kotlinx.datetime.TimeZone.UTC)
+        val yy = dt.year.toString().padStart(4, '0')
+        val MM = dt.monthNumber.toString().padStart(2, '0')
+        val dd = dt.dayOfMonth.toString().padStart(2, '0')
+        val HH = dt.hour.toString().padStart(2, '0')
+        val mm = dt.minute.toString().padStart(2, '0')
+        val ss = dt.second.toString().padStart(2, '0')
+        return format
+            .replace("yyyy", yy).replace("MM", MM).replace("dd", dd)
+            .replace("HH", HH).replace("mm", mm).replace("ss", ss)
+    }
+
     private fun buildXtreamCatchupCandidates(
         creds: XtreamCredentials,
         streamId: Int,
@@ -866,32 +876,32 @@ class IptvRepository @Inject constructor(
         durationMin: Long
     ): List<String> {
         val serverStartMs = program.startUtcMillis + getServerOffset(creds)
-        val minutePattern = DateTimeFormatter.ofPattern("yyyy-MM-dd:HH-mm")
-        val secondPattern = DateTimeFormatter.ofPattern("yyyy-MM-dd:HH-mm-ss")
-        val spaceSecondPattern = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-        val spaceMinutePattern = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+        val minutePattern = "yyyy-MM-dd:HH-mm"
+        val secondPattern = "yyyy-MM-dd:HH-mm-ss"
+        val spaceSecondPattern = "yyyy-MM-dd HH:mm:ss"
+        val spaceMinutePattern = "yyyy-MM-dd HH:mm"
         val hasSecondOffset = serverStartMs % 60_000L != 0L || program.startUtcMillis % 60_000L != 0L
         val starts = if (hasSecondOffset) {
             listOf(
-                formatUtcDateTime(serverStartMs, secondPattern),
-                formatUtcDateTime(program.startUtcMillis, secondPattern),
-                formatUtcDateTime(serverStartMs, spaceSecondPattern),
-                formatUtcDateTime(program.startUtcMillis, spaceSecondPattern),
-                formatUtcDateTime(serverStartMs, minutePattern),
-                formatUtcDateTime(program.startUtcMillis, minutePattern),
-                formatUtcDateTime(serverStartMs, spaceMinutePattern),
-                formatUtcDateTime(program.startUtcMillis, spaceMinutePattern)
+                formatXtreamTime(serverStartMs, secondPattern),
+                formatXtreamTime(program.startUtcMillis, secondPattern),
+                formatXtreamTime(serverStartMs, spaceSecondPattern),
+                formatXtreamTime(program.startUtcMillis, spaceSecondPattern),
+                formatXtreamTime(serverStartMs, minutePattern),
+                formatXtreamTime(program.startUtcMillis, minutePattern),
+                formatXtreamTime(serverStartMs, spaceMinutePattern),
+                formatXtreamTime(program.startUtcMillis, spaceMinutePattern)
             )
         } else {
             listOf(
-                formatUtcDateTime(serverStartMs, minutePattern),
-                formatUtcDateTime(program.startUtcMillis, minutePattern),
-                formatUtcDateTime(serverStartMs, secondPattern),
-                formatUtcDateTime(program.startUtcMillis, secondPattern),
-                formatUtcDateTime(serverStartMs, spaceSecondPattern),
-                formatUtcDateTime(program.startUtcMillis, spaceSecondPattern),
-                formatUtcDateTime(serverStartMs, spaceMinutePattern),
-                formatUtcDateTime(program.startUtcMillis, spaceMinutePattern)
+                formatXtreamTime(serverStartMs, minutePattern),
+                formatXtreamTime(program.startUtcMillis, minutePattern),
+                formatXtreamTime(serverStartMs, secondPattern),
+                formatXtreamTime(program.startUtcMillis, secondPattern),
+                formatXtreamTime(serverStartMs, spaceSecondPattern),
+                formatXtreamTime(program.startUtcMillis, spaceSecondPattern),
+                formatXtreamTime(serverStartMs, spaceMinutePattern),
+                formatXtreamTime(program.startUtcMillis, spaceMinutePattern)
             )
         }.distinct()
 
@@ -908,10 +918,6 @@ class IptvRepository @Inject constructor(
         }.distinct()
     }
 
-    private fun formatUtcDateTime(epochMs: Long, formatter: DateTimeFormatter): String {
-        return LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMs), ZoneId.of("UTC")).format(formatter)
-    }
-
     private fun applyCatchupSourceTemplate(
         channel: IptvChannel,
         source: String,
@@ -923,8 +929,8 @@ class IptvRepository @Inject constructor(
         durationMin: Long,
         streamId: Int?
     ): String {
-        val startDt = LocalDateTime.ofInstant(Instant.ofEpochMilli(startForDateMs), ZoneId.of("UTC"))
-        val endDt = LocalDateTime.ofInstant(Instant.ofEpochMilli(program.endUtcMillis), ZoneId.of("UTC"))
+        val startDt = kotlinx.datetime.Instant.fromEpochMilliseconds(startForDateMs).toLocalDateTime(kotlinx.datetime.TimeZone.UTC)
+        val endDt = kotlinx.datetime.Instant.fromEpochMilliseconds(program.endUtcMillis).toLocalDateTime(kotlinx.datetime.TimeZone.UTC)
         val durationSec = ((program.endUtcMillis - program.startUtcMillis) / 1000L).coerceAtLeast(1L)
         val templated = decodeM3uEntities(source)
             .replaceDurationScalePlaceholders(durationSec)
@@ -960,24 +966,24 @@ class IptvRepository @Inject constructor(
             .replace("{stream_id}", streamId?.toString().orEmpty())
             .replace("\${stream_id}", streamId?.toString().orEmpty())
             .replace("\$stream_id", streamId?.toString().orEmpty())
-            .replace("{Y}", startDt.format(DateTimeFormatter.ofPattern("yyyy")))
-            .replace("{m}", startDt.format(DateTimeFormatter.ofPattern("MM")))
-            .replace("{d}", startDt.format(DateTimeFormatter.ofPattern("dd")))
-            .replace("{H}", startDt.format(DateTimeFormatter.ofPattern("HH")))
-            .replace("{M}", startDt.format(DateTimeFormatter.ofPattern("mm")))
-            .replace("{S}", startDt.format(DateTimeFormatter.ofPattern("ss")))
-            .replace("{start:Y}", startDt.format(DateTimeFormatter.ofPattern("yyyy")))
-            .replace("{start:m}", startDt.format(DateTimeFormatter.ofPattern("MM")))
-            .replace("{start:d}", startDt.format(DateTimeFormatter.ofPattern("dd")))
-            .replace("{start:H}", startDt.format(DateTimeFormatter.ofPattern("HH")))
-            .replace("{start:M}", startDt.format(DateTimeFormatter.ofPattern("mm")))
-            .replace("{start:S}", startDt.format(DateTimeFormatter.ofPattern("ss")))
-            .replace("{end:Y}", endDt.format(DateTimeFormatter.ofPattern("yyyy")))
-            .replace("{end:m}", endDt.format(DateTimeFormatter.ofPattern("MM")))
-            .replace("{end:d}", endDt.format(DateTimeFormatter.ofPattern("dd")))
-            .replace("{end:H}", endDt.format(DateTimeFormatter.ofPattern("HH")))
-            .replace("{end:M}", endDt.format(DateTimeFormatter.ofPattern("mm")))
-            .replace("{end:S}", endDt.format(DateTimeFormatter.ofPattern("ss")))
+            .replace("{Y}", startDt.year.toString().padStart(4, '0'))
+            .replace("{m}", startDt.monthNumber.toString().padStart(2, '0'))
+            .replace("{d}", startDt.dayOfMonth.toString().padStart(2, '0'))
+            .replace("{H}", startDt.hour.toString().padStart(2, '0'))
+            .replace("{M}", startDt.minute.toString().padStart(2, '0'))
+            .replace("{S}", startDt.second.toString().padStart(2, '0'))
+            .replace("{start:Y}", startDt.year.toString().padStart(4, '0'))
+            .replace("{start:m}", startDt.monthNumber.toString().padStart(2, '0'))
+            .replace("{start:d}", startDt.dayOfMonth.toString().padStart(2, '0'))
+            .replace("{start:H}", startDt.hour.toString().padStart(2, '0'))
+            .replace("{start:M}", startDt.minute.toString().padStart(2, '0'))
+            .replace("{start:S}", startDt.second.toString().padStart(2, '0'))
+            .replace("{end:Y}", endDt.year.toString().padStart(4, '0'))
+            .replace("{end:m}", endDt.monthNumber.toString().padStart(2, '0'))
+            .replace("{end:d}", endDt.dayOfMonth.toString().padStart(2, '0'))
+            .replace("{end:H}", endDt.hour.toString().padStart(2, '0'))
+            .replace("{end:M}", endDt.minute.toString().padStart(2, '0'))
+            .replace("{end:S}", endDt.second.toString().padStart(2, '0'))
         return when {
             templated.startsWith("http://", ignoreCase = true) || templated.startsWith("https://", ignoreCase = true) -> templated
             templated.startsWith("/") -> channel.streamUrl.toHttpUrlOrNull()?.let { parsed ->
@@ -1017,10 +1023,8 @@ class IptvRepository @Inject constructor(
         }
     }
 
-    private val datePatternRegexCache = java.util.concurrent.ConcurrentHashMap<String, Regex>()
-
-    private fun String.replaceDatePatternPlaceholders(key: String, dateTime: LocalDateTime): String {
-        val regex = datePatternRegexCache.getOrPut(key) { Regex("""\$\{""" + key + """:([^}]+)\}|\{""" + key + """:([^}]+)\}""") }
+    private fun String.replaceDatePatternPlaceholders(key: String, dateTime: kotlinx.datetime.LocalDateTime): String {
+        val regex = Regex("""\$\{""" + key + """\:([^}]+)\}|\{""" + key + """\:([^}]+)\}""")
         return regex.replace(this) { match ->
             val pattern = match.groupValues.getOrNull(1)?.takeIf { it.isNotBlank() }
                 ?: match.groupValues.getOrNull(2)
@@ -1028,8 +1032,14 @@ class IptvRepository @Inject constructor(
             if (pattern in setOf("Y", "m", "d", "H", "M", "S")) {
                 return@replace match.value
             }
-            runCatching { dateTime.format(DateTimeFormatter.ofPattern(pattern)) }
-                .getOrDefault(match.value)
+            var res = pattern
+            res = res.replace("yyyy", dateTime.year.toString().padStart(4, '0'))
+            res = res.replace("MM", dateTime.monthNumber.toString().padStart(2, '0'))
+            res = res.replace("dd", dateTime.dayOfMonth.toString().padStart(2, '0'))
+            res = res.replace("HH", dateTime.hour.toString().padStart(2, '0'))
+            res = res.replace("mm", dateTime.minute.toString().padStart(2, '0'))
+            res = res.replace("ss", dateTime.second.toString().padStart(2, '0'))
+            res
         }
     }
 
@@ -5915,10 +5925,10 @@ class IptvRepository @Inject constructor(
     private fun parseXtreamDateTime(dateStr: String?): Long? {
         if (dateStr.isNullOrBlank()) return null
         return try {
-            val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-            val local = java.time.LocalDateTime.parse(dateStr, formatter)
+            val isoStr = dateStr.replace(" ", "T")
+            val local = kotlinx.datetime.LocalDateTime.parse(isoStr)
             // Xtream times are typically UTC
-            local.atZone(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+            local.toInstant(kotlinx.datetime.TimeZone.UTC).toEpochMilliseconds()
         } catch (_: Exception) {
             null
         }
@@ -6610,11 +6620,30 @@ class IptvRepository @Inject constructor(
         if (rawValue.isNullOrBlank()) return 0L
         val value = rawValue.trim()
 
-        return runCatching {
-            OffsetDateTime.parse(value, XMLTV_OFFSET_FORMATTER).toInstant().toEpochMilli()
-        }.recoverCatching {
-            val local = LocalDateTime.parse(value.take(14), XMLTV_LOCAL_FORMATTER)
-            local.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        return runCatching<Long> {
+            val dateStr = value.take(14)
+            val year = dateStr.substring(0, 4).toInt()
+            val month = dateStr.substring(4, 6).toInt()
+            val day = dateStr.substring(6, 8).toInt()
+            val hour = dateStr.substring(8, 10).toInt()
+            val minute = dateStr.substring(10, 12).toInt()
+            val second = dateStr.substring(12, 14).toInt()
+            
+            val localDateTime = kotlinx.datetime.LocalDateTime(year, month, day, hour, minute, second)
+            
+            val offsetPart = value.drop(14).trim()
+            if (offsetPart.startsWith("+") || offsetPart.startsWith("-")) {
+                // Parse offset like +0000 or -0500
+                val sign = if (offsetPart.startsWith("+")) 1 else -1
+                val h = offsetPart.drop(1).take(2).toIntOrNull() ?: 0
+                val m = offsetPart.drop(3).take(2).toIntOrNull() ?: 0
+                val totalSeconds = sign * (h * 3600 + m * 60)
+                
+                val fixedOffset = kotlinx.datetime.UtcOffset(seconds = totalSeconds)
+                localDateTime.toInstant(fixedOffset).toEpochMilliseconds()
+            } else {
+                localDateTime.toInstant(kotlinx.datetime.TimeZone.currentSystemDefault()).toEpochMilliseconds()
+            }
         }.getOrDefault(0L)
     }
 
@@ -8161,15 +8190,7 @@ class IptvRepository @Inject constructor(
         val QUALITY_SUFFIX_REGEX = Regex("\\b(hd|fhd|uhd|sd|4k|hevc|x265|x264|h264|h265)\\b")
         val GUIDE_PREFIX_REGEX = Regex("""^\s*[a-z]{2,4}\s*[\|:：/\-]+\s*""", RegexOption.IGNORE_CASE)
 
-        val XMLTV_LOCAL_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss")
-
-        val XMLTV_OFFSET_FORMATTER: DateTimeFormatter = DateTimeFormatterBuilder()
-            .appendPattern("yyyyMMddHHmmss")
-            .optionalStart()
-            .appendLiteral(' ')
-            .appendPattern("XX")
-            .optionalEnd()
-            .toFormatter(Locale.US)
+        // XMLTV formatters replaced with manual string parsing
 
     }
 }

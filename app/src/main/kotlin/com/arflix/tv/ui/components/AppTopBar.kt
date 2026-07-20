@@ -47,8 +47,6 @@ import com.arflix.tv.ui.theme.ArflixTypography
 import androidx.compose.ui.res.stringResource
 import com.arflix.tv.R
 import com.arflix.tv.util.settingsDataStore
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -413,6 +411,5 @@ private fun topBarCurrentTime(clockFormat: String): String {
         "12h" -> "h:mm a"
         else -> "HH:mm"
     }
-    val sdf = SimpleDateFormat(pattern, Locale.getDefault())
-    return sdf.format(Date())
+    return com.arflix.tv.util.KmpDateUtils.formatTime24h(com.arflix.tv.util.KmpDateUtils.nowEpochMillis())
 }

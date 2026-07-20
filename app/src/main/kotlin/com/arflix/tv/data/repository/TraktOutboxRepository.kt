@@ -10,7 +10,6 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
-import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,7 +33,7 @@ data class TraktOutboxItem(
     val season: Int? = null,
     val episode: Int? = null,
     val playbackId: Long? = null,
-    val createdAt: String = Instant.now().toString(),
+    val createdAt: String = com.arflix.tv.util.KmpDateUtils.nowIsoString(),
     val attempts: Int = 0
 )
 
