@@ -62,6 +62,7 @@ import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.ui.components.AppTopBar
 import com.arflix.tv.ui.components.AppTopBarContentTopInset
 import com.arflix.tv.ui.components.CardLayoutMode
+import com.arflix.tv.ui.components.LocalAppBottomBarPadding
 import com.arflix.tv.ui.components.LoadingIndicator
 import com.arflix.tv.ui.components.MediaCard
 import com.arflix.tv.ui.components.SidebarItem
@@ -393,7 +394,7 @@ fun WatchlistScreen(
                             LazyColumn(
                                 state = lazyColumnState,
                                 modifier = Modifier.weight(1f).fillMaxWidth().focusable(false),
-                                contentPadding = PaddingValues(top = if (isMobile) 48.dp else 0.dp, bottom = 16.dp),
+                                contentPadding = PaddingValues(top = if (isMobile) 48.dp else 0.dp, bottom = 16.dp + LocalAppBottomBarPadding.current),
                                 verticalArrangement = Arrangement.spacedBy(if (isMobile) 24.dp else 16.dp),
                                 userScrollEnabled = isMobile
                             ) {
@@ -484,7 +485,7 @@ private fun WatchlistItemsSection(
         LazyRow(
             state = lazyListState,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(start = 8.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
+            contentPadding = PaddingValues(start = 8.dp, end = 16.dp, top = 4.dp, bottom = 4.dp + LocalAppBottomBarPadding.current),
             modifier = Modifier.fillMaxWidth()
         ) {
             itemsIndexed(

@@ -94,6 +94,7 @@ import androidx.tv.material3.Surface
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.Icon
+import com.arflix.tv.ui.components.LocalAppBottomBarPadding
 import com.arflix.tv.ui.components.LoadingIndicator
 import com.arflix.tv.ui.components.QrCodeImage
 import com.arflix.tv.ui.components.Toast
@@ -3288,7 +3289,7 @@ private fun MobileSettingsMainPage(
 ) {
     androidx.compose.foundation.lazy.LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 8.dp + LocalAppBottomBarPadding.current),
         verticalArrangement = Arrangement.spacedBy(32.dp)
     ) {
         item {
@@ -8883,7 +8884,7 @@ private fun IptvCategoriesSettings(
                         .fillMaxWidth()
                         .heightIn(max = 560.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp)
+                    contentPadding = PaddingValues(bottom = 24.dp + LocalAppBottomBarPadding.current)
                 ) {
                     itemsIndexed(
                         items = orderedGroups,

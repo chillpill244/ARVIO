@@ -135,6 +135,7 @@ import com.arflix.tv.ui.components.TrailerPlayer
 import com.arflix.tv.ui.components.CardLayoutMode
 import com.arflix.tv.ui.components.AppTopBar
 import com.arflix.tv.ui.components.AppTopBarContentTopInset
+import com.arflix.tv.ui.components.LocalAppBottomBarPadding
 import com.arflix.tv.ui.components.MobileHeroBanner
 import com.arflix.tv.ui.components.ProfileAvatarVisual
 import com.arflix.tv.util.LocalDeviceType
@@ -2666,7 +2667,7 @@ private fun MobileHomeRowsLayer(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 80.dp),
+        contentPadding = PaddingValues(bottom = 80.dp + LocalAppBottomBarPadding.current),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         // Hero carousel — profile/search row + banner card pager
@@ -2995,7 +2996,7 @@ private fun TvHomeRowsLayer(
         ) {
             LazyColumn(
                 state = listState,
-                contentPadding = PaddingValues(bottom = rowsViewportHeight),
+                contentPadding = PaddingValues(bottom = rowsViewportHeight + LocalAppBottomBarPadding.current),
                 modifier = Modifier
                     .fillMaxSize()
                     .arvioDpadFocusGroup(enableFocusRestorer = false)

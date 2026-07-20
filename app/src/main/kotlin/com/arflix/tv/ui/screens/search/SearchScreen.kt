@@ -77,6 +77,7 @@ import androidx.tv.material3.Text
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.model.Category
+import com.arflix.tv.ui.components.LocalAppBottomBarPadding
 import com.arflix.tv.ui.components.LoadingIndicator
 import com.arflix.tv.ui.components.CardLayoutMode
 import com.arflix.tv.ui.components.AppTopBar
@@ -901,7 +902,7 @@ private fun RowsLayer(
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(top = focusBleedPadding / 2, bottom = maxHeight * 0.6f),
+            contentPadding = PaddingValues(top = focusBleedPadding / 2, bottom = maxHeight * 0.6f + LocalAppBottomBarPadding.current),
             modifier = Modifier.fillMaxSize().arvioDpadFocusGroup(),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
@@ -1044,7 +1045,7 @@ private fun ContentGrid(items: List<MediaItem>, usePosterCards: Boolean, isLoadi
     LaunchedEffect(gridState.firstVisibleItemIndex, items.size) { val lv = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0; if (items.isNotEmpty() && lv >= items.size - 8) onLoadMore() }
 
     val focusBleedPadding = if (isTouchDevice) 14.dp else 24.dp
-    LazyVerticalGrid(state = gridState, columns = GridCells.Adaptive(minSize = itemWidth + focusBleedPadding), contentPadding = PaddingValues(horizontal = focusBleedPadding, vertical = focusBleedPadding),
+    LazyVerticalGrid(state = gridState, columns = GridCells.Adaptive(minSize = itemWidth + focusBleedPadding), contentPadding = PaddingValues(start = focusBleedPadding, end = focusBleedPadding, top = focusBleedPadding, bottom = focusBleedPadding + LocalAppBottomBarPadding.current),
         horizontalArrangement = Arrangement.spacedBy(18.dp), verticalArrangement = Arrangement.spacedBy(26.dp), modifier = Modifier.fillMaxSize().arvioDpadFocusGroup()) {
         items(items.size, key = { "${items[it].mediaType}_${items[it].id}" }) { idx ->
             val item = items[idx]
