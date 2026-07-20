@@ -75,8 +75,8 @@ import com.arflix.tv.ui.components.AvatarIcon
 import com.arflix.tv.ui.components.AvatarRegistry
 import com.arflix.tv.util.LocalDeviceType
 import com.arflix.tv.util.ProfileAvatarFiles
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 
 // ============================================================
 // Add Profile Dialog

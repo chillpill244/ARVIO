@@ -34,9 +34,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import coil.size.Precision
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Precision
 import com.arflix.tv.data.model.CollectionGroupKind
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
@@ -154,10 +154,10 @@ fun MediaCard(
             .data(rawImageUrl)
             .size(widthPx, heightPx)
             .precision(Precision.INEXACT)
-            .allowHardware(true)
+            
             .memoryCacheKey(cacheKey)
             .placeholderMemoryCacheKey(cacheKey)
-            .crossfade(false)
+            
             .build()
     }
     // Performance: Removed context/density from keys
@@ -173,10 +173,10 @@ fun MediaCard(
                 .data(effectiveLogoImageUrl)
                 .size(logoWidthPx, logoHeightPx)
                 .precision(Precision.INEXACT)
-                .allowHardware(true)
+                
                 .memoryCacheKey(cacheKey)
                 .placeholderMemoryCacheKey(cacheKey)
-                .crossfade(false)
+                
                 .build()
         }
     }
@@ -585,10 +585,10 @@ fun PosterCard(
             .data(posterUrl)
             .size(widthPx, heightPx)
             .precision(Precision.INEXACT)
-            .allowHardware(true)
+            
             .memoryCacheKey(cacheKey)
             .placeholderMemoryCacheKey(cacheKey)
-            .crossfade(false)
+            
             .build()
     }
 

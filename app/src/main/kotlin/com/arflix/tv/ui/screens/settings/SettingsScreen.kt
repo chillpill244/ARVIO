@@ -11,7 +11,7 @@ import android.widget.EditText
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.arflix.tv.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.ui.input.pointer.pointerInput

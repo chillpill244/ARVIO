@@ -120,12 +120,12 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import coil.ImageLoader
-import coil.compose.AsyncImage
-import coil.compose.SubcomposeAsyncImage
-import coil.decode.SvgDecoder
-import coil.request.ImageRequest
-import coil.size.Precision
+import coil3.ImageLoader
+import coil3.compose.AsyncImage
+import coil3.compose.SubcomposeAsyncImage
+import coil3.svg.SvgDecoder
+import coil3.request.ImageRequest
+import coil3.size.Precision
 import com.arflix.tv.R
 import com.arflix.tv.data.model.CastMember
 import com.arflix.tv.data.model.Episode
@@ -1231,14 +1231,11 @@ internal fun handleRight(
 private fun rememberMetadataLogoImageLoader(context: Context): ImageLoader {
     return remember(context) {
         ImageLoader.Builder(context)
-            .okHttpClient(OkHttpProvider.coilClient)
+            .components { add(coil3.network.okhttp.OkHttpNetworkFetcherFactory(OkHttpProvider.coilClient)) }
             .components {
                 add(SvgDecoder.Factory())
             }
-            .allowRgb565(false)
-            .crossfade(false)
-            .placeholder(android.R.color.transparent)
-            .error(android.R.color.transparent)
+            
             .build()
     }
 }
@@ -3586,8 +3583,8 @@ private fun EpisodeCard(
             .data(episode.stillPath)
             .size(widthPx, heightPx)
             .precision(Precision.INEXACT)
-            .allowHardware(true)
-            .crossfade(false)
+            
+            
             .build()
     }
 

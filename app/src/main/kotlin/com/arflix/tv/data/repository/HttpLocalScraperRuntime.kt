@@ -600,7 +600,7 @@ class HttpLocalScraperRuntime @Inject constructor(
         val html = runCatching {
             getText("$domain/s?q=${query.urlEncode()}", mapOf("User-Agent" to USER_AGENT))
         }.getOrNull() ?: return emptyList()
-        val doc = org.jsoup.Jsoup.parse(html)
+        val doc = com.fleeksoft.ksoup.Ksoup.parse(html)
         val results = mutableListOf<ToonstreamResult>()
         doc.select("article").forEach { art ->
             val href = art.selectFirst("a")?.attr("href") ?: return@forEach
@@ -632,7 +632,7 @@ class HttpLocalScraperRuntime @Inject constructor(
         val html = runCatching { 
             getText("$seriesUrl/season/$targetSeason", mapOf("User-Agent" to USER_AGENT)) 
         }.getOrNull() ?: return emptyList()
-        val doc = org.jsoup.Jsoup.parse(html)
+        val doc = com.fleeksoft.ksoup.Ksoup.parse(html)
         val episodes = mutableListOf<ToonstreamEpisode>()
         
         doc.select("article").forEach { art ->
@@ -665,7 +665,7 @@ class HttpLocalScraperRuntime @Inject constructor(
 
     private suspend fun getToonstreamVideoLinks(pageUrl: String): List<String> = withContext(Dispatchers.IO) {
         val html = runCatching { getText(pageUrl, mapOf("User-Agent" to USER_AGENT)) }.getOrNull() ?: return@withContext emptyList()
-        val doc = org.jsoup.Jsoup.parse(html)
+        val doc = com.fleeksoft.ksoup.Ksoup.parse(html)
 
         val trembedUrls = doc.select("#aa-options iframe, .video-player iframe")
             .map { it.attr("data-src").ifBlank { it.attr("src") } }
@@ -678,7 +678,7 @@ class HttpLocalScraperRuntime @Inject constructor(
                 async(Dispatchers.IO) {
                     if (dataSrc.contains("/embed/")) {
                         val innerHtml = runCatching { getText(dataSrc, mapOf("User-Agent" to USER_AGENT)) }.getOrNull() ?: return@async null
-                        val innerFrame = org.jsoup.Jsoup.parse(innerHtml).selectFirst("iframe")
+                        val innerFrame = com.fleeksoft.ksoup.Ksoup.parse(innerHtml).selectFirst("iframe")
                         val src = innerFrame?.attr("src")?.ifBlank { innerFrame.attr("data-src") }
                         if (!src.isNullOrBlank()) {
                             if (src.startsWith("//")) "https:$src" else src
@@ -838,7 +838,7 @@ class HttpLocalScraperRuntime @Inject constructor(
 
     private suspend fun searchFourK(domain: String, query: String): List<FourKResult> {
         val html = runCatching { getText("$domain/?s=${query.urlEncode()}") }.getOrNull() ?: return emptyList()
-        val doc = org.jsoup.Jsoup.parse(html)
+        val doc = com.fleeksoft.ksoup.Ksoup.parse(html)
         val seen = mutableSetOf<String>()
         val results = mutableListOf<FourKResult>()
         doc.select("div.card-grid a").forEach { a ->
@@ -866,7 +866,7 @@ class HttpLocalScraperRuntime @Inject constructor(
         episode: Int
     ): FourKPage {
         val html = runCatching { getText(pageUrl) }.getOrNull() ?: return FourKPage(null, emptyList())
-        val doc = org.jsoup.Jsoup.parse(html)
+        val doc = com.fleeksoft.ksoup.Ksoup.parse(html)
         val titleText = doc.selectFirst("h1.page-title")?.text().orEmpty()
         val year = (Regex("""\b(19|20)\d{2}\b""").find(titleText)?.value
             ?: Regex("""\b(19|20)\d{2}\b""").find(doc.select("div.mt-2 span").text())?.value)?.toIntOrNull()
@@ -875,7 +875,7 @@ class HttpLocalScraperRuntime @Inject constructor(
         return FourKPage(year, links)
     }
 
-    private fun getFourKEpisodeLinks(doc: org.jsoup.nodes.Document, season: Int, episode: Int): List<String> {
+    private fun getFourKEpisodeLinks(doc: com.fleeksoft.ksoup.nodes.Document, season: Int, episode: Int): List<String> {
         val links = mutableListOf<String>()
         val seen = mutableSetOf<String>()
         doc.select("div.episodes-list div.season-item").forEach { seasonEl ->
@@ -920,7 +920,7 @@ class HttpLocalScraperRuntime @Inject constructor(
             val wp = json.string("blog_url") ?: ""
             if (wp.isBlank() || data.isBlank()) return@runCatching ""
             val t = runCatching { getText("$wp?re=$data") }.getOrNull().orEmpty()
-            org.jsoup.Jsoup.parse(t).text().trim()
+            com.fleeksoft.ksoup.Ksoup.parse(t).text().trim()
         }.getOrDefault("")
     }
 
@@ -1037,14 +1037,14 @@ class HttpLocalScraperRuntime @Inject constructor(
             url
         } else {
             val html = runCatching { getText(url) }.getOrNull() ?: return out
-            val raw = org.jsoup.Jsoup.parse(html).selectFirst("#download")?.attr("href")?.trim().orEmpty()
+            val raw = com.fleeksoft.ksoup.Ksoup.parse(html).selectFirst("#download")?.attr("href")?.trim().orEmpty()
             if (raw.isBlank()) return out
             if (raw.startsWith("http")) raw else "${baseUrl.trimEnd('/')}/${raw.trimStart('/')}"
         }
         if (href.isBlank()) return out
 
         val pageHtml = runCatching { getText(href) }.getOrNull() ?: return out
-        val doc = org.jsoup.Jsoup.parse(pageHtml)
+        val doc = com.fleeksoft.ksoup.Ksoup.parse(pageHtml)
         val size = doc.selectFirst("#size")?.text()?.trim().orEmpty()
         val header = doc.selectFirst("div.card-header")?.text()?.trim().orEmpty()
         val rel = parseFourKRelease(header)
@@ -1089,7 +1089,7 @@ class HttpLocalScraperRuntime @Inject constructor(
 
     private suspend fun extractHubDrive(url: String, hubcloud: String): List<FourKStream> {
         val html = runCatching { getText(url) }.getOrNull() ?: return emptyList()
-        val doc = org.jsoup.Jsoup.parse(html)
+        val doc = com.fleeksoft.ksoup.Ksoup.parse(html)
         var href = doc.selectFirst(".btn.btn-primary.btn-user.btn-success1.m-1")?.attr("href").orEmpty()
         if (href.isBlank()) {
             href = doc.select("a").firstOrNull { it.attr("href").contains("hubcloud", ignoreCase = true) }
@@ -1101,7 +1101,7 @@ class HttpLocalScraperRuntime @Inject constructor(
 
     private suspend fun extractHblinks(url: String, hubcloud: String): List<FourKStream> {
         val html = runCatching { getText(url) }.getOrNull() ?: return emptyList()
-        val doc = org.jsoup.Jsoup.parse(html)
+        val doc = com.fleeksoft.ksoup.Ksoup.parse(html)
         val hrefs = doc.select("h3 a, h5 a, div.entry-content p a")
             .mapNotNull { it.attr("href").trim().ifBlank { null } }
         val out = mutableListOf<FourKStream>()
@@ -1198,7 +1198,7 @@ class HttpLocalScraperRuntime @Inject constructor(
                 )
             )
         }.getOrNull() ?: return emptyList()
-        val doc = org.jsoup.Jsoup.parse(html)
+        val doc = com.fleeksoft.ksoup.Ksoup.parse(html)
         val seen = mutableSetOf<String>()
         val results = mutableListOf<AniDbResult>()
         doc.select("a.anime-card").forEach { a ->

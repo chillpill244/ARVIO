@@ -3,10 +3,10 @@ package com.arflix.tv.ui.startup
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import coil.ImageLoader
-import coil.imageLoader
-import coil.request.ImageRequest
-import coil.size.Precision
+import coil3.ImageLoader
+import coil3.imageLoader
+import coil3.request.ImageRequest
+import coil3.size.Precision
 import com.arflix.tv.data.model.Category
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.repository.MediaRepository
@@ -103,7 +103,7 @@ class StartupViewModel @Inject constructor(
                 .data(backdropUrl)
                 .size(heroBackdropPreloadWidth, heroBackdropPreloadHeight)
                 .precision(Precision.INEXACT)
-                .allowHardware(true)
+                
                 .build()
             imageLoader.enqueue(request)
         }
@@ -116,7 +116,7 @@ class StartupViewModel @Inject constructor(
                         .data(logoUrl)
                         .size(heroLogoPreloadWidth, heroLogoPreloadHeight)
                         .precision(Precision.INEXACT)
-                        .allowHardware(true)
+                        
                         .build()
                     imageLoader.enqueue(request)
                     val cacheKey = "${heroItem.mediaType}_${heroItem.id}"

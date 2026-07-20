@@ -44,7 +44,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.arflix.tv.data.db.DownloadEntity
 import com.arflix.tv.data.db.DownloadStatus
 import com.arflix.tv.ui.components.DownloadActionsSheet

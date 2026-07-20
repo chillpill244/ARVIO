@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.arflix.tv.ui.theme.appBackgroundDark
 import com.arflix.tv.ui.theme.BackgroundElevated
 import com.arflix.tv.ui.theme.BackgroundGlass
@@ -106,7 +106,7 @@ fun PlayerLoadingScreen(
             // Load at tiny resolution — inherently blurry when scaled up to
             // fullscreen. Avoids Modifier.blur() which kills GPU on low-end TV.
             AsyncImage(
-                model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                model = coil3.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
                     .data(backdropUrl)
                     .size(64, 36)
                     .build(),

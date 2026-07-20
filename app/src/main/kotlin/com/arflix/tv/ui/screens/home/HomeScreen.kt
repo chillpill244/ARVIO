@@ -119,11 +119,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import coil.ImageLoader
-import coil.compose.AsyncImage
-import coil.decode.SvgDecoder
-import coil.request.ImageRequest
-import coil.size.Precision
+import coil3.ImageLoader
+import coil3.compose.AsyncImage
+import coil3.svg.SvgDecoder
+import coil3.request.ImageRequest
+import coil3.size.Precision
 import com.arflix.tv.data.model.Category
 import com.arflix.tv.data.model.CatalogConfig
 import com.arflix.tv.data.model.CollectionTileShape
@@ -418,14 +418,11 @@ private suspend fun androidx.compose.foundation.lazy.LazyListState.animateHomeSc
 private fun rememberMetadataLogoImageLoader(context: Context): ImageLoader {
     return remember(context) {
         ImageLoader.Builder(context)
-            .okHttpClient(OkHttpProvider.coilClient)
+            .components { add(coil3.network.okhttp.OkHttpNetworkFetcherFactory(OkHttpProvider.coilClient)) }
             .components {
                 add(SvgDecoder.Factory())
             }
-            .allowRgb565(false)
-            .crossfade(false)
-            .placeholder(android.R.color.transparent)
-            .error(android.R.color.transparent)
+            
             .build()
     }
 }
@@ -493,10 +490,10 @@ private fun HomeBackdropCrossfade(
             .data(url)
             .size(backdropWidthPx, backdropHeightPx)
             .precision(Precision.INEXACT)
-            .allowHardware(true)
+            
             .memoryCacheKey(cacheKey)
             .placeholderMemoryCacheKey(cacheKey)
-            .crossfade(false)
+            
             .build()
         }
 
@@ -1346,10 +1343,10 @@ private fun HeroSection(
                                 .data(currentLogoUrl)
                                 .size(logoWidthPx, logoHeightPx)
                                 .precision(Precision.INEXACT)
-                                .allowHardware(true)
+                                
                                 .memoryCacheKey(cacheKey)
                                 .placeholderMemoryCacheKey(cacheKey)
-                                .crossfade(false)
+                                
                                 .build()
                         }
                         AsyncImage(
@@ -1700,7 +1697,7 @@ private fun TopRankRibbon(
         model = ImageRequest.Builder(context)
             .data(resId)
             .size(targetPx, targetPx)
-            .allowHardware(true)
+            
             .build(),
         contentDescription = "Rank #$clamped",
         contentScale = ContentScale.Fit,
@@ -2088,7 +2085,7 @@ private fun MobileHeroCarousel(
             state = pagerState,
             contentPadding = PaddingValues(horizontal = 64.dp),
             pageSpacing = 18.dp,
-            beyondBoundsPageCount = 1,
+            
             modifier = Modifier.fillMaxWidth()
         ) { page ->
             val item = heroItems[page % heroItems.size]

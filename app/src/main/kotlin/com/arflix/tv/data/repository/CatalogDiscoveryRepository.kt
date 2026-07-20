@@ -8,7 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.jsoup.Jsoup
+import com.fleeksoft.ksoup.Ksoup
 import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -104,7 +104,7 @@ class CatalogDiscoveryRepository @Inject constructor(
         }
         if (html.isBlank()) return emptyList()
 
-        val document = Jsoup.parse(html, "https://mdblist.com")
+        val document = Ksoup.parse(html, "https://mdblist.com")
         return document.select("article.related-list-card")
             .asSequence()
             .mapNotNull { card ->

@@ -15,14 +15,15 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
-import coil.ImageLoader
-import coil.ImageLoaderFactory
-import coil.decode.GifDecoder
-import coil.decode.ImageDecoderDecoder
-import coil.decode.SvgDecoder
-import coil.disk.DiskCache
-import coil.imageLoader
-import coil.memory.MemoryCache
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+
+
+import coil3.svg.SvgDecoder
+import coil3.disk.DiskCache
+import coil3.imageLoader
+import coil3.memory.MemoryCache
+import okio.Path.Companion.toOkioPath
 import com.arflix.tv.network.OkHttpProvider
 import com.arflix.tv.data.repository.AppUsageAnalyticsRepository
 import com.arflix.tv.data.repository.AuthRepository
@@ -54,7 +55,7 @@ import javax.inject.Inject
  * ARVIO TV Application class
  */
 @HiltAndroidApp
-class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFactory {
+class ArflixApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     @Volatile
     private var appImageLoader: ImageLoader? = null
@@ -151,7 +152,7 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
                         cloudSyncCoordinator.start()
                         realtimeSyncManager.start()
                     }
-                } else {
+                
                     realtimeSyncManager.stop()
                     cloudSyncCoordinator.stop()
                 }
@@ -159,15 +160,15 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
         }
     }
 
-    override fun newImageLoader(): ImageLoader {
+    override fun newImageLoader(context: coil3.PlatformContext): ImageLoader {
         val isTvDevice = detectDeviceType(this) == DeviceType.TV
         val isLowRamDevice = isLowRamDevice()
-        return ImageLoader.Builder(this)
+        return ImageLoader.Builder(context)
             // Use the dedicated Coil HTTP client instead of the main API client.
             // Avoids logging interceptor overhead and connection pool contention.
-            .okHttpClient(OkHttpProvider.coilClient)
+            .components { add(coil3.network.okhttp.OkHttpNetworkFetcherFactory(OkHttpProvider.coilClient)) }
             .memoryCache {
-                MemoryCache.Builder(this)
+                MemoryCache.Builder()
                     // The 2 GB Android TV dump showed Arvio spending most of
                     // its memory in native bitmap/texture allocations
                     // (255 MB native heap, 77 MB GPU cache). Use a fixed TV
@@ -185,27 +186,18 @@ class ArflixApplication : Application(), Configuration.Provider, ImageLoaderFact
             }
             .diskCache {
                 DiskCache.Builder()
-                    .directory(cacheDir.resolve("image_cache"))
+                    .directory(cacheDir.resolve("image_cache").toOkioPath())
                     .maxSizeBytes(if (isTvDevice) 128L * 1024L * 1024L else 96L * 1024L * 1024L)
                     .build()
             }
-            .crossfade(false)
-            .respectCacheHeaders(false)
-            .allowRgb565(true)
-            .bitmapConfig(Bitmap.Config.RGB_565)
             // No global placeholder — card composables use their own surface
             // background color as the visual placeholder. A global placeholder
             // causes a dark-rectangle flash behind transparent clearlogo PNGs
             // on the home hero. Error = transparent so failed loads are invisible
             // (the card surface background is the fallback visual).
-            .error(android.R.color.transparent)
+            
             .components {
                 add(SvgDecoder.Factory())
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    add(ImageDecoderDecoder.Factory())
-                } else {
-                    add(GifDecoder.Factory())
-                }
             }
             .build()
             .also { appImageLoader = it }

@@ -55,7 +55,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.arflix.tv.data.db.DownloadEntity
 import com.arflix.tv.data.db.DownloadStatus
 import com.arflix.tv.ui.components.CardLayoutMode

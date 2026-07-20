@@ -9,10 +9,10 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import coil.ImageLoader
-import coil.imageLoader
-import coil.request.ImageRequest
-import coil.size.Precision
+import coil3.ImageLoader
+import coil3.imageLoader
+import coil3.request.ImageRequest
+import coil3.size.Precision
 import com.arflix.tv.data.model.Category
 import com.arflix.tv.data.model.CatalogConfig
 import com.arflix.tv.data.model.CatalogKind
@@ -2833,10 +2833,10 @@ class HomeViewModel @Inject constructor(
                 .data(url)
                 .size(requestWidth, requestHeight)
                 .precision(Precision.INEXACT)
-                .allowHardware(true)
+                
                 .memoryCacheKey(cacheKey)
                 .placeholderMemoryCacheKey(cacheKey)
-                .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
                 .build()
             imageLoader.enqueue(request)
         }

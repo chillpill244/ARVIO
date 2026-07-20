@@ -3,10 +3,11 @@ package com.arflix.tv.network
 import android.app.ActivityManager
 import android.content.Context
 import android.util.Log
-import coil.ImageLoader
-import coil.decode.SvgDecoder
-import coil.disk.DiskCache
-import coil.memory.MemoryCache
+import coil3.ImageLoader
+import coil3.disk.DiskCache
+import coil3.memory.MemoryCache
+import coil3.svg.SvgDecoder
+import okio.Path.Companion.toOkioPath
 import com.arflix.tv.BuildConfig
 import okhttp3.Cache
 import okhttp3.ConnectionPool
@@ -505,21 +506,18 @@ object OkHttpProvider {
             48 * 1024 * 1024
         }
         return ImageLoader.Builder(context)
-            .okHttpClient(coilClient)
+            .components { add(coil3.network.okhttp.OkHttpNetworkFetcherFactory(coilClient)) }
             .memoryCache {
-                MemoryCache.Builder(context)
-                    .maxSizeBytes(imageCacheBytes)
+                MemoryCache.Builder()
+                    .maxSizeBytes(imageCacheBytes.toLong())
                     .build()
             }
             .diskCache {
                 DiskCache.Builder()
-                    .directory(context.cacheDir.resolve("image_cache"))
+                    .directory(context.cacheDir.resolve("image_cache").toOkioPath())
                     .maxSizeBytes(IMAGE_DISK_CACHE_SIZE)
                     .build()
             }
-            .crossfade(false)
-            .respectCacheHeaders(false)
-            .allowRgb565(true)
             .components {
                 add(SvgDecoder.Factory())
             }

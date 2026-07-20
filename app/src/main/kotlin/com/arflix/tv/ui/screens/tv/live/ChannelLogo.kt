@@ -26,9 +26,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import coil.size.Precision
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Precision
 
 /**
  * Typographic channel logo placeholder. Variant chosen by first char-code % 3.
@@ -102,8 +102,8 @@ fun ChannelLogo(
                     .data(logoUrl)
                     .size(px, px)
                     .precision(Precision.INEXACT)
-                    .allowHardware(true)
-                    .crossfade(false)
+                    
+                    
                     .memoryCacheKey("$logoUrl|${px}x$px")
                     .placeholderMemoryCacheKey("$logoUrl|${px}x$px")
                     .build()

@@ -2,7 +2,6 @@ package com.arflix.tv.ui.screens.settings
 
 import android.content.Context
 import android.graphics.Bitmap
-import coil.Coil
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -1377,7 +1376,7 @@ class SettingsViewModel @Inject constructor(
             val imageLoader = withContext(Dispatchers.IO) {
                 OkHttpProvider.createCoilImageLoader(context)
             }
-            Coil.setImageLoader(imageLoader)
+            coil3.SingletonImageLoader.setSafe { imageLoader }
         }
     }
 

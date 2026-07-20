@@ -136,7 +136,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.arflix.tv.ArflixApplication
 import com.arflix.tv.network.OkHttpProvider
 import com.arflix.tv.data.model.MediaType
