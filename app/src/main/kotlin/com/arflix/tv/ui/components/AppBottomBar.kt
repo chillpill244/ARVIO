@@ -39,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -76,6 +77,8 @@ val bottomBarItems = listOf(
     BottomBarItem(R.string.topbar_tv, Icons.Rounded.LiveTv, Icons.Outlined.LiveTv, "tv"),
     BottomBarItem(R.string.settings, Icons.Rounded.Settings, Icons.Outlined.Settings, "settings")
 )
+
+val LocalAppBottomBarPadding = staticCompositionLocalOf { 0.dp }
 
 @Stable
 class AppBottomBarScrollState {

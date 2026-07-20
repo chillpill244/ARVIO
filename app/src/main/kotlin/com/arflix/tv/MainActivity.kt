@@ -60,6 +60,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.arflix.tv.ui.components.rememberAppBottomBarScrollState
+import androidx.compose.runtime.CompositionLocalProvider
+import com.arflix.tv.ui.components.LocalAppBottomBarPadding
 import android.content.pm.ActivityInfo
 import com.arflix.tv.util.DeviceType
 import com.arflix.tv.util.DEVICE_MODE_OVERRIDE_KEY
@@ -614,7 +616,10 @@ fun ArflixApp(
 
     val bottomBarScrollState = rememberAppBottomBarScrollState()
 
-    Box(
+    CompositionLocalProvider(
+        LocalAppBottomBarPadding provides if (showBottomBar) 84.dp else 0.dp
+    ) {
+        Box(
         modifier = Modifier
             .nestedScroll(bottomBarScrollState.nestedScrollConnection)
             .fillMaxSize()
@@ -680,6 +685,7 @@ fun ArflixApp(
                     .fillMaxWidth()
             )
         }
+    }
     }
 
     LaunchedEffect(activeProfile?.id, pendingLauncherRequest) {
