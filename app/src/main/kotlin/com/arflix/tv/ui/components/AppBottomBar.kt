@@ -65,8 +65,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
 import com.arflix.tv.R
-import com.arflix.tv.ui.theme.AccentGreen
-import com.arflix.tv.ui.theme.appBackgroundDark
+import com.arflix.tv.shared.theme.AccentGreen
+import com.arflix.tv.shared.theme.appBackgroundDark
 
 data class BottomBarItem(
     @StringRes val labelRes: Int,

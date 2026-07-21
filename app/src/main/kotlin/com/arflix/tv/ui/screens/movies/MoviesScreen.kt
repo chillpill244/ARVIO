@@ -80,10 +80,10 @@ import com.arflix.tv.ui.components.topBarSelectedIndex
 import com.arflix.tv.ui.components.LocalAppBottomBarPadding
 import com.arflix.tv.ui.screens.shared.IptvNotConfiguredPanel
 import com.arflix.tv.ui.screens.shared.MediaCategoryContent
-import com.arflix.tv.ui.theme.BackgroundDark
-import com.arflix.tv.ui.theme.Pink
-import com.arflix.tv.ui.theme.TextPrimary
-import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.shared.theme.BackgroundDark
+import com.arflix.tv.shared.theme.Pink
+import com.arflix.tv.shared.theme.TextPrimary
+import com.arflix.tv.shared.theme.TextSecondary
 import com.arflix.tv.util.LocalDeviceType
 
 private enum class MoviesFocusZone {
@@ -399,7 +399,7 @@ private fun MobileMoviesLayout(
                                     ) {
                                         Text(
                                             text = category,
-                                            style = com.arflix.tv.ui.theme.ArflixTypography.body,
+                                            style = com.arflix.tv.shared.theme.ArflixTypography.body,
                                             color = if (isFav) Pink else TextPrimary,
                                             modifier = Modifier.weight(1f)
                                         )
@@ -487,7 +487,7 @@ private fun MobileMoviesLayout(
                         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                             Text(
                                 text = if (uiState.itemSearchQuery.isNotEmpty()) "No items match your search" else "No items in this category",
-                                style = com.arflix.tv.ui.theme.ArflixTypography.body,
+                                style = com.arflix.tv.shared.theme.ArflixTypography.body,
                                 color = TextSecondary
                             )
                         }

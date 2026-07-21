@@ -33,9 +33,9 @@ import coil3.size.Precision
 import androidx.compose.ui.platform.LocalContext
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
-import com.arflix.tv.ui.skin.ArvioFocusableSurface
-import com.arflix.tv.ui.skin.ArvioSkin
-import com.arflix.tv.ui.skin.rememberArvioCardShape
+import com.arflix.tv.shared.skin.ArvioFocusableSurface
+import com.arflix.tv.shared.skin.ArvioSkin
+import com.arflix.tv.shared.skin.rememberArvioCardShape
 
 /**
  * Continue Watching card with progress bar.

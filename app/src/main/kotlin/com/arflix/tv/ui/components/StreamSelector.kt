@@ -75,11 +75,11 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.arflix.tv.data.model.StreamSource
 import com.arflix.tv.ui.focus.arvioDpadFocusGroup
-import com.arflix.tv.ui.theme.ArflixTypography
+import com.arflix.tv.shared.theme.ArflixTypography
 import com.arflix.tv.util.LocalDeviceType
-import com.arflix.tv.ui.theme.Pink
-import com.arflix.tv.ui.theme.TextPrimary
-import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.shared.theme.Pink
+import com.arflix.tv.shared.theme.TextPrimary
+import com.arflix.tv.shared.theme.TextSecondary
 import androidx.compose.ui.res.stringResource
 import com.arflix.tv.R
 

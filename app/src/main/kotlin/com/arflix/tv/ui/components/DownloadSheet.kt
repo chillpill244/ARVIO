@@ -52,8 +52,8 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.arflix.tv.data.model.StreamSource
 import com.arflix.tv.data.model.Subtitle
-import com.arflix.tv.ui.theme.ArflixTypography
-import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.shared.theme.ArflixTypography
+import com.arflix.tv.shared.theme.TextSecondary
 import com.arflix.tv.util.HlsDownloadSelection
 import com.arflix.tv.util.HlsDownloadUtil
 import com.arflix.tv.util.HlsInspection

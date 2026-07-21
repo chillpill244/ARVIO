@@ -160,18 +160,18 @@ import com.arflix.tv.ui.focus.arvioManualBringIntoViewBoundary
 import com.arflix.tv.ui.focus.arvioDpadFocusGroup
 import com.arflix.tv.ui.focus.isArvioDpadNavigationKey
 import com.arflix.tv.ui.focus.rememberArvioDpadRepeatGate
-import com.arflix.tv.ui.skin.ArvioFocusableSurface
-import com.arflix.tv.ui.skin.ArvioSkin
-import com.arflix.tv.ui.skin.rememberArvioCardShape
-import com.arflix.tv.ui.skin.resolveAccentColor
-import com.arflix.tv.ui.theme.AnimationConstants
-import com.arflix.tv.ui.theme.ArflixTypography
-import com.arflix.tv.ui.theme.BackgroundCard
-import com.arflix.tv.ui.theme.appBackgroundDark
-import com.arflix.tv.ui.theme.Pink
-import com.arflix.tv.ui.theme.Purple
-import com.arflix.tv.ui.theme.TextPrimary
-import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.shared.skin.ArvioFocusableSurface
+import com.arflix.tv.shared.skin.ArvioSkin
+import com.arflix.tv.shared.skin.rememberArvioCardShape
+import com.arflix.tv.shared.skin.resolveAccentColor
+import com.arflix.tv.shared.theme.AnimationConstants
+import com.arflix.tv.shared.theme.ArflixTypography
+import com.arflix.tv.shared.theme.BackgroundCard
+import com.arflix.tv.shared.theme.appBackgroundDark
+import com.arflix.tv.shared.theme.Pink
+import com.arflix.tv.shared.theme.Purple
+import com.arflix.tv.shared.theme.TextPrimary
+import com.arflix.tv.shared.theme.TextSecondary
 import com.arflix.tv.util.LocalDeviceType
 import com.arflix.tv.util.formatGenreName
 import com.arflix.tv.util.isInCinema
@@ -1312,7 +1312,7 @@ internal fun DetailsContent(
                 androidx.tv.material3.Text(
                     text = "This will remove the downloaded file from your device.",
                     style = ArflixTypography.body,
-                    color = com.arflix.tv.ui.theme.TextSecondary
+                    color = com.arflix.tv.shared.theme.TextSecondary
                 )
                 Spacer(Modifier.height(4.dp))
                 Row(
@@ -1328,7 +1328,7 @@ internal fun DetailsContent(
                         androidx.tv.material3.Text(
                             text = "Cancel",
                             style = ArflixTypography.body,
-                            color = com.arflix.tv.ui.theme.TextSecondary
+                            color = com.arflix.tv.shared.theme.TextSecondary
                         )
                     }
                     Box(

@@ -59,7 +59,7 @@ import androidx.tv.material3.Text
 import com.arflix.tv.data.model.Profile
 import com.arflix.tv.ui.components.ProfileAvatarVisual
 import com.arflix.tv.ui.components.Toast
-import com.arflix.tv.ui.theme.appBackgroundDark
+import com.arflix.tv.shared.theme.appBackgroundDark
 import com.arflix.tv.util.LocalDeviceType
 import androidx.compose.ui.res.stringResource
 import com.arflix.tv.R

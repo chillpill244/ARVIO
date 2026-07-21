@@ -60,11 +60,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import com.arflix.tv.ui.theme.ArflixTypography
-import com.arflix.tv.ui.theme.BackgroundElevated
-import com.arflix.tv.ui.theme.Pink
-import com.arflix.tv.ui.theme.TextPrimary
-import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.shared.theme.ArflixTypography
+import com.arflix.tv.shared.theme.BackgroundElevated
+import com.arflix.tv.shared.theme.Pink
+import com.arflix.tv.shared.theme.TextPrimary
+import com.arflix.tv.shared.theme.TextSecondary
 import com.arflix.tv.util.tr
 import androidx.compose.ui.res.stringResource
 import com.arflix.tv.R

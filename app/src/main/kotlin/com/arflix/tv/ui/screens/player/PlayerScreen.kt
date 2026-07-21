@@ -154,14 +154,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.arflix.tv.util.LocalDeviceType
 import com.arflix.tv.util.settingsDataStore
 import com.arflix.tv.util.weightedSubtitleScore
-import com.arflix.tv.ui.skin.LocalAccentColorOverride
-import com.arflix.tv.ui.theme.ArflixTypography
-import com.arflix.tv.ui.theme.Pink
-import com.arflix.tv.ui.theme.PurpleDark
-import com.arflix.tv.ui.theme.PurpleLight
-import com.arflix.tv.ui.theme.PurplePrimary
-import com.arflix.tv.ui.theme.TextPrimary
-import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.shared.skin.LocalAccentColorOverride
+import com.arflix.tv.shared.theme.ArflixTypography
+import com.arflix.tv.shared.theme.Pink
+import com.arflix.tv.shared.theme.PurpleDark
+import com.arflix.tv.shared.theme.PurpleLight
+import com.arflix.tv.shared.theme.PurplePrimary
+import com.arflix.tv.shared.theme.TextPrimary
+import com.arflix.tv.shared.theme.TextSecondary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -2776,7 +2776,7 @@ fun PlayerScreen(
                 )
                 Text(
                     text = "AI Translating",
-                    style = com.arflix.tv.ui.theme.ArflixTypography.caption,
+                    style = com.arflix.tv.shared.theme.ArflixTypography.caption,
                     color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f)
                 )
             }

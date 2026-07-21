@@ -7,7 +7,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.arflix.tv.ui.theme.JetBrainsSansFontFamily
+import com.arflix.tv.shared.theme.JetBrainsSansFontFamily
 
 // ARVIO Live TV — design tokens. OKLCH reference kept in spec.md §2.
 // Mapped from handoff/tokens.kt. `JetBrainsSansFontFamily` ships; JetBrains Mono

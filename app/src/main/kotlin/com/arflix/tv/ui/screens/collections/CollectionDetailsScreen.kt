@@ -72,10 +72,10 @@ import com.arflix.tv.ui.components.CardLayoutMode
 import com.arflix.tv.ui.components.MediaCard
 import com.arflix.tv.ui.components.rememberCatalogueRowLayoutMode
 import com.arflix.tv.ui.focus.arvioDpadFocusGroup
-import com.arflix.tv.ui.theme.ArflixTypography
-import com.arflix.tv.ui.theme.appBackgroundDark
-import com.arflix.tv.ui.theme.TextPrimary
-import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.shared.theme.ArflixTypography
+import com.arflix.tv.shared.theme.appBackgroundDark
+import com.arflix.tv.shared.theme.TextPrimary
+import com.arflix.tv.shared.theme.TextSecondary
 import com.arflix.tv.util.LocalDeviceType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

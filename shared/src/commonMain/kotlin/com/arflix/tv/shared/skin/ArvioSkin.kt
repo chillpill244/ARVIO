@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.skin
+package com.arflix.tv.shared.skin
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider

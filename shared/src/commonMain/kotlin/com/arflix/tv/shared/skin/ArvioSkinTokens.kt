@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.skin
+package com.arflix.tv.shared.skin
 
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
@@ -9,7 +9,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.arflix.tv.ui.theme.JetBrainsSansFontFamily
+import com.arflix.tv.shared.theme.JetBrainsSansFontFamily
 
 @Immutable
 data class ArvioColorTokens(

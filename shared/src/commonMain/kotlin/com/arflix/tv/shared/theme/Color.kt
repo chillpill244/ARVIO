@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.theme
+package com.arflix.tv.shared.theme
 
 import androidx.compose.ui.graphics.Color
 

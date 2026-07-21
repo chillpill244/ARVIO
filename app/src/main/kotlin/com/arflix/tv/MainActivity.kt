@@ -111,7 +111,7 @@ import com.arflix.tv.ui.screens.login.LoginScreen
 import com.arflix.tv.ui.startup.StartupViewModel
 import com.arflix.tv.ui.theme.ArflixTvTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.arflix.tv.ui.theme.appBackgroundDark
+import com.arflix.tv.shared.theme.appBackgroundDark
 import com.arflix.tv.worker.TraktSyncWorker
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch

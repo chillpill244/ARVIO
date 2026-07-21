@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.arflix.tv.data.repository.SkipInterval
-import com.arflix.tv.ui.theme.ArflixTypography
+import com.arflix.tv.shared.theme.ArflixTypography
 import kotlinx.coroutines.delay
 
 /** Interval types that mark end credits / outro / ED segments. */

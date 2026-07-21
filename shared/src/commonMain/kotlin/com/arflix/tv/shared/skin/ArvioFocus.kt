@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.skin
+package com.arflix.tv.shared.skin
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween

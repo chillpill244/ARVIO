@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.arflix.tv.data.model.Profile
-import com.arflix.tv.ui.theme.ArflixTypography
+import com.arflix.tv.shared.theme.ArflixTypography
 import kotlinx.coroutines.delay
 import android.content.Context
 import android.text.format.DateFormat

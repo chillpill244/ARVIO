@@ -88,17 +88,17 @@ import com.arflix.tv.ui.components.topBarFocusedItem
 import com.arflix.tv.ui.components.topBarMaxIndex
 import com.arflix.tv.ui.components.rememberCatalogueRowLayoutMode
 import com.arflix.tv.ui.focus.arvioDpadFocusGroup
-import com.arflix.tv.ui.skin.ArvioFocusableSurface
-import com.arflix.tv.ui.skin.ArvioSkin
-import com.arflix.tv.ui.skin.rememberArvioCardShape
-import com.arflix.tv.ui.skin.resolveAccentColor
-import com.arflix.tv.ui.theme.ArflixTypography
-import com.arflix.tv.ui.theme.BackgroundCard
-import com.arflix.tv.ui.theme.appBackgroundDark
-import com.arflix.tv.ui.theme.AccentGreen
-import com.arflix.tv.ui.theme.Pink
-import com.arflix.tv.ui.theme.TextPrimary
-import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.shared.skin.ArvioFocusableSurface
+import com.arflix.tv.shared.skin.ArvioSkin
+import com.arflix.tv.shared.skin.rememberArvioCardShape
+import com.arflix.tv.shared.skin.resolveAccentColor
+import com.arflix.tv.shared.theme.ArflixTypography
+import com.arflix.tv.shared.theme.BackgroundCard
+import com.arflix.tv.shared.theme.appBackgroundDark
+import com.arflix.tv.shared.theme.AccentGreen
+import com.arflix.tv.shared.theme.Pink
+import com.arflix.tv.shared.theme.TextPrimary
+import com.arflix.tv.shared.theme.TextSecondary
 import com.arflix.tv.util.LocalDeviceType
 
 @OptIn(ExperimentalTvMaterial3Api::class)

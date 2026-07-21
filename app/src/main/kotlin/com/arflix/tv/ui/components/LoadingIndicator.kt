@@ -18,7 +18,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.arflix.tv.ui.theme.Pink
+import com.arflix.tv.shared.theme.Pink
 
 /**
  * TV-compatible loading indicator that doesn't use Material3

@@ -40,10 +40,10 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.arflix.tv.data.model.Profile
-import com.arflix.tv.ui.skin.ArvioSkin
-import com.arflix.tv.ui.skin.resolveAccentColor
-import com.arflix.tv.ui.theme.AnimationConstants
-import com.arflix.tv.ui.theme.ArflixTypography
+import com.arflix.tv.shared.skin.ArvioSkin
+import com.arflix.tv.shared.skin.resolveAccentColor
+import com.arflix.tv.shared.theme.AnimationConstants
+import com.arflix.tv.shared.theme.ArflixTypography
 import androidx.compose.ui.res.stringResource
 import com.arflix.tv.R
 import com.arflix.tv.util.settingsDataStore
@@ -323,7 +323,7 @@ private fun TopBarSettingsGear(
                     .offset(x = 2.dp, y = (-2).dp)
                     .size(8.dp)
                     .clip(CircleShape)
-                    .background(com.arflix.tv.ui.theme.AccentRed)
+                    .background(com.arflix.tv.shared.theme.AccentRed)
             )
         }
     }

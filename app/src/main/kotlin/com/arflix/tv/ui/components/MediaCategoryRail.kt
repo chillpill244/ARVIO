@@ -38,8 +38,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import com.arflix.tv.ui.theme.ArflixTypography
-import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.shared.theme.ArflixTypography
+import com.arflix.tv.shared.theme.TextSecondary
 
 /**
  * Reusable category rail component for Movies, Series, and TV screens.

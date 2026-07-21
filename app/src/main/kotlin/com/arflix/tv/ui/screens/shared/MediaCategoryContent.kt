@@ -66,11 +66,11 @@ import com.arflix.tv.ui.components.MediaCategoryRail
 import com.arflix.tv.ui.components.TopBarClock
 import com.arflix.tv.ui.components.LocalAppBottomBarPadding
 import androidx.compose.material.icons.filled.LiveTv
-import com.arflix.tv.ui.theme.ArflixTypography
-import com.arflix.tv.ui.theme.BackgroundCard
-import com.arflix.tv.ui.theme.BackgroundDark
-import com.arflix.tv.ui.theme.TextPrimary
-import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.shared.theme.ArflixTypography
+import com.arflix.tv.shared.theme.BackgroundCard
+import com.arflix.tv.shared.theme.BackgroundDark
+import com.arflix.tv.shared.theme.TextPrimary
+import com.arflix.tv.shared.theme.TextSecondary
 import kotlin.math.abs
 
 /**

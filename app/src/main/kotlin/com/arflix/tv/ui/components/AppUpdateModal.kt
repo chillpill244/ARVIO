@@ -46,11 +46,11 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.arflix.tv.BuildConfig
 import com.arflix.tv.R
 import com.arflix.tv.util.LocalDeviceType
-import com.arflix.tv.ui.theme.ArflixTypography
-import com.arflix.tv.ui.theme.BackgroundElevated
-import com.arflix.tv.ui.theme.Pink
-import com.arflix.tv.ui.theme.TextPrimary
-import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.shared.theme.ArflixTypography
+import com.arflix.tv.shared.theme.BackgroundElevated
+import com.arflix.tv.shared.theme.Pink
+import com.arflix.tv.shared.theme.TextPrimary
+import com.arflix.tv.shared.theme.TextSecondary
 import com.arflix.tv.updater.UpdateStatus
 
 private data class ActionButtonConfig(

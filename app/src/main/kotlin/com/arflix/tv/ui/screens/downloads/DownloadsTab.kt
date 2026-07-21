@@ -62,8 +62,8 @@ import com.arflix.tv.data.db.DownloadStatus
 import com.arflix.tv.ui.components.CardLayoutMode
 import com.arflix.tv.ui.components.DownloadActionsSheet
 import com.arflix.tv.ui.components.rememberCardLayoutMode
-import com.arflix.tv.ui.theme.ArflixTypography
-import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.shared.theme.ArflixTypography
+import com.arflix.tv.shared.theme.TextSecondary
 import com.arflix.tv.util.formatBytes
 
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalFoundationApi::class)

@@ -25,22 +25,22 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
-import com.arflix.tv.ui.theme.appBackgroundDark
-import com.arflix.tv.ui.theme.BackgroundElevated
-import com.arflix.tv.ui.theme.BackgroundGlass
-import com.arflix.tv.ui.theme.BackgroundOverlay
-import com.arflix.tv.ui.theme.Cyan
-import com.arflix.tv.ui.theme.ParticleCyan
-import com.arflix.tv.ui.theme.ParticlePurple
-import com.arflix.tv.ui.theme.ParticlePurpleDark
-import com.arflix.tv.ui.theme.ParticlePurpleLight
-import com.arflix.tv.ui.theme.Pink
-import com.arflix.tv.ui.theme.Purple
-import com.arflix.tv.ui.theme.PurpleDark
-import com.arflix.tv.ui.theme.PurpleLight
-import com.arflix.tv.ui.theme.PurplePrimary
-import com.arflix.tv.ui.theme.TextPrimary
-import com.arflix.tv.ui.theme.TextSecondary
+import com.arflix.tv.shared.theme.appBackgroundDark
+import com.arflix.tv.shared.theme.BackgroundElevated
+import com.arflix.tv.shared.theme.BackgroundGlass
+import com.arflix.tv.shared.theme.BackgroundOverlay
+import com.arflix.tv.shared.theme.Cyan
+import com.arflix.tv.shared.theme.ParticleCyan
+import com.arflix.tv.shared.theme.ParticlePurple
+import com.arflix.tv.shared.theme.ParticlePurpleDark
+import com.arflix.tv.shared.theme.ParticlePurpleLight
+import com.arflix.tv.shared.theme.Pink
+import com.arflix.tv.shared.theme.Purple
+import com.arflix.tv.shared.theme.PurpleDark
+import com.arflix.tv.shared.theme.PurpleLight
+import com.arflix.tv.shared.theme.PurplePrimary
+import com.arflix.tv.shared.theme.TextPrimary
+import com.arflix.tv.shared.theme.TextSecondary
 
 /**
  * Premium Player Loading Screen

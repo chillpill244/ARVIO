@@ -47,7 +47,7 @@ import com.arflix.tv.ui.components.SkeletonDetailsPage
 import com.arflix.tv.ui.components.TrailerPlayer
 import com.arflix.tv.ui.components.topBarFocusedItem
 import com.arflix.tv.ui.components.topBarMaxIndex
-import com.arflix.tv.ui.theme.appBackgroundDark
+import com.arflix.tv.shared.theme.appBackgroundDark
 import com.arflix.tv.util.LocalDeviceType
 import kotlinx.coroutines.launch
 

@@ -21,9 +21,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.arflix.tv.data.repository.CloudSyncScope
 import com.arflix.tv.ui.focus.arvioDpadFocusGroup
-import com.arflix.tv.ui.skin.ArvioFocusableSurface
-import com.arflix.tv.ui.skin.ArvioSkin
-import com.arflix.tv.ui.skin.rememberArvioCardShape
+import com.arflix.tv.shared.skin.ArvioFocusableSurface
+import com.arflix.tv.shared.skin.ArvioSkin
+import com.arflix.tv.shared.skin.rememberArvioCardShape
 import com.arflix.tv.util.profilesDataStore
 import com.arflix.tv.util.settingsDataStore
 import androidx.lifecycle.compose.collectAsStateWithLifecycle

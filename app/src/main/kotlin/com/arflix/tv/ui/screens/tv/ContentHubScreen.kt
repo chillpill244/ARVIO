@@ -39,7 +39,7 @@ import com.arflix.tv.ui.screens.movies.MoviesScreen
 import com.arflix.tv.ui.screens.series.SeriesScreen
 import com.arflix.tv.ui.screens.tv.shared.ContentHubTab
 import com.arflix.tv.ui.screens.tv.shared.ContentMenuPanel
-import com.arflix.tv.ui.theme.ArflixTypography
+import com.arflix.tv.shared.theme.ArflixTypography
 import com.arflix.tv.util.LocalDeviceType
 
 @Composable
