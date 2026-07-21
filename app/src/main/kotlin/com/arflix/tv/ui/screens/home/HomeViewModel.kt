@@ -40,7 +40,6 @@ import com.arflix.tv.util.Constants
 import com.arflix.tv.util.DeviceType
 import com.arflix.tv.util.LAST_APP_LANGUAGE_KEY
 import com.arflix.tv.util.detectDeviceType
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -64,7 +63,6 @@ import kotlinx.coroutines.cancelAndJoin
 import java.util.Collections
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Inject
 import com.arflix.tv.util.Logger
 
 data class HomeUiState(
@@ -114,9 +112,8 @@ enum class ToastType {
     SUCCESS, ERROR, INFO
 }
 
-@HiltViewModel
 @OptIn(ExperimentalCoroutinesApi::class)
-class HomeViewModel @Inject constructor(
+class HomeViewModel constructor(
     private val mediaRepository: MediaRepository,
     private val catalogRepository: CatalogRepository,
     private val streamRepository: StreamRepository,

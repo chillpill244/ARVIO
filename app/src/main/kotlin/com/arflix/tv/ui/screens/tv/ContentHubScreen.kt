@@ -30,7 +30,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import androidx.tv.material3.Text
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.Profile
@@ -64,7 +64,7 @@ fun ContentHubScreen(
     val isMobile = LocalDeviceType.current.isTouchDevice()
 
     // Hoisted so TvViewModel survives tab switches — prevents EPG from reloading on every TV tab visit
-    val tvViewModel: TvViewModel = hiltViewModel()
+    val tvViewModel: TvViewModel = koinViewModel()
 
     if (isMobile) {
         Column(modifier = Modifier.fillMaxSize()) {

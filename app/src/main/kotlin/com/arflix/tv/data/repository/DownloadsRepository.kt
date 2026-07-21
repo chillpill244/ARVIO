@@ -17,20 +17,16 @@ import com.arflix.tv.util.HlsDownloadUtil
 import com.arflix.tv.worker.DownloadWorker
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class DownloadsRepository @Inject constructor(
+class DownloadsRepository constructor(
     private val dao: DownloadDao,
     private val workManager: WorkManager,
-    @ApplicationContext private val context: Context
+    private val context: Context
 ) {
 
     fun observeAllDownloads(): Flow<List<DownloadEntity>> = dao.observeAll()

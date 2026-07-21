@@ -41,7 +41,6 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey as globalStringPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,7 +52,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 private fun isSupplementalStream(stream: StreamSource): Boolean =
     stream.addonId == "iptv_xtream_vod" || stream.addonId == HomeServerRepository.ADDON_ID
@@ -155,8 +153,7 @@ private object PlayerRegexes {
     val SIZE_PATTERN_3 = Regex("""^(\d+(?:\.\d+)?)$""")
 }
 
-@HiltViewModel
-class PlayerViewModel @Inject constructor(
+class PlayerViewModel constructor(
     private val preferenceStore: PreferenceStore, private val platformEnvironment: PlatformEnvironment,
     private val profileManager: ProfileManager,
     private val mediaRepository: MediaRepository,

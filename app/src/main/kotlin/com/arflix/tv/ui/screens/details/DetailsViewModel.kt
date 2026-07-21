@@ -28,7 +28,6 @@ import com.arflix.tv.data.repository.WatchHistoryRepository
 import com.arflix.tv.data.repository.WatchlistRepository
 import com.arflix.tv.util.Constants
 import com.arflix.tv.util.settingsDataStore
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -41,7 +40,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Locale
-import javax.inject.Inject
 
 data class DetailsUiState(
     val isLoading: Boolean = true,
@@ -178,8 +176,7 @@ enum class ToastType {
 private fun isSupplementalStream(stream: StreamSource): Boolean =
     stream.addonId == "iptv_xtream_vod" || stream.addonId == HomeServerRepository.ADDON_ID
 
-@HiltViewModel
-class DetailsViewModel @Inject constructor(
+class DetailsViewModel constructor(
     private val preferenceStore: PreferenceStore, private val platformEnvironment: PlatformEnvironment,
     private val mediaRepository: MediaRepository,
     private val profileManager: ProfileManager,

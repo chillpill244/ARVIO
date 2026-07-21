@@ -50,7 +50,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,8 +84,8 @@ import kotlinx.coroutines.delay
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun WatchlistScreen(
-    viewModel: WatchlistViewModel = hiltViewModel(),
-    downloadsViewModel: DownloadsViewModel = hiltViewModel(),
+    viewModel: WatchlistViewModel = koinViewModel(),
+    downloadsViewModel: DownloadsViewModel = koinViewModel(),
     initialTab: Int = 0,
     currentProfile: com.arflix.tv.data.model.Profile? = null,
     onNavigateToDetails: (MediaType, Int) -> Unit = { _, _ -> },

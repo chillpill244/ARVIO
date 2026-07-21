@@ -10,7 +10,6 @@ import com.arflix.tv.util.Constants
 import com.arflix.tv.util.traktDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -24,8 +23,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Local watchlist item stored in DataStore
@@ -45,9 +42,8 @@ data class LocalWatchlistItem(
  * Each profile has its own separate watchlist stored in DataStore.
  * No authentication required - works completely offline.
  */
-@Singleton
-class WatchlistRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class WatchlistRepository constructor(
+    private val context: Context,
     private val profileManager: ProfileManager,
     private val tmdbApi: TmdbApi,
     private val invalidationBus: CloudSyncInvalidationBus

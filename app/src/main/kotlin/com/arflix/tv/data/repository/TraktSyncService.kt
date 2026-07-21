@@ -9,7 +9,6 @@ import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.util.Constants
 import com.arflix.tv.util.traktDataStore
 import com.google.gson.Gson
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -32,10 +31,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import retrofit2.HttpException
+import io.ktor.client.plugins.ResponseException
 import java.util.concurrent.atomic.AtomicInteger
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * TraktSyncService - Manages synchronization between Trakt and Supabase
@@ -51,9 +48,8 @@ import javax.inject.Singleton
  * - episode_progress: In-progress playback state
  * - sync_state: Tracks sync timestamps and status
  */
-@Singleton
-class TraktSyncService @Inject constructor(
-    @ApplicationContext private val context: Context,
+class TraktSyncService constructor(
+    private val context: Context,
     private val traktApi: TraktApi,
     private val supabaseApi: SupabaseApi,
     private val authRepository: AuthRepository,
@@ -1765,8 +1761,8 @@ class TraktSyncService @Inject constructor(
         val auth = getAuthHeader() ?: throw IllegalStateException("Not authenticated with Trakt")
         return try {
             block(auth)
-        } catch (e: HttpException) {
-            if (e.code() == 401) {
+        } catch (e: ResponseException) {
+            if (e.response.status.value == 401) {
                 val refreshed = refreshTokenIfNeeded(force = true) ?: throw e
                 block("Bearer $refreshed")
             } else {
@@ -1790,8 +1786,8 @@ class TraktSyncService @Inject constructor(
         if (auth == null) throw IllegalStateException("Supabase auth failed")
         return try {
             block(auth)
-        } catch (e: HttpException) {
-            if (e.code() == 401) {
+        } catch (e: ResponseException) {
+            if (e.response.status.value == 401) {
                 val refreshed = supabaseAuthMutex.withLock {
                     authRepository.refreshAccessToken()
                 }

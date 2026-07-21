@@ -61,7 +61,6 @@ import com.arflix.tv.util.LAST_APP_LANGUAGE_KEY
 import com.arflix.tv.util.settingsDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -78,7 +77,6 @@ import kotlin.uuid.Uuid
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
-import javax.inject.Inject
 
 enum class ToastType {
     SUCCESS, ERROR, INFO
@@ -205,8 +203,7 @@ data class SettingsUiState(
     val smoothScrolling: Boolean = true
 )
 
-@HiltViewModel
-class SettingsViewModel @Inject constructor(
+class SettingsViewModel constructor(
     private val preferenceStore: PreferenceStore, private val platformEnvironment: PlatformEnvironment,
     private val profileManager: ProfileManager,
     private val traktRepository: TraktRepository,
@@ -2879,7 +2876,7 @@ class SettingsViewModel @Inject constructor(
             } catch (e: Exception) {
                 System.err.println("SettingsVM: failed to start Trakt auth: ${e.message}")
                 val message = when (e) {
-                    is retrofit2.HttpException -> "Trakt activation failed (${e.code()})"
+                    is io.ktor.client.plugins.ResponseException -> "Trakt activation failed (${e.response.status.value})"
                     else -> e.message?.takeIf { it.isNotBlank() } ?: "Trakt activation failed"
                 }
                 _uiState.value = _uiState.value.copy(
@@ -2940,13 +2937,13 @@ class SettingsViewModel @Inject constructor(
                     // Keep polling on 400 (pending) - user hasn't entered code yet
                     // Check both HttpException code and message for 400
                     val is400 = when (e) {
-                        is retrofit2.HttpException -> e.code() == 400
+                        is io.ktor.client.plugins.ResponseException -> e.response.status.value == 400
                         else -> e.message?.contains("400") == true ||
                                 e.message?.contains("pending") == true
                     }
                     if (!is400) {
                         lastFailure = when (e) {
-                            is retrofit2.HttpException -> "Trakt authorization failed (${e.code()})"
+                            is io.ktor.client.plugins.ResponseException -> "Trakt authorization failed (${e.response.status.value})"
                             else -> e.message?.takeIf { it.isNotBlank() } ?: "Trakt authorization failed"
                         }
                         break

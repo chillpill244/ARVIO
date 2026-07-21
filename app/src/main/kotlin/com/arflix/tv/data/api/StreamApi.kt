@@ -2,14 +2,15 @@ package com.arflix.tv.data.api
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import retrofit2.http.GET
-import retrofit2.http.Url
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.request.get
 
 /**
  * Stremio addon API interface for stream resolution
  * Enhanced to support compatible stream addons
  */
-interface StreamApi {
+class StreamApi(private val client: HttpClient) {
 
     // ========== Stremio Addon Manifest ==========
 
@@ -17,69 +18,60 @@ interface StreamApi {
      * Fetch addon manifest from any Stremio addon URL
      * URL format: https://addon.example.com/manifest.json
      */
-    @GET
     suspend fun getAddonManifest(
-        @Url url: String
-    ): StremioManifestResponse
+        url: String
+    ): StremioManifestResponse = client.get(url).body()
 
     // ========== Generic Stremio Addon ==========
 
-    @GET
     suspend fun getAddonStreams(
-        @Url url: String
-    ): StremioStreamResponse
+        url: String
+    ): StremioStreamResponse = client.get(url).body()
 
-    @GET
     suspend fun getAddonCatalog(
-        @Url url: String
-    ): StremioCatalogResponse
+        url: String
+    ): StremioCatalogResponse = client.get(url).body()
 
-    @GET
     suspend fun getAddonMeta(
-        @Url url: String
-    ): StremioMetaResponse
+        url: String
+    ): StremioMetaResponse = client.get(url).body()
 
     // ========== OpenSubtitles ==========
 
-    @GET
     suspend fun getSubtitles(
-        @Url url: String
-    ): StremioSubtitleResponse
+        url: String
+    ): StremioSubtitleResponse = client.get(url).body()
 
     // ========== Kitsu API (for anime ID lookup) ==========
 
-    @GET
     suspend fun searchKitsuAnime(
-        @Url url: String
-    ): KitsuSearchResponse
+        url: String
+    ): KitsuSearchResponse = client.get(url).body()
 
     /**
      * Get Kitsu mappings by external site and ID (e.g., TVDB -> Kitsu)
      * URL: https://kitsu.io/api/edge/mappings?filter[externalSite]=thetvdb/series&filter[externalId]=ID&include=item
      */
-    @GET
     suspend fun getKitsuMappings(
-        @Url url: String
-    ): KitsuMappingResponse
+        url: String
+    ): KitsuMappingResponse = client.get(url).body()
 
     /**
      * Get Kitsu anime detail by ID
      * URL: https://kitsu.io/api/edge/anime/KITSU_ID
      */
-    @GET
     suspend fun getKitsuAnimeDetail(
-        @Url url: String
-    ): KitsuAnimeDetailResponse
+        url: String
+    ): KitsuAnimeDetailResponse = client.get(url).body()
 
     /**
      * Get Kitsu anime media-relationships (sequel, prequel, etc.)
      * URL: https://kitsu.io/api/edge/anime/KITSU_ID/relationships/media-relationships
      *   or: https://kitsu.io/api/edge/anime/KITSU_ID?include=mediaRelationships.destination
      */
-    @GET
     suspend fun getKitsuMediaRelationships(
-        @Url url: String
-    ): KitsuMediaRelationshipsResponse
+        url: String
+    ): KitsuMediaRelationshipsResponse = client.get(url).body()
 
     // ========== ARM API (Anime ID Resolution) ==========
 
@@ -88,19 +80,17 @@ interface StreamApi {
      * URL: https://arm.haglund.dev/api/v2/themoviedb?id=TMDB_ID
      * Returns list of matching entries (multiple for multi-season anime)
      */
-    @GET
     suspend fun getArmMappingByTmdb(
-        @Url url: String
-    ): List<ArmMappingEntry>
+        url: String
+    ): List<ArmMappingEntry> = client.get(url).body()
 
     /**
      * Resolve IMDB ID to anime IDs via ARM API
      * URL: https://arm.haglund.dev/api/v2/imdb?id=IMDB_ID
      */
-    @GET
     suspend fun getArmMappingByImdb(
-        @Url url: String
-    ): List<ArmMappingEntry>
+        url: String
+    ): List<ArmMappingEntry> = client.get(url).body()
 }
 
 // ========== Stremio Manifest Models ==========

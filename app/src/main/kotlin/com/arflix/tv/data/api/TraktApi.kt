@@ -2,437 +2,783 @@ package com.arflix.tv.data.api
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import retrofit2.http.Body
-import retrofit2.http.DELETE
-import retrofit2.http.GET
-import retrofit2.http.Header
-import retrofit2.http.POST
-import retrofit2.http.Path
-import retrofit2.http.Query
-import retrofit2.Response
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.request.*
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 
 /**
  * Trakt.tv API interface
  */
-interface TraktApi {
+class TraktApi(private val client: HttpClient) {
     
     // ========== Authentication ==========
     
-    @POST("oauth/device/code")
-    @retrofit2.http.Headers("Content-Type: application/json")
     suspend fun getDeviceCode(
-        @Body request: DeviceCodeRequest
-    ): TraktDeviceCode
+        request: DeviceCodeRequest
+    ): TraktDeviceCode {
+        val response = client.post("oauth/device/code") {
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }
+        return response.body()
+    }
+
     
-    @POST("oauth/device/token")
-    @retrofit2.http.Headers("Content-Type: application/json")
     suspend fun pollToken(
-        @Body request: TokenPollRequest
-    ): TraktToken
+        request: TokenPollRequest
+    ): TraktToken {
+        val response = client.post("oauth/device/token") {
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }
+        return response.body()
+    }
+
     
-    @POST("oauth/token")
-    @retrofit2.http.Headers("Content-Type: application/json")
     suspend fun refreshToken(
-        @Body request: RefreshTokenRequest
-    ): TraktToken
+        request: RefreshTokenRequest
+    ): TraktToken {
+        val response = client.post("oauth/token") {
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }
+        return response.body()
+    }
+
     
     // ========== Sync ==========
 
-    @GET("sync/last_activities")
-    @retrofit2.http.Headers("Content-Type: application/json")
     suspend fun getLastActivities(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2"
-    ): TraktLastActivities
+        auth: String,
+        clientId: String,
+        version: String = "2"
+    ): TraktLastActivities {
+        val response = client.get("sync/last_activities") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+        }
+        return response.body()
+    }
 
-    @GET("sync/watched/movies")
-    @retrofit2.http.Headers("Content-Type: application/json")
+
     suspend fun getWatchedMovies(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2"
-    ): List<TraktWatchedMovie>
+        auth: String,
+        clientId: String,
+        version: String = "2"
+    ): List<TraktWatchedMovie> {
+        val response = client.get("sync/watched/movies") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+        }
+        return response.body()
+    }
+
     
-    @GET("sync/watched/shows")
-    @retrofit2.http.Headers("Content-Type: application/json")
     suspend fun getWatchedShows(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2"
-    ): List<TraktWatchedShow>
+        auth: String,
+        clientId: String,
+        version: String = "2"
+    ): List<TraktWatchedShow> {
+        val response = client.get("sync/watched/shows") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+        }
+        return response.body()
+    }
+
     
-    @GET("sync/playback")
-    @retrofit2.http.Headers("Content-Type: application/json")
     suspend fun getPlaybackProgress(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Query("type") type: String? = null,
-        @Query("page") page: Int? = null,
-        @Query("limit") limit: Int? = null
-    ): List<TraktPlaybackItem>
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        type: String? = null,
+        page: Int? = null,
+        limit: Int? = null
+    ): List<TraktPlaybackItem> {
+        val response = client.get("sync/playback") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (type != null) parameter("type", type)
+            if (page != null) parameter("page", page)
+            if (limit != null) parameter("limit", limit)
+        }
+        return response.body()
+    }
+
     
-    @DELETE("sync/playback/{id}")
     suspend fun removePlaybackItem(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Path("id") id: Long
-    )
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        id: Long
+    ) {
+        val response = client.delete("sync/playback/$id") {
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+        }
+    }
+
     
-    @POST("sync/history")
-    @retrofit2.http.Headers("Content-Type: application/json")
     suspend fun addToHistory(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Body body: TraktHistoryBody
-    ): TraktSyncResponse
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        body: TraktHistoryBody
+    ): TraktSyncResponse {
+        val response = client.post("sync/history") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            setBody(body)
+        }
+        return response.body()
+    }
+
     
-    @POST("sync/history/remove")
-    @retrofit2.http.Headers("Content-Type: application/json")
     suspend fun removeFromHistory(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Body body: TraktHistoryBody
-    ): TraktSyncResponse
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        body: TraktHistoryBody
+    ): TraktSyncResponse {
+        val response = client.post("sync/history/remove") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            setBody(body)
+        }
+        return response.body()
+    }
+
     
-    @POST("scrobble/start")
-    @retrofit2.http.Headers("Content-Type: application/json")
     suspend fun scrobbleStart(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Body body: TraktScrobbleBody
-    ): TraktScrobbleResponse
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        body: TraktScrobbleBody
+    ): TraktScrobbleResponse {
+        val response = client.post("scrobble/start") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            setBody(body)
+        }
+        return response.body()
+    }
 
-    @POST("scrobble/pause")
-    @retrofit2.http.Headers("Content-Type: application/json")
+
     suspend fun scrobblePause(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Body body: TraktScrobbleBody
-    ): TraktScrobbleResponse
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        body: TraktScrobbleBody
+    ): TraktScrobbleResponse {
+        val response = client.post("scrobble/pause") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            setBody(body)
+        }
+        return response.body()
+    }
 
-    @POST("scrobble/stop")
-    @retrofit2.http.Headers("Content-Type: application/json")
+
     suspend fun scrobbleStop(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Body body: TraktScrobbleBody
-    ): TraktScrobbleResponse
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        body: TraktScrobbleBody
+    ): TraktScrobbleResponse {
+        val response = client.post("scrobble/stop") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            setBody(body)
+        }
+        return response.body()
+    }
+
 
     // ========== Search ==========
 
-    @GET("search/tmdb/{id}")
     suspend fun searchByTmdb(
-        @Header("trakt-api-key") clientId: String,
-        @Path("id") tmdbId: Int,
-        @Query("type") type: String
-    ): List<TraktSearchResult>
+        clientId: String,
+        tmdbId: Int,
+        type: String
+    ): List<TraktSearchResult> {
+        val response = client.get("search/tmdb/$tmdbId") {
+            header("trakt-api-key", clientId)
+            if (type != null) parameter("type", type)
+        }
+        return response.body()
+    }
 
-    @GET("search/list")
+
     suspend fun searchLists(
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Query("query") query: String,
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20,
-        @Query("extended") extended: String = "full"
-    ): List<TraktListSearchResult>
+        clientId: String,
+        version: String = "2",
+        query: String,
+        page: Int = 1,
+        limit: Int = 20,
+        extended: String = "full"
+    ): List<TraktListSearchResult> {
+        val response = client.get("search/list") {
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (query != null) parameter("query", query)
+            if (page != null) parameter("page", page)
+            if (limit != null) parameter("limit", limit)
+            if (extended != null) parameter("extended", extended)
+        }
+        return response.body()
+    }
+
 
     // ========== Collection ==========
 
-    @GET("sync/collection/movies")
     suspend fun getCollectionMovies(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Query("extended") extended: String = "full"
-    ): List<TraktCollectionMovie>
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        extended: String = "full"
+    ): List<TraktCollectionMovie> {
+        val response = client.get("sync/collection/movies") {
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (extended != null) parameter("extended", extended)
+        }
+        return response.body()
+    }
 
-    @GET("sync/collection/shows")
+
     suspend fun getCollectionShows(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Query("extended") extended: String = "full"
-    ): List<TraktCollectionShow>
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        extended: String = "full"
+    ): List<TraktCollectionShow> {
+        val response = client.get("sync/collection/shows") {
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (extended != null) parameter("extended", extended)
+        }
+        return response.body()
+    }
 
-    @POST("sync/collection")
-    @retrofit2.http.Headers("Content-Type: application/json")
+
     suspend fun addToCollection(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Body body: TraktCollectionBody
-    ): TraktSyncResponse
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        body: TraktCollectionBody
+    ): TraktSyncResponse {
+        val response = client.post("sync/collection") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            setBody(body)
+        }
+        return response.body()
+    }
 
-    @POST("sync/collection/remove")
-    @retrofit2.http.Headers("Content-Type: application/json")
+
     suspend fun removeFromCollection(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Body body: TraktCollectionBody
-    ): TraktSyncResponse
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        body: TraktCollectionBody
+    ): TraktSyncResponse {
+        val response = client.post("sync/collection/remove") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            setBody(body)
+        }
+        return response.body()
+    }
+
 
     // ========== Ratings ==========
 
-    @GET("sync/ratings/movies")
     suspend fun getRatingsMovies(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2"
-    ): List<TraktRatingItem>
+        auth: String,
+        clientId: String,
+        version: String = "2"
+    ): List<TraktRatingItem> {
+        val response = client.get("sync/ratings/movies") {
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+        }
+        return response.body()
+    }
 
-    @GET("sync/ratings/shows")
+
     suspend fun getRatingsShows(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2"
-    ): List<TraktRatingItem>
+        auth: String,
+        clientId: String,
+        version: String = "2"
+    ): List<TraktRatingItem> {
+        val response = client.get("sync/ratings/shows") {
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+        }
+        return response.body()
+    }
 
-    @GET("sync/ratings/episodes")
+
     suspend fun getRatingsEpisodes(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2"
-    ): List<TraktRatingItem>
+        auth: String,
+        clientId: String,
+        version: String = "2"
+    ): List<TraktRatingItem> {
+        val response = client.get("sync/ratings/episodes") {
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+        }
+        return response.body()
+    }
 
-    @POST("sync/ratings")
-    @retrofit2.http.Headers("Content-Type: application/json")
+
     suspend fun addRating(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Body body: TraktRatingBody
-    ): TraktSyncResponse
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        body: TraktRatingBody
+    ): TraktSyncResponse {
+        val response = client.post("sync/ratings") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            setBody(body)
+        }
+        return response.body()
+    }
 
-    @POST("sync/ratings/remove")
-    @retrofit2.http.Headers("Content-Type: application/json")
+
     suspend fun removeRating(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Body body: TraktRatingBody
-    ): TraktSyncResponse
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        body: TraktRatingBody
+    ): TraktSyncResponse {
+        val response = client.post("sync/ratings/remove") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            setBody(body)
+        }
+        return response.body()
+    }
+
 
     // ========== Comments ==========
 
-    @GET("movies/{id}/comments/{sort}")
     suspend fun getMovieComments(
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Path("id") movieId: String,
-        @Path("sort") sort: String = "newest",
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 10
-    ): List<TraktComment>
+        clientId: String,
+        version: String = "2",
+        movieId: String,
+        sort: String = "newest",
+        page: Int = 1,
+        limit: Int = 10
+    ): List<TraktComment> {
+        val response = client.get("movies/$movieId/comments/$sort") {
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (page != null) parameter("page", page)
+            if (limit != null) parameter("limit", limit)
+        }
+        return response.body()
+    }
 
-    @GET("shows/{id}/comments/{sort}")
+
     suspend fun getShowComments(
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Path("id") showId: String,
-        @Path("sort") sort: String = "newest",
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 10
-    ): List<TraktComment>
+        clientId: String,
+        version: String = "2",
+        showId: String,
+        sort: String = "newest",
+        page: Int = 1,
+        limit: Int = 10
+    ): List<TraktComment> {
+        val response = client.get("shows/$showId/comments/$sort") {
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (page != null) parameter("page", page)
+            if (limit != null) parameter("limit", limit)
+        }
+        return response.body()
+    }
 
-    @GET("shows/{id}/seasons/{season}/comments/{sort}")
+
     suspend fun getSeasonComments(
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Path("id") showId: String,
-        @Path("season") season: Int,
-        @Path("sort") sort: String = "newest",
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 10
-    ): List<TraktComment>
+        clientId: String,
+        version: String = "2",
+        showId: String,
+        season: Int,
+        sort: String = "newest",
+        page: Int = 1,
+        limit: Int = 10
+    ): List<TraktComment> {
+        val response = client.get("shows/$showId/seasons/$season/comments/$sort") {
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (page != null) parameter("page", page)
+            if (limit != null) parameter("limit", limit)
+        }
+        return response.body()
+    }
 
-    @GET("shows/{id}/seasons/{season}/episodes/{episode}/comments/{sort}")
+
     suspend fun getEpisodeComments(
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Path("id") showId: String,
-        @Path("season") season: Int,
-        @Path("episode") episode: Int,
-        @Path("sort") sort: String = "newest",
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 10
-    ): List<TraktComment>
+        clientId: String,
+        version: String = "2",
+        showId: String,
+        season: Int,
+        episode: Int,
+        sort: String = "newest",
+        page: Int = 1,
+        limit: Int = 10
+    ): List<TraktComment> {
+        val response = client.get("shows/$showId/seasons/$season/episodes/$episode/comments/$sort") {
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (page != null) parameter("page", page)
+            if (limit != null) parameter("limit", limit)
+        }
+        return response.body()
+    }
+
 
     // ========== History ==========
 
-    @GET("users/me/history/movies")
-    @retrofit2.http.Headers("Content-Type: application/json")
     suspend fun getHistoryMovies(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20,
-        @Query("start_at") startAt: String? = null
-    ): List<TraktHistoryItem>
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        page: Int = 1,
+        limit: Int = 20,
+        startAt: String? = null
+    ): List<TraktHistoryItem> {
+        val response = client.get("users/me/history/movies") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (page != null) parameter("page", page)
+            if (limit != null) parameter("limit", limit)
+            if (startAt != null) parameter("start_at", startAt)
+        }
+        return response.body()
+    }
 
-    @GET("users/me/history/episodes")
-    @retrofit2.http.Headers("Content-Type: application/json")
+
     suspend fun getHistoryEpisodes(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20,
-        @Query("start_at") startAt: String? = null
-    ): List<TraktHistoryItem>
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        page: Int = 1,
+        limit: Int = 20,
+        startAt: String? = null
+    ): List<TraktHistoryItem> {
+        val response = client.get("users/me/history/episodes") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (page != null) parameter("page", page)
+            if (limit != null) parameter("limit", limit)
+            if (startAt != null) parameter("start_at", startAt)
+        }
+        return response.body()
+    }
 
-    @POST("sync/history/remove")
-    @retrofit2.http.Headers("Content-Type: application/json")
+
     suspend fun removeFromHistoryByIds(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Body body: TraktHistoryRemoveBody
-    ): TraktSyncResponse
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        body: TraktHistoryRemoveBody
+    ): TraktSyncResponse {
+        val response = client.post("sync/history/remove") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            setBody(body)
+        }
+        return response.body()
+    }
+
 
     // ========== Watchlist ==========
     
-    @GET("users/me/watchlist")
     suspend fun getWatchlist(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Query("type") type: String? = null,
-        @Query("extended") extended: String = "full"
-    ): List<TraktWatchlistItem>
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        type: String? = null,
+        extended: String = "full"
+    ): List<TraktWatchlistItem> {
+        val response = client.get("users/me/watchlist") {
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (type != null) parameter("type", type)
+            if (extended != null) parameter("extended", extended)
+        }
+        return response.body()
+    }
 
-    @GET("users/me/watchlist")
+
     suspend fun getWatchlistPage(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Query("type") type: String? = null,
-        @Query("extended") extended: String = "full",
-        @Query("page") page: Int,
-        @Query("limit") limit: Int
-    ): Response<List<TraktWatchlistItem>>
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        type: String? = null,
+        extended: String = "full",
+        page: Int,
+        limit: Int
+    ): List<TraktWatchlistItem> {
+        val response = client.get("users/me/watchlist") {
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (type != null) parameter("type", type)
+            if (extended != null) parameter("extended", extended)
+            if (page != null) parameter("page", page)
+            if (limit != null) parameter("limit", limit)
+        }
+        return response.body()
+    }
 
-    @GET("users/me/watchlist/{type}/added")
+
     suspend fun getWatchlistAddedPage(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Path("type") type: String,
-        @Query("extended") extended: String = "full",
-        @Query("page") page: Int,
-        @Query("limit") limit: Int
-    ): Response<List<TraktWatchlistItem>>
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        type: String,
+        extended: String = "full",
+        page: Int,
+        limit: Int
+    ): List<TraktWatchlistItem> {
+        val response = client.get("users/me/watchlist/$type/added") {
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (extended != null) parameter("extended", extended)
+            if (page != null) parameter("page", page)
+            if (limit != null) parameter("limit", limit)
+        }
+        return response.body()
+    }
+
     
-    @POST("sync/watchlist")
-    @retrofit2.http.Headers("Content-Type: application/json")
     suspend fun addToWatchlist(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Body body: TraktWatchlistBody
-    ): TraktSyncResponse
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        body: TraktWatchlistBody
+    ): TraktSyncResponse {
+        val response = client.post("sync/watchlist") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            setBody(body)
+        }
+        return response.body()
+    }
+
     
-    @POST("sync/watchlist/remove")
-    @retrofit2.http.Headers("Content-Type: application/json")
     suspend fun removeFromWatchlist(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Body body: TraktWatchlistBody
-    ): TraktSyncResponse
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        body: TraktWatchlistBody
+    ): TraktSyncResponse {
+        val response = client.post("sync/watchlist/remove") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            setBody(body)
+        }
+        return response.body()
+    }
+
     
     // ========== Up Next ==========
 
-    @GET("shows/{id}/progress/watched")
     suspend fun getShowProgress(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Path("id") showId: String,
-        @Query("hidden") hidden: String = "false",
-        @Query("specials") specials: String = "false",
-        @Query("count_specials") countSpecials: String = "false"
-    ): TraktShowProgress
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        showId: String,
+        hidden: String = "false",
+        specials: String = "false",
+        countSpecials: String = "false"
+    ): TraktShowProgress {
+        val response = client.get("shows/$showId/progress/watched") {
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (hidden != null) parameter("hidden", hidden)
+            if (specials != null) parameter("specials", specials)
+            if (countSpecials != null) parameter("count_specials", countSpecials)
+        }
+        return response.body()
+    }
+
     
     // ========== Hidden Items ==========
 
-    @GET("users/hidden/progress_watched")
     suspend fun getHiddenProgressShows(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Query("type") type: String = "show",
-        @Query("limit") limit: Int = 100,
-        @Query("page") page: Int? = null
-    ): List<TraktHiddenItem>
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        type: String = "show",
+        limit: Int = 100,
+        page: Int? = null
+    ): List<TraktHiddenItem> {
+        val response = client.get("users/hidden/progress_watched") {
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (type != null) parameter("type", type)
+            if (limit != null) parameter("limit", limit)
+            if (page != null) parameter("page", page)
+        }
+        return response.body()
+    }
 
-    @GET("users/hidden/progress_watched_reset")
+
     suspend fun getHiddenProgressResetShows(
-        @Header("Authorization") auth: String,
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Query("type") type: String = "show",
-        @Query("limit") limit: Int = 100,
-        @Query("page") page: Int? = null
-    ): List<TraktHiddenItem>
+        auth: String,
+        clientId: String,
+        version: String = "2",
+        type: String = "show",
+        limit: Int = 100,
+        page: Int? = null
+    ): List<TraktHiddenItem> {
+        val response = client.get("users/hidden/progress_watched_reset") {
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (type != null) parameter("type", type)
+            if (limit != null) parameter("limit", limit)
+            if (page != null) parameter("page", page)
+        }
+        return response.body()
+    }
+
 
     // ========== Anime (Custom Lists) ==========
 
-    @GET("lists/anime-streaming/anime-trending/items")
     suspend fun getTrendingAnime(
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2"
-    ): List<TraktListItem>
+        clientId: String,
+        version: String = "2"
+    ): List<TraktListItem> {
+        val response = client.get("lists/anime-streaming/anime-trending/items") {
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+        }
+        return response.body()
+    }
+
 
     // ========== Public Lists ==========
 
-    @GET("users/{username}/lists/{listId}")
     suspend fun getUserListSummary(
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Path("username") username: String,
-        @Path("listId") listId: String
-    ): TraktPublicListSummary
+        clientId: String,
+        version: String = "2",
+        username: String,
+        listId: String
+    ): TraktPublicListSummary {
+        val response = client.get("users/$username/lists/$listId") {
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+        }
+        return response.body()
+    }
 
-    @GET("users/{username}/lists/{listId}/items/{type}")
+
     suspend fun getUserListItems(
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Path("username") username: String,
-        @Path("listId") listId: String,
-        @Path("type") type: String,
-        @Query("extended") extended: String = "full",
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 100
-    ): List<TraktPublicListItem>
+        clientId: String,
+        version: String = "2",
+        username: String,
+        listId: String,
+        type: String,
+        extended: String = "full",
+        page: Int = 1,
+        limit: Int = 100
+    ): List<TraktPublicListItem> {
+        val response = client.get("users/$username/lists/$listId/items/$type") {
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (extended != null) parameter("extended", extended)
+            if (page != null) parameter("page", page)
+            if (limit != null) parameter("limit", limit)
+        }
+        return response.body()
+    }
 
-    @GET("lists/{listId}")
+
     suspend fun getListSummary(
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Path("listId") listId: String
-    ): TraktPublicListSummary
+        clientId: String,
+        version: String = "2",
+        listId: String
+    ): TraktPublicListSummary {
+        val response = client.get("lists/$listId") {
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+        }
+        return response.body()
+    }
 
-    @GET("lists/{listId}/items/{type}")
+
     suspend fun getListItems(
-        @Header("trakt-api-key") clientId: String,
-        @Header("trakt-api-version") version: String = "2",
-        @Path("listId") listId: String,
-        @Path("type") type: String,
-        @Query("extended") extended: String = "full",
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 100
-    ): List<TraktPublicListItem>
+        clientId: String,
+        version: String = "2",
+        listId: String,
+        type: String,
+        extended: String = "full",
+        page: Int = 1,
+        limit: Int = 100
+    ): List<TraktPublicListItem> {
+        val response = client.get("lists/$listId/items/$type") {
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", version)
+            if (extended != null) parameter("extended", extended)
+            if (page != null) parameter("page", page)
+            if (limit != null) parameter("limit", limit)
+        }
+        return response.body()
+    }
+
 }
 
 // ========== Request Bodies ==========

@@ -20,11 +20,8 @@ import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.navigation.Screen
 import com.arflix.tv.util.AppLogger
 import com.arflix.tv.util.Constants
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 data class LauncherContinueWatchingRequest(
     val mediaType: MediaType,
@@ -34,9 +31,8 @@ data class LauncherContinueWatchingRequest(
     val startPositionMs: Long? = null
 )
 
-@Singleton
-class LauncherContinueWatchingRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class LauncherContinueWatchingRepository constructor(
+    private val context: Context,
     private val profileManager: ProfileManager,
     private val traktRepository: TraktRepository,
     private val watchHistoryRepository: WatchHistoryRepository

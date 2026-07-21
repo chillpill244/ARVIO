@@ -4,8 +4,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import java.util.concurrent.atomic.AtomicInteger
-import javax.inject.Inject
-import javax.inject.Singleton
 
 enum class CloudSyncScope {
     PROFILE_SETTINGS,
@@ -25,8 +23,7 @@ data class CloudSyncInvalidation(
     val changedAt: Long = System.currentTimeMillis()
 )
 
-@Singleton
-class CloudSyncInvalidationBus @Inject constructor() {
+class CloudSyncInvalidationBus constructor() {
     private val _events = MutableSharedFlow<CloudSyncInvalidation>(
         extraBufferCapacity = 64
     )

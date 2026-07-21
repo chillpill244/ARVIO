@@ -116,7 +116,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import androidx.media3.common.C
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.MediaItem
@@ -188,8 +188,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.res.stringResource
 import com.arflix.tv.R
 import com.arflix.tv.cast.CastManager
-import com.arflix.tv.cast.CastManagerEntryPoint
-import dagger.hilt.android.EntryPointAccessors
+
+import org.koin.compose.koinInject
 import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.CastConnected
 import androidx.compose.material.icons.filled.PictureInPicture
@@ -235,7 +235,7 @@ fun PlayerScreen(
     preferredSourceName: String? = null,
     preferredBingeGroup: String? = null,
     startPositionMs: Long? = null,
-    viewModel: PlayerViewModel = hiltViewModel(),
+    viewModel: PlayerViewModel = koinViewModel(),
     onBack: () -> Unit = {},
     onPlayNext: (Int, Int, String?, String?, String?) -> Unit = { _, _, _, _, _ -> }
 ) {
@@ -249,9 +249,7 @@ fun PlayerScreen(
     val coroutineScope = rememberCoroutineScope()
     val deviceType = LocalDeviceType.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val castManager = remember(context) {
-        EntryPointAccessors.fromApplication(context.applicationContext, CastManagerEntryPoint::class.java).castManager()
-    }
+    val castManager: com.arflix.tv.cast.CastManager = org.koin.compose.koinInject()
     val castState by castManager.castState.collectAsStateWithLifecycle()
     val isCasting = castState is CastManager.CastState.Casting
     val castAvailable = castState !is CastManager.CastState.NotAvailable

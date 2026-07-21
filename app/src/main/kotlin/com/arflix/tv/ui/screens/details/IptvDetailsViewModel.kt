@@ -18,14 +18,12 @@ import com.arflix.tv.data.repository.MediaRepository
 import com.arflix.tv.data.repository.TraktRepository
 import com.arflix.tv.data.repository.WatchlistRepository
 import com.arflix.tv.util.settingsDataStore
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class IptvDetailsUiState(
     val isLoading: Boolean = true,
@@ -49,8 +47,7 @@ data class IptvDetailsUiState(
     val isInWatchlist: Boolean = false
 )
 
-@HiltViewModel
-class IptvDetailsViewModel @Inject constructor(
+class IptvDetailsViewModel constructor(
     private val iptvRepository: IptvRepository,
     private val mediaRepository: MediaRepository,
     private val watchlistRepository: WatchlistRepository,

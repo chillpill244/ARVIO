@@ -5,13 +5,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import com.arflix.tv.util.settingsDataStore
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class PlaybackTelemetryRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+class PlaybackTelemetryRepository constructor(
+    private val context: Context
 ) {
     private companion object {
         val startupSamplesKey = longPreferencesKey("telemetry_startup_samples_v1")

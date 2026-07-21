@@ -34,6 +34,12 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Response
 import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
+
 
 /**
  * Provides a configured OkHttpClient instance.
@@ -285,6 +291,44 @@ object OkHttpProvider {
             AppDnsProvider.CLOUDFLARE -> cloudflareDns
             AppDnsProvider.GOOGLE -> googleDns
             AppDnsProvider.ADGUARD -> adguardDns
+        }
+    }
+
+    val ktorClient: HttpClient
+        get() = ktorAppClient ?: synchronized(clientLock) {
+            ktorAppClient ?: buildKtorAppClient().also { ktorAppClient = it }
+        }
+
+    val ktorCoilClient: HttpClient
+        get() = ktorCoilAppClient ?: synchronized(clientLock) {
+            ktorCoilAppClient ?: buildKtorCoilClient().also { ktorCoilAppClient = it }
+        }
+
+    @Volatile
+    private var ktorAppClient: HttpClient? = null
+
+    @Volatile
+    private var ktorCoilAppClient: HttpClient? = null
+
+    private fun buildKtorAppClient(): HttpClient {
+        return HttpClient(OkHttp) {
+            engine {
+                preconfigured = client
+            }
+            install(ContentNegotiation) {
+                json(
+                    Json { ignoreUnknownKeys = true; coerceInputValues = true },
+                    contentType = io.ktor.http.ContentType.Any
+                )
+            }
+        }
+    }
+
+    private fun buildKtorCoilClient(): HttpClient {
+        return HttpClient(OkHttp) {
+            engine {
+                preconfigured = coilClient
+            }
         }
     }
 

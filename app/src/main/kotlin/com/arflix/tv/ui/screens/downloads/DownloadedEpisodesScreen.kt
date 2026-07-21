@@ -40,7 +40,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
@@ -59,7 +59,7 @@ import com.arflix.tv.util.formatBytes
 fun DownloadedEpisodesScreen(
     tmdbId: Int,
     title: String,
-    viewModel: DownloadsViewModel = hiltViewModel(),
+    viewModel: DownloadsViewModel = koinViewModel(),
     onPlayEpisode: (DownloadEntity) -> Unit,
     onBack: () -> Unit
 ) {

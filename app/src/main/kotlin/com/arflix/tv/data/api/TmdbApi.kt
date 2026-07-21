@@ -2,207 +2,329 @@ package com.arflix.tv.data.api
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import retrofit2.http.GET
-import retrofit2.http.Path
-import retrofit2.http.Query
+import io.ktor.client.HttpClient
+import io.ktor.client.request.*
+import io.ktor.client.call.*
 
 /**
  * TMDB API interface
  */
-interface TmdbApi {
+class TmdbApi(private val client: HttpClient) {
     
-    @GET("trending/movie/day")
     suspend fun getTrendingMovies(
-        @Query("api_key") apiKey: String,
-        @Query("language") language: String? = null,
-        @Query("page") page: Int = 1
-    ): TmdbListResponse
+        apiKey: String,
+        language: String? = null,
+        page: Int = 1
+    ): TmdbListResponse {
+        return client.get("trending/movie/day") {
+            parameter("api_key", apiKey)
+            if (language != null) parameter("language", language)
+            parameter("page", page)
+        }.body()
+    }
 
-    @GET("trending/tv/day")
     suspend fun getTrendingTv(
-        @Query("api_key") apiKey: String,
-        @Query("language") language: String? = null,
-        @Query("page") page: Int = 1
-    ): TmdbListResponse
+        apiKey: String,
+        language: String? = null,
+        page: Int = 1
+    ): TmdbListResponse {
+        return client.get("trending/tv/day") {
+            parameter("api_key", apiKey)
+            if (language != null) parameter("language", language)
+            parameter("page", page)
+        }.body()
+    }
     
-    @GET("discover/tv")
     suspend fun discoverTv(
-        @Query("api_key") apiKey: String,
-        @Query("with_watch_providers") watchProviders: Int? = null,
-        @Query("watch_region") watchRegion: String = "US",
-        @Query("sort_by") sortBy: String = "popularity.desc",
-        @Query("with_genres") genres: String? = null,
-        @Query("with_people") people: String? = null,
-        @Query("with_original_language") originalLanguage: String? = null,
-        @Query("first_air_date_year") year: Int? = null,
-        @Query("vote_count.gte") minVoteCount: Int? = null,
-        @Query("with_keywords") keywords: String? = null,
-        @Query("air_date.gte") airDateGte: String? = null,
-        @Query("air_date.lte") airDateLte: String? = null,
-        @Query("language") language: String? = null,
-        @Query("page") page: Int = 1
-    ): TmdbListResponse
+        apiKey: String,
+        watchProviders: Int? = null,
+        watchRegion: String = "US",
+        sortBy: String = "popularity.desc",
+        genres: String? = null,
+        people: String? = null,
+        originalLanguage: String? = null,
+        year: Int? = null,
+        minVoteCount: Int? = null,
+        keywords: String? = null,
+        airDateGte: String? = null,
+        airDateLte: String? = null,
+        language: String? = null,
+        page: Int = 1
+    ): TmdbListResponse {
+        return client.get("discover/tv") {
+            parameter("api_key", apiKey)
+            if (watchProviders != null) parameter("with_watch_providers", watchProviders)
+            parameter("watch_region", watchRegion)
+            parameter("sort_by", sortBy)
+            if (genres != null) parameter("with_genres", genres)
+            if (people != null) parameter("with_people", people)
+            if (originalLanguage != null) parameter("with_original_language", originalLanguage)
+            if (year != null) parameter("first_air_date_year", year)
+            if (minVoteCount != null) parameter("vote_count.gte", minVoteCount)
+            if (keywords != null) parameter("with_keywords", keywords)
+            if (airDateGte != null) parameter("air_date.gte", airDateGte)
+            if (airDateLte != null) parameter("air_date.lte", airDateLte)
+            if (language != null) parameter("language", language)
+            parameter("page", page)
+        }.body()
+    }
 
-    @GET("discover/movie")
     suspend fun discoverMovies(
-        @Query("api_key") apiKey: String,
-        @Query("with_genres") genres: String? = null,
-        @Query("with_crew") crew: String? = null,
-        @Query("sort_by") sortBy: String = "popularity.desc",
-        @Query("vote_count.gte") minVoteCount: Int? = null,
-        @Query("with_keywords") keywords: String? = null,
-        @Query("with_original_language") originalLanguage: String? = null,
-        @Query("primary_release_year") year: Int? = null,
-        @Query("release_date.gte") releaseDateGte: String? = null,
-        @Query("release_date.lte") releaseDateLte: String? = null,
-        @Query("with_watch_providers") watchProviders: Int? = null,
-        @Query("watch_region") watchRegion: String? = null,
-        @Query("language") language: String? = null,
-        @Query("page") page: Int = 1
-    ): TmdbListResponse
+        apiKey: String,
+        genres: String? = null,
+        crew: String? = null,
+        sortBy: String = "popularity.desc",
+        minVoteCount: Int? = null,
+        keywords: String? = null,
+        originalLanguage: String? = null,
+        year: Int? = null,
+        releaseDateGte: String? = null,
+        releaseDateLte: String? = null,
+        watchProviders: Int? = null,
+        watchRegion: String? = null,
+        language: String? = null,
+        page: Int = 1
+    ): TmdbListResponse {
+        return client.get("discover/movie") {
+            parameter("api_key", apiKey)
+            if (genres != null) parameter("with_genres", genres)
+            if (crew != null) parameter("with_crew", crew)
+            parameter("sort_by", sortBy)
+            if (minVoteCount != null) parameter("vote_count.gte", minVoteCount)
+            if (keywords != null) parameter("with_keywords", keywords)
+            if (originalLanguage != null) parameter("with_original_language", originalLanguage)
+            if (year != null) parameter("primary_release_year", year)
+            if (releaseDateGte != null) parameter("release_date.gte", releaseDateGte)
+            if (releaseDateLte != null) parameter("release_date.lte", releaseDateLte)
+            if (watchProviders != null) parameter("with_watch_providers", watchProviders)
+            if (watchRegion != null) parameter("watch_region", watchRegion)
+            if (language != null) parameter("language", language)
+            parameter("page", page)
+        }.body()
+    }
     
-    @GET("movie/{movie_id}")
     suspend fun getMovieDetails(
-        @Path("movie_id") movieId: Int,
-        @Query("api_key") apiKey: String,
-        @Query("language") language: String? = null
-    ): TmdbMovieDetails
+        movieId: Int,
+        apiKey: String,
+        language: String? = null
+    ): TmdbMovieDetails {
+        return client.get("movie/$movieId") {
+            parameter("api_key", apiKey)
+            if (language != null) parameter("language", language)
+        }.body()
+    }
     
-    @GET("tv/{tv_id}")
     suspend fun getTvDetails(
-        @Path("tv_id") tvId: Int,
-        @Query("api_key") apiKey: String,
-        @Query("language") language: String? = null
-    ): TmdbTvDetails
+        tvId: Int,
+        apiKey: String,
+        language: String? = null
+    ): TmdbTvDetails {
+        return client.get("tv/$tvId") {
+            parameter("api_key", apiKey)
+            if (language != null) parameter("language", language)
+        }.body()
+    }
     
-    @GET("tv/{tv_id}/season/{season_number}")
     suspend fun getTvSeason(
-        @Path("tv_id") tvId: Int,
-        @Path("season_number") seasonNumber: Int,
-        @Query("api_key") apiKey: String,
-        @Query("language") language: String? = null
-    ): TmdbSeasonDetails
+        tvId: Int,
+        seasonNumber: Int,
+        apiKey: String,
+        language: String? = null
+    ): TmdbSeasonDetails {
+        return client.get("tv/$tvId/season/$seasonNumber") {
+            parameter("api_key", apiKey)
+            if (language != null) parameter("language", language)
+        }.body()
+    }
 
-    @GET("tv/{tv_id}/season/{season_number}/episode/{episode_number}/external_ids")
     suspend fun getTvEpisodeExternalIds(
-        @Path("tv_id") tvId: Int,
-        @Path("season_number") seasonNumber: Int,
-        @Path("episode_number") episodeNumber: Int,
-        @Query("api_key") apiKey: String
-    ): TmdbExternalIds
+        tvId: Int,
+        seasonNumber: Int,
+        episodeNumber: Int,
+        apiKey: String
+    ): TmdbExternalIds {
+        return client.get("tv/$tvId/season/$seasonNumber/episode/$episodeNumber/external_ids") {
+            parameter("api_key", apiKey)
+        }.body()
+    }
     
-    @GET("{media_type}/{id}/credits")
     suspend fun getCredits(
-        @Path("media_type") mediaType: String,
-        @Path("id") id: Int,
-        @Query("api_key") apiKey: String,
-        @Query("language") language: String? = null
-    ): TmdbCreditsResponse
+        mediaType: String,
+        id: Int,
+        apiKey: String,
+        language: String? = null
+    ): TmdbCreditsResponse {
+        return client.get("$mediaType/$id/credits") {
+            parameter("api_key", apiKey)
+            if (language != null) parameter("language", language)
+        }.body()
+    }
     
-    @GET("{media_type}/{id}/similar")
     suspend fun getSimilar(
-        @Path("media_type") mediaType: String,
-        @Path("id") id: Int,
-        @Query("api_key") apiKey: String,
-        @Query("language") language: String? = null
-    ): TmdbListResponse
+        mediaType: String,
+        id: Int,
+        apiKey: String,
+        language: String? = null
+    ): TmdbListResponse {
+        return client.get("$mediaType/$id/similar") {
+            parameter("api_key", apiKey)
+            if (language != null) parameter("language", language)
+        }.body()
+    }
 
-    @GET("{media_type}/{id}/recommendations")
     suspend fun getRecommendations(
-        @Path("media_type") mediaType: String,
-        @Path("id") id: Int,
-        @Query("api_key") apiKey: String,
-        @Query("language") language: String? = null
-    ): TmdbListResponse
+        mediaType: String,
+        id: Int,
+        apiKey: String,
+        language: String? = null
+    ): TmdbListResponse {
+        return client.get("$mediaType/$id/recommendations") {
+            parameter("api_key", apiKey)
+            if (language != null) parameter("language", language)
+        }.body()
+    }
 
-    @GET("{media_type}/{id}/images")
     suspend fun getImages(
-        @Path("media_type") mediaType: String,
-        @Path("id") id: Int,
-        @Query("api_key") apiKey: String
-    ): TmdbImagesResponse
+        mediaType: String,
+        id: Int,
+        apiKey: String
+    ): TmdbImagesResponse {
+        return client.get("$mediaType/$id/images") {
+            parameter("api_key", apiKey)
+        }.body()
+    }
     
-    @GET("{media_type}/{id}/videos")
     suspend fun getVideos(
-        @Path("media_type") mediaType: String,
-        @Path("id") id: Int,
-        @Query("api_key") apiKey: String,
-        @Query("language") language: String? = null
-    ): TmdbVideosResponse
+        mediaType: String,
+        id: Int,
+        apiKey: String,
+        language: String? = null
+    ): TmdbVideosResponse {
+        return client.get("$mediaType/$id/videos") {
+            parameter("api_key", apiKey)
+            if (language != null) parameter("language", language)
+        }.body()
+    }
     
-    @GET("person/{person_id}")
     suspend fun getPersonDetails(
-        @Path("person_id") personId: Int,
-        @Query("api_key") apiKey: String,
-        @Query("append_to_response") appendToResponse: String = "combined_credits",
-        @Query("language") language: String? = null
-    ): TmdbPersonDetails
+        personId: Int,
+        apiKey: String,
+        appendToResponse: String = "combined_credits",
+        language: String? = null
+    ): TmdbPersonDetails {
+        return client.get("person/$personId") {
+            parameter("api_key", apiKey)
+            parameter("append_to_response", appendToResponse)
+            if (language != null) parameter("language", language)
+        }.body()
+    }
 
-    @GET("movie/{movie_id}/external_ids")
     suspend fun getMovieExternalIds(
-        @Path("movie_id") movieId: Int,
-        @Query("api_key") apiKey: String
-    ): TmdbExternalIds
+        movieId: Int,
+        apiKey: String
+    ): TmdbExternalIds {
+        return client.get("movie/$movieId/external_ids") {
+            parameter("api_key", apiKey)
+        }.body()
+    }
 
-    @GET("tv/{tv_id}/external_ids")
     suspend fun getTvExternalIds(
-        @Path("tv_id") tvId: Int,
-        @Query("api_key") apiKey: String
-    ): TmdbExternalIds
+        tvId: Int,
+        apiKey: String
+    ): TmdbExternalIds {
+        return client.get("tv/$tvId/external_ids") {
+            parameter("api_key", apiKey)
+        }.body()
+    }
 
-    @GET("movie/{movie_id}/watch/providers")
     suspend fun getMovieWatchProviders(
-        @Path("movie_id") movieId: Int,
-        @Query("api_key") apiKey: String
-    ): TmdbWatchProvidersResponse
+        movieId: Int,
+        apiKey: String
+    ): TmdbWatchProvidersResponse {
+        return client.get("movie/$movieId/watch/providers") {
+            parameter("api_key", apiKey)
+        }.body()
+    }
 
-    @GET("tv/{tv_id}/watch/providers")
     suspend fun getTvWatchProviders(
-        @Path("tv_id") tvId: Int,
-        @Query("api_key") apiKey: String
-    ): TmdbWatchProvidersResponse
+        tvId: Int,
+        apiKey: String
+    ): TmdbWatchProvidersResponse {
+        return client.get("tv/$tvId/watch/providers") {
+            parameter("api_key", apiKey)
+        }.body()
+    }
     
-    @GET("search/multi")
     suspend fun searchMulti(
-        @Query("api_key") apiKey: String,
-        @Query("query") query: String,
-        @Query("language") language: String? = null,
-        @Query("page") page: Int = 1
-    ): TmdbListResponse
+        apiKey: String,
+        query: String,
+        language: String? = null,
+        page: Int = 1
+    ): TmdbListResponse {
+        return client.get("search/multi") {
+            parameter("api_key", apiKey)
+            parameter("query", query)
+            if (language != null) parameter("language", language)
+            parameter("page", page)
+        }.body()
+    }
 
-    @GET("search/movie")
     suspend fun searchMovies(
-        @Query("api_key") apiKey: String,
-        @Query("query") query: String,
-        @Query("language") language: String? = null,
-        @Query("page") page: Int = 1,
-        @Query("primary_release_year") primaryReleaseYear: Int? = null,
-        @Query("year") year: Int? = null
-    ): TmdbListResponse
+        apiKey: String,
+        query: String,
+        language: String? = null,
+        page: Int = 1,
+        primaryReleaseYear: Int? = null,
+        year: Int? = null
+    ): TmdbListResponse {
+        return client.get("search/movie") {
+            parameter("api_key", apiKey)
+            parameter("query", query)
+            if (language != null) parameter("language", language)
+            parameter("page", page)
+            if (primaryReleaseYear != null) parameter("primary_release_year", primaryReleaseYear)
+            if (year != null) parameter("year", year)
+        }.body()
+    }
 
-    @GET("search/tv")
     suspend fun searchTv(
-        @Query("api_key") apiKey: String,
-        @Query("query") query: String,
-        @Query("language") language: String? = null,
-        @Query("page") page: Int = 1,
-        @Query("first_air_date_year") firstAirDateYear: Int? = null
-    ): TmdbListResponse
+        apiKey: String,
+        query: String,
+        language: String? = null,
+        page: Int = 1,
+        firstAirDateYear: Int? = null
+    ): TmdbListResponse {
+        return client.get("search/tv") {
+            parameter("api_key", apiKey)
+            parameter("query", query)
+            if (language != null) parameter("language", language)
+            parameter("page", page)
+            if (firstAirDateYear != null) parameter("first_air_date_year", firstAirDateYear)
+        }.body()
+    }
 
-    @GET("find/{external_id}")
     suspend fun findByExternalId(
-        @Path("external_id") externalId: String,
-        @Query("api_key") apiKey: String,
-        @Query("external_source") externalSource: String = "imdb_id"
-    ): TmdbFindResponse
+        externalId: String,
+        apiKey: String,
+        externalSource: String = "imdb_id"
+    ): TmdbFindResponse {
+        return client.get("find/$externalId") {
+            parameter("api_key", apiKey)
+            parameter("external_source", externalSource)
+        }.body()
+    }
 
-    @GET("{media_type}/{id}/reviews")
     suspend fun getReviews(
-        @Path("media_type") mediaType: String,
-        @Path("id") id: Int,
-        @Query("api_key") apiKey: String,
-        @Query("language") language: String? = null
-    ): TmdbReviewsResponse
+        mediaType: String,
+        id: Int,
+        apiKey: String,
+        language: String? = null
+    ): TmdbReviewsResponse {
+        return client.get("$mediaType/$id/reviews") {
+            parameter("api_key", apiKey)
+            if (language != null) parameter("language", language)
+        }.body()
+    }
 
     /**
      * TMDB "collection" endpoint. Returns the explicit list of films that belong
@@ -210,12 +332,16 @@ interface TmdbApi {
      * Used by the Collections feature to populate franchise rows without
      * relying on external addons.
      */
-    @GET("collection/{collection_id}")
     suspend fun getTmdbCollection(
-        @Path("collection_id") collectionId: Int,
-        @Query("api_key") apiKey: String,
-        @Query("language") language: String? = null
-    ): TmdbCollectionResponse
+        collectionId: Int,
+        apiKey: String,
+        language: String? = null
+    ): TmdbCollectionResponse {
+        return client.get("collection/$collectionId") {
+            parameter("api_key", apiKey)
+            if (language != null) parameter("language", language)
+        }.body()
+    }
 }
 
 // Response data classes

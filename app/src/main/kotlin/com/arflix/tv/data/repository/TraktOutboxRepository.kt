@@ -8,12 +8,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private val Context.traktOutboxDataStore: DataStore<Preferences> by preferencesDataStore(name = "trakt_outbox")
 
@@ -39,9 +36,8 @@ data class TraktOutboxItem(
     val attempts: Int = 0
 )
 
-@Singleton
-class TraktOutboxRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class TraktOutboxRepository constructor(
+    private val context: Context,
     private val profileManager: ProfileManager
 ) {
     private val gson = Gson()

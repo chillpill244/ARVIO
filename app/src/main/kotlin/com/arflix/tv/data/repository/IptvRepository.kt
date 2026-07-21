@@ -20,7 +20,6 @@ import com.google.gson.JsonObject
 import com.google.gson.annotations.SerializedName
 import com.google.gson.reflect.TypeToken
 import com.google.gson.stream.JsonReader
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -66,8 +65,6 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 import javax.xml.XMLConstants
-import javax.inject.Inject
-import javax.inject.Singleton
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -151,9 +148,8 @@ data class IptvTvSessionState(
     val recentChannelIds: List<String> = emptyList()
 )
 
-@Singleton
-class IptvRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class IptvRepository constructor(
+    private val context: Context,
     private val okHttpClient: OkHttpClient,
     private val profileManager: ProfileManager,
     private val invalidationBus: CloudSyncInvalidationBus

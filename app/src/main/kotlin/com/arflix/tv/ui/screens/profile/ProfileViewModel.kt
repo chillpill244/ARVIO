@@ -16,7 +16,6 @@ import com.arflix.tv.data.repository.WatchlistRepository
 import com.arflix.tv.data.repository.IptvRepository
 import com.arflix.tv.ui.components.ToastType
 import com.arflix.tv.util.PinUtil
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +23,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
 
 data class ProfileUiState(
     val profiles: List<Profile> = emptyList(),
@@ -54,8 +52,7 @@ data class ProfileUiState(
     val pinError: String = "" // Error message for wrong PIN
 )
 
-@HiltViewModel
-class ProfileViewModel @Inject constructor(
+class ProfileViewModel constructor(
     private val profileRepository: ProfileRepository,
     private val profileManager: ProfileManager,
     private val traktRepository: TraktRepository,

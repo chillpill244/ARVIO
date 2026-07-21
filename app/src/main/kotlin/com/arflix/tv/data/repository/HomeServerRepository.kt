@@ -15,7 +15,6 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -34,8 +33,6 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 import java.text.Normalizer
 import java.util.Locale
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlin.math.abs
 
 enum class HomeServerKind {
@@ -169,9 +166,8 @@ internal object HomeServerMatcher {
     fun isAcceptable(score: Int): Boolean = score >= 150 || score >= 900
 }
 
-@Singleton
-class HomeServerRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class HomeServerRepository constructor(
+    private val context: Context,
     private val okHttpClient: OkHttpClient,
     private val profileManager: ProfileManager
 ) {

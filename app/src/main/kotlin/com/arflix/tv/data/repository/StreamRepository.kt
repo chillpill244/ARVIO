@@ -28,7 +28,6 @@ import com.arflix.tv.util.Constants
 import com.arflix.tv.util.settingsDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -49,15 +48,13 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import retrofit2.HttpException
+import io.ktor.client.plugins.ResponseException
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private val Context.streamDataStore: DataStore<Preferences> by preferencesDataStore(name = "stream_prefs")
 
@@ -70,9 +67,8 @@ typealias StreamCallback = (streams: List<StreamSource>?, addonId: String, addon
  * Repository for stream resolution from Stremio addons
  * Enhanced with addon management
  */
-@Singleton
-class StreamRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class StreamRepository constructor(
+    private val context: Context,
     private val streamApi: StreamApi,
     private val okHttpClient: OkHttpClient,
     private val profileManager: ProfileManager,
@@ -1218,9 +1214,9 @@ class StreamRepository @Inject constructor(
     }
 
     private fun Throwable.toShortLogMessage(): String {
-        val http = this as? HttpException
+        val http = this as? ResponseException
         return if (http != null) {
-            "HttpException(code=${http.code()} message=${http.message()})"
+            "ResponseException(code=${http.response.status.value} message=${http.message})"
         } else {
             "${this::class.java.simpleName}: ${message ?: "no-message"}"
         }

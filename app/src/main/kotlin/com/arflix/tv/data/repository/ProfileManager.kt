@@ -7,15 +7,12 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.arflix.tv.util.profilesDataStore
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Manages the current active profile and provides profile-scoped preference keys.
@@ -24,9 +21,8 @@ import javax.inject.Singleton
  * Example: Instead of "access_token", use profileManager.profileKey("access_token")
  * which returns "profile_<id>_access_token"
  */
-@Singleton
-class ProfileManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class ProfileManager constructor(
+    private val context: Context,
     private val profileRepository: ProfileRepository
 ) {
     // Default profile ID used when no profile is selected (for backwards compatibility)

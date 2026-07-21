@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
+import org.koin.android.ext.android.inject
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import com.arflix.tv.R
@@ -84,7 +85,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.metrics.performance.JankStats
 import androidx.metrics.performance.PerformanceMetricsState
@@ -112,11 +113,8 @@ import com.arflix.tv.ui.theme.ArflixTvTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.arflix.tv.ui.theme.appBackgroundDark
 import com.arflix.tv.worker.TraktSyncWorker
-import dagger.hilt.android.AndroidEntryPoint
-import dagger.Lazy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -130,46 +128,35 @@ private sealed interface ActiveProfileLoadState {
  * Main Activity - Single activity architecture with Compose Navigation
  * Uses Android 12+ Splash Screen API for instant launch feedback
  */
-@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    @Inject
-    lateinit var authRepository: Lazy<AuthRepository>
+    val authRepository: AuthRepository by inject()
 
-    @Inject
-    lateinit var profileRepository: Lazy<ProfileRepository>
+    val profileRepository: ProfileRepository by inject()
 
-    @Inject
-    lateinit var traktRepository: Lazy<TraktRepository>
+    val traktRepository: TraktRepository by inject()
 
-    @Inject
-    lateinit var profileManager: Lazy<ProfileManager>
+    val profileManager: ProfileManager by inject()
 
-    @Inject
-    lateinit var watchHistoryRepository: Lazy<WatchHistoryRepository>
+    val watchHistoryRepository: WatchHistoryRepository by inject()
 
-    @Inject
-    lateinit var watchlistRepository: Lazy<WatchlistRepository>
+    val watchlistRepository: WatchlistRepository by inject()
 
-    @Inject
-    lateinit var launcherContinueWatchingRepository: Lazy<LauncherContinueWatchingRepository>
+    val launcherContinueWatchingRepository: LauncherContinueWatchingRepository by inject()
 
-    @Inject
-    lateinit var mediaRepository: Lazy<MediaRepository>
+    val mediaRepository: MediaRepository by inject()
 
     // Prefetch IPTV early so the TV screen opens without a loading stall.
     // IptvRepository is @Singleton; touching it at activity start warms the
     // in-memory snapshot (and will trigger a disk-cache read + silent
     // background refresh) so by the time the user navigates into the TV tab
     // everything is already resident.
-    @Inject
-    lateinit var iptvRepository: Lazy<com.arflix.tv.data.repository.IptvRepository>
+    val iptvRepository: com.arflix.tv.data.repository.IptvRepository by inject()
 
     private var jankStats: JankStats? = null
     private var pendingLauncherRequest by mutableStateOf<LauncherContinueWatchingRequest?>(null)
 
-    // StartupViewModel for parallel loading during splash
-    private val startupViewModel: StartupViewModel by viewModels()
+
 
     override fun attachBaseContext(newBase: Context) {
         val tag = newBase.getSharedPreferences("app_locale", Context.MODE_PRIVATE)
@@ -240,7 +227,7 @@ class MainActivity : ComponentActivity() {
         }
 
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            runCatching { iptvRepository.get().warmupFromCacheOnly() }
+            runCatching { iptvRepository.warmupFromCacheOnly() }
         }
 
         setContent {
@@ -253,7 +240,7 @@ class MainActivity : ComponentActivity() {
                 val skipSelection =
                     this@MainActivity.settingsDataStore.data.first()[SKIP_PROFILE_SELECTION_KEY] ?: false
                 if (skipSelection) {
-                    val profiles = profileRepository.get()
+                    val profiles = profileRepository
                     val activeProfile = profiles.getActiveProfile()
                     if (activeProfile == null) {
                         val fallbackProfile = profiles.getProfiles().maxByOrNull { it.lastUsedAt }
@@ -272,7 +259,7 @@ class MainActivity : ComponentActivity() {
                 this@MainActivity.settingsDataStore.data.map { it[ACCENT_COLOR_KEY] }
             }.collectAsStateWithLifecycle(initialValue = null)
             val activeProfileId by remember {
-                profileRepository.get().activeProfileId
+                profileRepository.activeProfileId
             }.collectAsStateWithLifecycle(initialValue = null)
             val appLanguage by remember(activeProfileId) {
                 this@MainActivity.settingsDataStore.data.map { prefs ->
@@ -286,7 +273,7 @@ class MainActivity : ComponentActivity() {
                 }
             }.collectAsStateWithLifecycle(initialValue = "en-US")
             LaunchedEffect(appLanguage) {
-                mediaRepository.get().contentLanguage = if (appLanguage == "en-US") null else appLanguage
+                mediaRepository.contentLanguage = if (appLanguage == "en-US") null else appLanguage
             }
             val deviceType = when (deviceModeOverride) {
                 "tv" -> DeviceType.TV
@@ -300,7 +287,7 @@ class MainActivity : ComponentActivity() {
             val effectiveDeviceType = if (!hasTouchScreen && deviceType != DeviceType.TV) DeviceType.TV else deviceType
             // Wrap the Activity as a ContextWrapper that only overrides getResources() with
             // localized resources. Hilt traverses ContextWrapper chains to find the Activity,
-            // so hiltViewModel() still works correctly.
+            // so koinViewModel() still works correctly.
             val localizedContext = remember(appLanguage) {
                 val locale = com.arflix.tv.util.appLocale(appLanguage)
                 java.util.Locale.setDefault(locale)
@@ -328,17 +315,18 @@ class MainActivity : ComponentActivity() {
                     oledBlackBackground = oledBlackBackground,
                     accentColorName = accentColorName
                 ) {
+                    val startupViewModel: StartupViewModel = org.koin.androidx.compose.koinViewModel()
                     val startupState by startupViewModel.state.collectAsStateWithLifecycle()
                     ArflixApp(
-                        authRepository = authRepository.get(),
-                        profileRepository = profileRepository.get(),
-                        traktRepository = traktRepository.get(),
-                        profileManager = profileManager.get(),
-                        watchHistoryRepository = watchHistoryRepository.get(),
-                        watchlistRepository = watchlistRepository.get(),
-                        iptvRepository = iptvRepository.get(),
-                        launcherContinueWatchingRepository = launcherContinueWatchingRepository.get(),
-                        mediaRepository = mediaRepository.get(),
+                        authRepository = authRepository,
+                        profileRepository = profileRepository,
+                        traktRepository = traktRepository,
+                        profileManager = profileManager,
+                        watchHistoryRepository = watchHistoryRepository,
+                        watchlistRepository = watchlistRepository,
+                        iptvRepository = iptvRepository,
+                        launcherContinueWatchingRepository = launcherContinueWatchingRepository,
+                        mediaRepository = mediaRepository,
                         oledBlackBackground = oledBlackBackground,
                         skipProfileSelection = skipProfileSelection,
                         pendingLauncherRequest = pendingLauncherRequest,
@@ -364,11 +352,11 @@ class MainActivity : ComponentActivity() {
 
         runAfterFirstDraw {
             lifecycleScope.launch {
-                authRepository.get().checkAuthState()
+                authRepository.checkAuthState()
             }
             ArflixApplication.instance.scheduleTraktSyncIfNeeded()
             lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                val repo = iptvRepository.get()
+                val repo = iptvRepository
                 runCatching { repo.warmupFromCacheOnly() }
                 kotlinx.coroutines.delay(60_000L)
                 runCatching { repo.prefetchFreshStartupData() }
@@ -577,7 +565,7 @@ fun ArflixApp(
         Screen.ProfileSelection.route
     }
 
-    val downloadsViewModel: DownloadsViewModel = hiltViewModel()
+    val downloadsViewModel: DownloadsViewModel = koinViewModel()
     val downloadsState by downloadsViewModel.uiState.collectAsStateWithLifecycle()
     val hasAnyDownloads: Boolean by remember {
         derivedStateOf {

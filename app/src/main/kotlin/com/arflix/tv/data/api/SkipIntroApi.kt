@@ -3,20 +3,26 @@ package com.arflix.tv.data.api
 import androidx.annotation.Keep
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import retrofit2.http.GET
-import retrofit2.http.Path
-import retrofit2.http.Query
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.request.get
+import io.ktor.client.request.parameter
 
 /**
  * IntroDB segments API.
  */
-interface IntroDbApi {
-    @GET("segments")
+class IntroDbApi(private val client: HttpClient) {
     suspend fun getSegments(
-        @Query("imdb_id") imdbId: String,
-        @Query("season") season: Int,
-        @Query("episode") episode: Int
-    ): IntroDbSegmentsResponse
+        imdbId: String,
+        season: Int,
+        episode: Int
+    ): IntroDbSegmentsResponse {
+        return client.get("segments") {
+            parameter("imdb_id", imdbId)
+            parameter("season", season)
+            parameter("episode", episode)
+        }.body()
+    }
 }
 
 @Keep
@@ -45,14 +51,18 @@ data class IntroDbSegment(
 /**
  * AniSkip API (anime OP/ED/recap skip times).
  */
-interface AniSkipApi {
-    @GET("skip-times/{malId}/{episode}")
+class AniSkipApi(private val client: HttpClient) {
     suspend fun getSkipTimes(
-        @Path("malId") malId: String,
-        @Path("episode") episode: Int,
-        @Query("types") types: List<String>,
-        @Query("episodeLength") episodeLength: Int = 0
-    ): AniSkipResponse
+        malId: String,
+        episode: Int,
+        types: List<String>,
+        episodeLength: Int = 0
+    ): AniSkipResponse {
+        return client.get("skip-times/$malId/$episode") {
+            parameter("types", types)
+            parameter("episodeLength", episodeLength)
+        }.body()
+    }
 }
 
 @Keep
@@ -80,12 +90,16 @@ data class AniSkipInterval(
 /**
  * ARM API (IMDB -> MAL ID resolution).
  */
-interface ArmApi {
-    @GET("imdb")
+class ArmApi(private val client: HttpClient) {
     suspend fun resolve(
-        @Query("id") imdbId: String,
-        @Query("include") include: String = "myanimelist"
-    ): List<ArmEntry>
+        imdbId: String,
+        include: String = "myanimelist"
+    ): List<ArmEntry> {
+        return client.get("imdb") {
+            parameter("id", imdbId)
+            parameter("include", include)
+        }.body()
+    }
 }
 
 @Keep

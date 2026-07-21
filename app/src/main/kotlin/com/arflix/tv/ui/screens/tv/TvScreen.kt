@@ -101,7 +101,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -163,7 +163,7 @@ private enum class TvFocusZone {
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun TvScreen(
-    viewModel: TvViewModel = hiltViewModel(),
+    viewModel: TvViewModel = koinViewModel(),
     currentProfile: com.arflix.tv.data.model.Profile? = null,
     contentStartPadding: Dp = 0.dp,
     initialChannelId: String? = null,

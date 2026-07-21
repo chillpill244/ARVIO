@@ -12,7 +12,6 @@ import com.arflix.tv.data.repository.IptvConfig
 import com.arflix.tv.data.repository.IptvRepository
 import com.arflix.tv.data.repository.IptvTvSessionState
 import com.arflix.tv.util.AppLogger
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,7 +23,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
 
 
 private object TvViewModelRegexes {
@@ -72,8 +70,7 @@ data class TvUiState(
     val hasPotentialGuideSource: Boolean get() = config.hasConfiguredEpgSource()
 }
 
-@HiltViewModel
-class TvViewModel @Inject constructor(
+class TvViewModel constructor(
     val iptvRepository: IptvRepository,
     private val cloudSyncRepository: CloudSyncRepository
 ) : ViewModel() {

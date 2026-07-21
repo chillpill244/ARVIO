@@ -5,10 +5,8 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.arflix.tv.data.repository.TraktRepository
 import com.arflix.tv.data.repository.TraktSyncService
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 import kotlinx.coroutines.flow.first
 
 /**
@@ -21,21 +19,10 @@ import kotlinx.coroutines.flow.first
 class TraktSyncWorker(
     appContext: Context,
     params: WorkerParameters
-) : CoroutineWorker(appContext, params) {
+) : CoroutineWorker(appContext, params), KoinComponent {
 
-    @EntryPoint
-    @InstallIn(SingletonComponent::class)
-    interface TraktSyncWorkerEntryPoint {
-        fun traktRepository(): TraktRepository
-        fun traktSyncService(): TraktSyncService
-    }
-
-    private val deps: TraktSyncWorkerEntryPoint by lazy {
-        EntryPointAccessors.fromApplication(
-            applicationContext,
-            TraktSyncWorkerEntryPoint::class.java
-        )
-    }
+    private val traktRepository: com.arflix.tv.data.repository.TraktRepository by inject()
+    private val syncService: com.arflix.tv.data.repository.TraktSyncService by inject()
 
     companion object {
         const val TAG = "TraktSyncWorker"
@@ -49,8 +36,7 @@ class TraktSyncWorker(
 
     override suspend fun doWork(): Result {
         // Check if user is authenticated
-        val isAuth = deps.traktRepository().isAuthenticated.first()
-        if (!isAuth) {
+        if (!traktRepository.isAuthenticated.first()) {
             return Result.success()
         }
 
@@ -58,8 +44,8 @@ class TraktSyncWorker(
 
         return try {
             when (syncMode) {
-                SYNC_MODE_FULL -> deps.traktSyncService().performFullSync()
-                else -> deps.traktSyncService().performIncrementalSync()
+                SYNC_MODE_FULL -> syncService.performFullSync()
+                else -> syncService.performIncrementalSync()
             }
             Result.success()
         } catch (e: Exception) {

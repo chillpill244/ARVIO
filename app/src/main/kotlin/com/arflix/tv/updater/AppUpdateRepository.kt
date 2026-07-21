@@ -7,13 +7,10 @@ import com.arflix.tv.BuildConfig
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import dagger.hilt.android.qualifiers.ApplicationContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 @Serializable
 private data class GitHubReleaseDto(
@@ -26,9 +23,8 @@ private data class GitHubReleaseDto(
     @SerialName("assets") val assets: List<GitHubAssetDto>
 )
 
-@Singleton
-class AppUpdateRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class AppUpdateRepository constructor(
+    private val context: Context,
     private val okHttpClient: OkHttpClient
 ) {
     private val json = Json { ignoreUnknownKeys = true }

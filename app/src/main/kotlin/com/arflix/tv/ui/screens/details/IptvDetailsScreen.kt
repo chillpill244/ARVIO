@@ -36,7 +36,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.model.Profile
@@ -57,7 +57,7 @@ fun IptvDetailsScreen(
     mediaType: MediaType,
     initialSeason: Int? = null,
     initialEpisode: Int? = null,
-    viewModel: IptvDetailsViewModel = hiltViewModel(),
+    viewModel: IptvDetailsViewModel = koinViewModel(),
     currentProfile: Profile? = null,
     onNavigateToPlayer: (MediaType, Int, Int?, Int?, String?, String?, String?, String?, Long?) -> Unit,
     onNavigateToHome: () -> Unit = {},

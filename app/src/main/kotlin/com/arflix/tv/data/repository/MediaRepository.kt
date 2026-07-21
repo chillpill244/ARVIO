@@ -53,9 +53,6 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import android.content.Context
 import com.arflix.tv.util.ParsedCatalogUrl
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 data class StreamingServiceInfo(
     val id: Int,
@@ -79,9 +76,8 @@ data class PersonMediaSearchResult(
  * Cross-references with Trakt for watched status
  * Includes in-memory caching for performance
  */
-@Singleton
-class MediaRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class MediaRepository constructor(
+    private val context: Context,
     private val tmdbApi: TmdbApi,
     private val traktRepository: TraktRepository,
     private val traktApi: TraktApi,

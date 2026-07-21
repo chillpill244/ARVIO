@@ -143,7 +143,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.arflix.tv.ui.components.SettingsRow
 import com.arflix.tv.ui.components.SettingsToggleRow
 import androidx.core.widget.doAfterTextChanged
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.arflix.tv.data.model.CatalogConfig
@@ -280,7 +280,7 @@ private fun Modifier.settingsFocusSlot(index: Int): Modifier {
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SettingsScreen(
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: SettingsViewModel = koinViewModel(),
     currentProfile: com.arflix.tv.data.model.Profile? = null,
     autoStartCloudAuth: Boolean = false,
     onNavigateToHome: () -> Unit = {},

@@ -11,10 +11,10 @@ import androidx.work.WorkerParameters
 import com.arflix.tv.data.db.DownloadStatus
 import com.arflix.tv.data.db.DownloadType
 import com.arflix.tv.data.repository.DownloadsRepository
-import com.arflix.tv.di.RepositoryAccessEntryPoint
 import com.arflix.tv.util.HlsDownloadUtil
 import com.arflix.tv.util.formatBytes
-import dagger.hilt.android.EntryPointAccessors
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicLong
 class DownloadWorker(
     appContext: Context,
     params: WorkerParameters
-) : CoroutineWorker(appContext, params) {
+) : CoroutineWorker(appContext, params), KoinComponent {
 
     companion object {
         const val KEY_DOWNLOAD_ID = "download_id"
@@ -54,12 +54,7 @@ class DownloadWorker(
         private const val HLS_PARALLEL_SEGMENTS = 3
     }
 
-    private val repository: DownloadsRepository by lazy {
-        EntryPointAccessors.fromApplication(
-            applicationContext,
-            RepositoryAccessEntryPoint::class.java
-        ).downloadsRepository()
-    }
+    private val repository: com.arflix.tv.data.repository.DownloadsRepository by inject()
 
     private val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()

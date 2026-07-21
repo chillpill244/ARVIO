@@ -18,8 +18,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val TAG = "InAppYouTubeExtractor"
 private const val EXTRACTOR_TIMEOUT_MS = 30_000L
@@ -143,8 +141,7 @@ private val CLIENTS = listOf(
     )
 )
 
-@Singleton
-class InAppYouTubeExtractor @Inject constructor() {
+class InAppYouTubeExtractor constructor() {
     private val gson = Gson()
 
     private val httpClient = OkHttpClient.Builder()

@@ -8,12 +8,9 @@ import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.repository.IptvRepository
 import com.arflix.tv.ui.screens.shared.MediaCategoryViewModel
-import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 import com.arflix.tv.util.Logger
 
-@HiltViewModel
-class SeriesViewModel @Inject constructor(
+class SeriesViewModel constructor(
     iptvRepository: IptvRepository,
     private val tmdbApi: TmdbApi,
     preferenceStore: PreferenceStore, platformEnvironment: PlatformEnvironment,) : MediaCategoryViewModel(MediaType.TV, iptvRepository, preferenceStore, platformEnvironment) {

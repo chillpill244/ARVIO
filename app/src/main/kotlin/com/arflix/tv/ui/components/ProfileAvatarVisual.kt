@@ -27,10 +27,7 @@ import coil3.request.ImageRequest
 import com.arflix.tv.data.model.Profile
 import com.arflix.tv.data.repository.ProfileAvatarImageManager
 import com.arflix.tv.util.ProfileAvatarFiles
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
+import org.koin.compose.koinInject
 
 @Composable
 fun ProfileAvatarVisual(
@@ -40,12 +37,7 @@ fun ProfileAvatarVisual(
     iconPadding: Dp = 4.dp
 ) {
     val context = LocalContext.current
-    val avatarManager = remember(context) {
-        EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            ProfileAvatarVisualEntryPoint::class.java
-        ).profileAvatarImageManager()
-    }
+    val avatarManager: com.arflix.tv.data.repository.ProfileAvatarImageManager = koinInject()
     var customFile by remember(profile.id, profile.avatarImageVersion, context) {
         mutableStateOf(
             ProfileAvatarFiles.localFile(context, profile)?.takeIf { it.exists() && it.length() > 0L }
@@ -117,10 +109,4 @@ fun ProfileAvatarVisual(
             }
         }
     }
-}
-
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-private interface ProfileAvatarVisualEntryPoint {
-    fun profileAvatarImageManager(): ProfileAvatarImageManager
 }

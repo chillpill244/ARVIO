@@ -10,11 +10,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import com.fleeksoft.ksoup.Ksoup
 import java.net.URLEncoder
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class CatalogDiscoveryRepository @Inject constructor(
+class CatalogDiscoveryRepository constructor(
     private val traktApi: TraktApi,
     private val okHttpClient: OkHttpClient
 ) {

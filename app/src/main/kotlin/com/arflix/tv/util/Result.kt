@@ -137,13 +137,13 @@ fun Throwable.toAppException(): AppException = when (this) {
     is java.net.SocketTimeoutException -> AppException.Network("Connection timed out", this)
     is java.net.ConnectException -> AppException.Network("Could not connect to server", this)
     is javax.net.ssl.SSLException -> AppException.Network("Secure connection failed", this)
-    is retrofit2.HttpException -> {
-        when (code()) {
+    is io.ktor.client.plugins.ResponseException -> {
+        when (response.status.value) {
             401 -> AppException.Auth("Session expired. Please sign in again.", this)
             403 -> AppException.Auth("Access denied", this)
-            404 -> AppException.Server("Not found", code(), this)
-            in 500..599 -> AppException.Server("Server error. Please try again later.", code(), this)
-            else -> AppException.Server("Request failed", code(), this)
+            404 -> AppException.Server("Not found", response.status.value, this)
+            in 500..599 -> AppException.Server("Server error. Please try again later.", response.status.value, this)
+            else -> AppException.Server("Request failed", response.status.value, this)
         }
     }
     else -> AppException.Unknown(message ?: "An unexpected error occurred", this)

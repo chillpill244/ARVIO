@@ -8,7 +8,7 @@ plugins {
     // Kotlin in the root build.gradle.kts.
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
-    id("com.google.dagger.hilt.android")
+    // id("com.google.dagger.hilt.android")
     id("androidx.baselineprofile")
     id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin")
     id("io.gitlab.arturbosch.detekt")
@@ -173,11 +173,8 @@ composeCompiler {
         .file("app/compose_stability_config.conf")
 }
 
-// KSP configuration for Hilt
+// KSP configuration for Room (Hilt config removed)
 ksp {
-    arg("dagger.fastInit", "enabled")
-    arg("dagger.formatGeneratedSource", "disabled")
-    arg("dagger.hilt.android.internal.disableAndroidSuperclassValidation", "true")
 }
 
 dependencies {
@@ -213,14 +210,11 @@ dependencies {
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.6")
 
-    // Hilt for DI — 2.54 is the first release with Kotlin 2.1 metadata
-    // support on the Java compile side. 2.52 fails on `hiltJavaCompile*`
-    // with "Unable to read Kotlin metadata due to unsupported metadata
-    // version" because Hilt parses generated `@Module` classes that carry
-    // Kotlin 2.1's newer metadata format.
-    implementation("com.google.dagger:hilt-android:2.54")
-    ksp("com.google.dagger:hilt-compiler:2.54")
-    implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
+    // Koin for DI
+    val koinVersion = "4.0.0"
+    implementation("io.insert-koin:koin-android:$koinVersion")
+    implementation("io.insert-koin:koin-androidx-compose:$koinVersion")
+    implementation("io.insert-koin:koin-androidx-workmanager:$koinVersion")
 
     // Leanback (TV compliance, browse fragments if needed)
     implementation("androidx.leanback:leanback:1.1.0-rc02")
@@ -244,20 +238,24 @@ dependencies {
     // `sideloadImplementation` if/when shipping the play flavor to the Store.
     implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1")
 
-    // Networking - Retrofit + OkHttp
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0") // Keep for legacy
-    implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
+    // Networking - Ktor + OkHttp Engine
+    val ktorVersion = "2.3.7"
+    implementation("io.ktor:ktor-client-core:$ktorVersion")
+    implementation("io.ktor:ktor-client-okhttp:$ktorVersion")
+    implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-    
+    implementation("io.coil-kt.coil3:coil-network-ktor2:3.0.4")
+
     // Serialization
+    implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
     implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
 
     // HTML parsing for catalog discovery.
-    implementation("com.fleeksoft.ksoup:ksoup:0.2.0")
+    implementation("com.fleeksoft.ksoup:ksoup:0.1.2")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
@@ -288,8 +286,6 @@ dependencies {
 
     // WorkManager for background sync
     implementation("androidx.work:work-runtime-ktx:2.9.0")
-    implementation("androidx.hilt:hilt-work:1.1.0")
-    ksp("androidx.hilt:hilt-compiler:1.1.0")
 
     // Room for download persistence
     implementation("androidx.room:room-runtime:2.7.0-alpha13")

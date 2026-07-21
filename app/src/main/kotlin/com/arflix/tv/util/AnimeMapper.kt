@@ -7,8 +7,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withContext
 import java.net.URLEncoder
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Maps TMDB IDs to Kitsu IDs for anime content and resolves correct episode queries.
@@ -24,8 +22,7 @@ import javax.inject.Singleton
  * IMPORTANT: ARM API is now the primary source because hardcoded IDs can become stale.
  * This ensures ALL anime work correctly, not just the ones with hardcoded entries.
  */
-@Singleton
-class AnimeMapper @Inject constructor(
+class AnimeMapper constructor(
     private val streamApi: StreamApi,
     private val tmdbApi: TmdbApi
 ) {

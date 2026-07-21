@@ -5,12 +5,6 @@ import android.app.Application
 import android.content.ComponentCallbacks2
 import android.graphics.Bitmap
 import android.os.Build
-import androidx.hilt.work.HiltWorkerFactory
-import androidx.work.Configuration
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -39,7 +33,14 @@ import com.arflix.tv.util.DeviceType
 import com.arflix.tv.util.SentryCrashReporter
 import com.arflix.tv.util.detectDeviceType
 import com.arflix.tv.worker.TraktSyncWorker
-import dagger.hilt.android.HiltAndroidApp
+import org.koin.android.ext.koin.androidContext
+import org.koin.androidx.workmanager.koin.workManagerFactory
+import org.koin.core.context.startKoin
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+import com.arflix.tv.di.appModule
+import com.arflix.tv.di.databaseModule
+import com.arflix.tv.di.generatedModule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,37 +50,32 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.arflix.tv.util.settingsDataStore
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
 
 /**
  * ARVIO TV Application class
  */
-@HiltAndroidApp
-class ArflixApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory {
+class ArflixApplication : Application(), androidx.work.Configuration.Provider, SingletonImageLoader.Factory, KoinComponent {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     @Volatile
     private var appImageLoader: ImageLoader? = null
 
-    @Inject
-    lateinit var workerFactory: HiltWorkerFactory
-    @Inject
-    lateinit var profileManager: ProfileManager
-    @Inject
-    lateinit var authRepository: AuthRepository
-    @Inject
-    lateinit var cloudSyncRepository: CloudSyncRepository
-    @Inject
-    lateinit var cloudSyncCoordinator: CloudSyncCoordinator
-    @Inject
-    lateinit var realtimeSyncManager: RealtimeSyncManager
-    @Inject
-    lateinit var watchlistRepository: WatchlistRepository
-    @Inject
-    lateinit var appUsageAnalyticsRepository: AppUsageAnalyticsRepository
+    val profileManager: ProfileManager by inject()
+    val authRepository: AuthRepository by inject()
+    val cloudSyncRepository: CloudSyncRepository by inject()
+    val cloudSyncCoordinator: CloudSyncCoordinator by inject()
+    val realtimeSyncManager: RealtimeSyncManager by inject()
+    val watchlistRepository: WatchlistRepository by inject()
+    val appUsageAnalyticsRepository: AppUsageAnalyticsRepository by inject()
 
     override fun onCreate() {
         super.onCreate()
         instance = this
+
+        startKoin {
+            androidContext(this@ArflixApplication)
+            workManagerFactory()
+            modules(appModule, databaseModule, generatedModule)
+        }
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             val channel = android.app.NotificationChannel(
@@ -166,7 +162,7 @@ class ArflixApplication : Application(), Configuration.Provider, SingletonImageL
         return ImageLoader.Builder(context)
             // Use the dedicated Coil HTTP client instead of the main API client.
             // Avoids logging interceptor overhead and connection pool contention.
-            .components { add(coil3.network.okhttp.OkHttpNetworkFetcherFactory(OkHttpProvider.coilClient)) }
+            .components { add(coil3.network.ktor2.KtorNetworkFetcherFactory(com.arflix.tv.network.OkHttpProvider.ktorCoilClient)) }
             .memoryCache {
                 MemoryCache.Builder()
                     // The 2 GB Android TV dump showed Arvio spending most of
@@ -230,9 +226,8 @@ class ArflixApplication : Application(), Configuration.Provider, SingletonImageL
         return activityManager?.isLowRamDevice == true
     }
 
-    override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder()
-            .setWorkerFactory(workerFactory)
+    override val workManagerConfiguration: androidx.work.Configuration
+        get() = androidx.work.Configuration.Builder()
             .setMinimumLoggingLevel(android.util.Log.ASSERT)
             .build()
 
@@ -240,8 +235,8 @@ class ArflixApplication : Application(), Configuration.Provider, SingletonImageL
      * Schedule periodic Trakt data sync
      */
     fun scheduleTraktSyncIfNeeded() {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
+        val constraints = androidx.work.Constraints.Builder()
+            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
             .build()
 
         // Use INCREMENTAL sync on startup for fast app launch
@@ -265,13 +260,13 @@ class ArflixApplication : Application(), Configuration.Provider, SingletonImageL
 
         WorkManager.getInstance(this).enqueueUniqueWork(
             TraktSyncWorker.WORK_NAME_ON_OPEN,
-            ExistingWorkPolicy.KEEP,
+            androidx.work.ExistingWorkPolicy.KEEP,
             oneTimeRequest
         )
 
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             TraktSyncWorker.WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
+            androidx.work.ExistingPeriodicWorkPolicy.KEEP,
             syncRequest
         )
     }

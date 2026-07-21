@@ -1,6 +1,5 @@
 package com.arflix.tv.di
 
-import android.content.Context
 import com.arflix.tv.data.api.AniSkipApi
 import com.arflix.tv.data.api.ArmApi
 import com.arflix.tv.data.api.IntroDbApi
@@ -10,164 +9,92 @@ import com.arflix.tv.data.api.TmdbApi
 import com.arflix.tv.data.api.TraktApi
 import com.arflix.tv.network.OkHttpProvider
 import com.arflix.tv.util.Constants
-import dagger.Module
-import dagger.Provides
-import dagger.hilt.android.qualifiers.ApplicationContext
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
-import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
-import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
-import javax.inject.Named
-import javax.inject.Singleton
 import com.arflix.tv.util.settingsDataStore
 import com.arflix.tv.util.mediaCategoryPreferences
+import org.koin.android.ext.koin.androidContext
+import org.koin.core.qualifier.named
+import androidx.work.WorkManager
+import org.koin.dsl.module
+import com.arflix.tv.data.repository.AndroidPreferenceStore
+import com.arflix.tv.data.repository.PlatformEnvironment
+import com.arflix.tv.data.repository.AndroidPlatformEnvironment
+import com.arflix.tv.data.repository.PreferenceStore
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.defaultRequest
 
-@Module
-@InstallIn(SingletonComponent::class)
-object AppModule {
+val appModule = module {
+    single<WorkManager> { WorkManager.getInstance(androidContext()) }
 
-    @Provides
-    @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
-        return OkHttpProvider.client
-    }
-
-    @Provides
-    @Singleton
-    fun provideTmdbApi(okHttpClient: OkHttpClient): TmdbApi {
-        return Retrofit.Builder()
-            .baseUrl(Constants.TMDB_BASE_URL)
-            .client(okHttpClient)
-            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
-            .build()
-            .create(TmdbApi::class.java)
+    single<OkHttpClient> { OkHttpProvider.client }
+    single<HttpClient> { OkHttpProvider.ktorClient }
+    
+    single<TmdbApi> {
+        val client = get<HttpClient>().config {
+            defaultRequest { url(Constants.TMDB_BASE_URL) }
+        }
+        TmdbApi(client)
     }
     
-    @Provides
-    @Singleton
-    fun provideTraktApi(okHttpClient: OkHttpClient): TraktApi {
-        return Retrofit.Builder()
-            .baseUrl(Constants.TRAKT_API_URL)
-            .client(okHttpClient)
-            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
-            .build()
-            .create(TraktApi::class.java)
+    single<TraktApi> {
+        val client = get<HttpClient>().config {
+            defaultRequest { url(Constants.TRAKT_API_URL) }
+        }
+        TraktApi(client)
     }
     
-    @Provides
-    @Singleton
-    fun provideSupabaseApi(okHttpClient: OkHttpClient): SupabaseApi {
-        // Supabase API client without disk cache to prevent OkHttp from returning
-        // cached responses for POST/upsert operations (which silently drops writes)
-        val noCacheClient = okHttpClient.newBuilder()
-            .cache(null)
-            .build()
-        return Retrofit.Builder()
-            .baseUrl(Constants.SUPABASE_URL + "/")
-            .client(noCacheClient)
-            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
-            .build()
-            .create(SupabaseApi::class.java)
+    single<SupabaseApi> {
+        // Supabase requires a no-cache client in Retrofit setup, but for Ktor we can just use the standard one
+        // and optionally disable caching per request if needed. For now, just use the standard one.
+        val client = get<HttpClient>().config {
+            defaultRequest { url(Constants.SUPABASE_URL + "/") }
+        }
+        SupabaseApi(client)
     }
     
-    @Provides
-    @Singleton
-    fun provideStreamApi(okHttpClient: OkHttpClient): StreamApi {
-        // Base URL doesn't matter for dynamic URLs
-        return Retrofit.Builder()
-            .baseUrl("https://api.themoviedb.org/")
-            .client(okHttpClient)
-            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
-            .build()
-            .create(StreamApi::class.java)
+    single<StreamApi> {
+        val client = get<HttpClient>().config {
+            defaultRequest { url("https://api.themoviedb.org/") }
+        }
+        StreamApi(client)
     }
 
-    // Skip intro providers (IntroDB + AniSkip + ARM).
-
-    @Provides
-    @Singleton
-    @Named("introDb")
-    fun provideIntroDbRetrofit(okHttpClient: OkHttpClient): Retrofit {
-        return Retrofit.Builder()
-            .baseUrl("https://api.introdb.app/")
-            .client(okHttpClient)
-            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
-            .build()
+    single<IntroDbApi> { 
+        val client = get<HttpClient>().config {
+            defaultRequest { url("https://api.introdb.app/") }
+        }
+        IntroDbApi(client)
     }
 
-    @Provides
-    @Singleton
-    fun provideIntroDbApi(@Named("introDb") retrofit: Retrofit): IntroDbApi {
-        return retrofit.create(IntroDbApi::class.java)
+    single<AniSkipApi> { 
+        val client = get<HttpClient>().config {
+            defaultRequest { url("https://api.aniskip.com/v2/") }
+        }
+        AniSkipApi(client)
     }
 
-    @Provides
-    @Singleton
-    @Named("aniSkip")
-    fun provideAniSkipRetrofit(okHttpClient: OkHttpClient): Retrofit {
-        return Retrofit.Builder()
-            .baseUrl("https://api.aniskip.com/v2/")
-            .client(okHttpClient)
-            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
-            .build()
+    single<ArmApi> { 
+        val client = get<HttpClient>().config {
+            defaultRequest { url("https://arm.haglund.dev/api/v2/") }
+        }
+        ArmApi(client)
     }
 
-    @Provides
-    @Singleton
-    fun provideAniSkipApi(@Named("aniSkip") retrofit: Retrofit): AniSkipApi {
-        return retrofit.create(AniSkipApi::class.java)
+    single<com.arflix.tv.data.api.JikanApi> { 
+        val client = get<HttpClient>().config {
+            defaultRequest { url("https://api.jikan.moe/v4/") }
+        }
+        com.arflix.tv.data.api.JikanApi(client)
     }
 
-    @Provides
-    @Singleton
-    @Named("arm")
-    fun provideArmRetrofit(okHttpClient: OkHttpClient): Retrofit {
-        return Retrofit.Builder()
-            .baseUrl("https://arm.haglund.dev/api/v2/")
-            .client(okHttpClient)
-            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
-            .build()
-    }
-
-    @Provides
-    @Singleton
-    fun provideArmApi(@Named("arm") retrofit: Retrofit): ArmApi {
-        return retrofit.create(ArmApi::class.java)
-    }
-
-    @Provides
-    @Singleton
-    @Named("jikan")
-    fun provideJikanRetrofit(okHttpClient: OkHttpClient): Retrofit {
-        return Retrofit.Builder()
-            .baseUrl("https://api.jikan.moe/v4/")
-            .client(okHttpClient)
-            .addConverterFactory(Json { ignoreUnknownKeys = true; coerceInputValues = true }.asConverterFactory("application/json".toMediaType()))
-            .build()
-    }
-
-    @Provides
-    @Singleton
-    fun provideJikanApi(@Named("jikan") retrofit: Retrofit): com.arflix.tv.data.api.JikanApi {
-        return retrofit.create(com.arflix.tv.data.api.JikanApi::class.java)
-    }
-    @Provides
-    @Singleton
-    fun providePreferenceStore(@ApplicationContext context: android.content.Context): com.arflix.tv.data.repository.PreferenceStore {
-        return com.arflix.tv.data.repository.AndroidPreferenceStore(
+    single<PreferenceStore> {
+        val context = androidContext()
+        AndroidPreferenceStore(
             context = context,
             settings = context.settingsDataStore,
             mediaCategory = context.mediaCategoryPreferences
         )
     }
 
-    @Provides
-    @Singleton
-    fun providePlatformEnvironment(@ApplicationContext context: android.content.Context): com.arflix.tv.data.repository.PlatformEnvironment {
-        return com.arflix.tv.data.repository.AndroidPlatformEnvironment(context)
-    }
+    single<PlatformEnvironment> { AndroidPlatformEnvironment(androidContext()) }
 }

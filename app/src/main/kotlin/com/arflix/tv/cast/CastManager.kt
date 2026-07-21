@@ -11,25 +11,14 @@ import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
 import com.google.android.gms.cast.CastMediaControlIntent
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
-import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-interface CastManagerEntryPoint {
-    fun castManager(): CastManager
-}
 
-@Singleton
-class CastManager @Inject constructor(
-    @ApplicationContext private val context: Context
+
+class CastManager constructor(
+    private val context: Context
 ) {
     sealed class CastState {
         object NotAvailable : CastState()

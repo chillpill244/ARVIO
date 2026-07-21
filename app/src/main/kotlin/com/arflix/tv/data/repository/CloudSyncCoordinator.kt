@@ -9,11 +9,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class CloudSyncCoordinator @Inject constructor(
+class CloudSyncCoordinator constructor(
     private val invalidationBus: CloudSyncInvalidationBus,
     private val cloudSyncRepository: CloudSyncRepository,
     private val authRepository: AuthRepository

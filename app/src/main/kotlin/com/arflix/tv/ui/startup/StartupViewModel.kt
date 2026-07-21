@@ -13,12 +13,10 @@ import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.repository.MediaRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * StartupViewModel - Handles parallel loading during splash screen
@@ -37,9 +35,8 @@ data class StartupState(
     val error: String? = null
 )
 
-@HiltViewModel
 @OptIn(ExperimentalCoroutinesApi::class)
-class StartupViewModel @Inject constructor(
+class StartupViewModel constructor(
     private val mediaRepository: MediaRepository,
     private val preferenceStore: PreferenceStore, private val platformEnvironment: PlatformEnvironment,) : ViewModel() {
     private val imageLoader: ImageLoader by lazy(LazyThreadSafetyMode.NONE) {

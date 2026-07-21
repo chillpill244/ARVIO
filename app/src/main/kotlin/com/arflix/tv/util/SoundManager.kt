@@ -4,17 +4,13 @@ import android.content.Context
 import android.media.AudioManager
 import android.view.SoundEffectConstants
 import android.view.View
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Manages UI sound effects for navigation
  * Uses Android's built-in sound effect system for consistent TV experience
  */
-@Singleton
-class SoundManager @Inject constructor(
-    @ApplicationContext private val context: Context
+class SoundManager constructor(
+    private val context: Context
 ) {
     private val audioManager: AudioManager? = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
     private var isEnabled = true

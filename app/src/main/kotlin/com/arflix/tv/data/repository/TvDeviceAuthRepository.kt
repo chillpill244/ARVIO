@@ -9,8 +9,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import javax.inject.Inject
-import javax.inject.Singleton
 
 data class TvDeviceAuthSession(
     val userCode: String,
@@ -40,8 +38,7 @@ data class TvDeviceAuthCompleteResult(
     val message: String? = null
 )
 
-@Singleton
-class TvDeviceAuthRepository @Inject constructor(
+class TvDeviceAuthRepository constructor(
     private val okHttpClient: OkHttpClient
 ) {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()

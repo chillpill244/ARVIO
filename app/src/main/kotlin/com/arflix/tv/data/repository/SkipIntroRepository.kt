@@ -3,10 +3,8 @@ import androidx.annotation.Keep
 import com.arflix.tv.data.api.AniSkipApi
 import com.arflix.tv.data.api.ArmApi
 import com.arflix.tv.data.api.IntroDbApi
-import retrofit2.HttpException
+import io.ktor.client.plugins.ResponseException
 import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Inject
-import javax.inject.Singleton
 
 @Keep
 data class SkipInterval(
@@ -16,8 +14,7 @@ data class SkipInterval(
     val provider: String   // "introdb" or "aniskip"
 )
 
-@Singleton
-class SkipIntroRepository @Inject constructor(
+class SkipIntroRepository constructor(
     private val introDbApi: IntroDbApi,
     private val aniSkipApi: AniSkipApi,
     private val armApi: ArmApi
@@ -76,7 +73,7 @@ class SkipIntroRepository @Inject constructor(
             body.outro?.let { addIfValid("outro", it.startMs, it.endMs, it.startSec, it.endSec) }
 
             out.sortedBy { it.startMs }
-        } catch (e: HttpException) {
+        } catch (e: ResponseException) {
             emptyList()
         } catch (e: Exception) {
             emptyList()
@@ -104,7 +101,7 @@ class SkipIntroRepository @Inject constructor(
                     } else null
                 }
                 .sortedBy { it.startMs }
-        } catch (e: HttpException) {
+        } catch (e: ResponseException) {
             emptyList()
         } catch (e: Exception) {
             emptyList()
@@ -117,7 +114,7 @@ class SkipIntroRepository @Inject constructor(
 
         val malId = try {
             armApi.resolve(imdbId).firstOrNull()?.myanimelist?.toString()
-        } catch (_: HttpException) {
+        } catch (_: ResponseException) {
             null
         } catch (_: Exception) {
             null

@@ -1,14 +1,14 @@
 package com.arflix.tv.updater
 
 import android.content.BroadcastReceiver
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
 import com.arflix.tv.util.Logger
 import android.widget.Toast
-import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
 
 /**
  * Handles PackageInstaller session callbacks for the in-app APK updater.
@@ -21,11 +21,9 @@ import javax.inject.Inject
  * hangs forever and no install ever happens — which is exactly what was reported in
  * issues #116, #99, and #75 for versions 1.9.3 through 1.9.73.
  */
-@AndroidEntryPoint
-class ApkInstallReceiver : BroadcastReceiver() {
+class ApkInstallReceiver : BroadcastReceiver(), KoinComponent {
 
-    @Inject
-    lateinit var updateStatusManager: UpdateStatusManager
+    val updateStatusManager: UpdateStatusManager by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, -999)

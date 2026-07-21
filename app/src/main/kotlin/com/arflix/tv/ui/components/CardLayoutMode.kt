@@ -20,7 +20,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.arflix.tv.data.repository.CloudSyncScope
-import com.arflix.tv.di.RepositoryAccessEntryPoint
 import com.arflix.tv.ui.focus.arvioDpadFocusGroup
 import com.arflix.tv.ui.skin.ArvioFocusableSurface
 import com.arflix.tv.ui.skin.ArvioSkin
@@ -28,7 +27,6 @@ import com.arflix.tv.ui.skin.rememberArvioCardShape
 import com.arflix.tv.util.profilesDataStore
 import com.arflix.tv.util.settingsDataStore
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -113,11 +111,8 @@ suspend fun toggleCatalogueRowLayoutMode(
     rowKey: String
 ) {
     val normalizedRowKey = normalizeCatalogueRowLayoutKey(rowKey)
-    val entryPoint = EntryPointAccessors.fromApplication(
-        context,
-        RepositoryAccessEntryPoint::class.java
-    )
-    val profileId = entryPoint.profileManager().getProfileId()
+    val profileManager = org.koin.java.KoinJavaComponent.getKoin().get<com.arflix.tv.data.repository.ProfileManager>()
+    val profileId = profileManager.getProfileId()
     val key = profileCatalogueRowLayoutModeKey(profileId, normalizedRowKey)
     context.settingsDataStore.edit { prefs ->
         val fallback = normalizeCardLayoutMode(
@@ -126,8 +121,9 @@ suspend fun toggleCatalogueRowLayoutMode(
         val current = parseCardLayoutMode(prefs[key] ?: fallback)
         prefs[key] = toggledCardLayoutMode(current)
     }
-    entryPoint.cloudSyncInvalidationBus().markDirty(
-        CloudSyncScope.PROFILE_SETTINGS,
+    val bus = org.koin.java.KoinJavaComponent.getKoin().get<com.arflix.tv.data.repository.CloudSyncInvalidationBus>()
+    bus.markDirty(
+        com.arflix.tv.data.repository.CloudSyncScope.PROFILE_SETTINGS,
         profileId,
         "catalogue row layout"
     )

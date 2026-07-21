@@ -49,7 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -67,7 +67,7 @@ import com.arflix.tv.R
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun ProfileSelectionScreen(
-    viewModel: ProfileViewModel = hiltViewModel(),
+    viewModel: ProfileViewModel = koinViewModel(),
     onProfileSelected: () -> Unit,
     onShowAddProfile: () -> Unit,
     onConnectCloud: () -> Unit = {},

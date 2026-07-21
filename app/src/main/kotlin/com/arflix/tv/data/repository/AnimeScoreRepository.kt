@@ -6,8 +6,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Collections
-import javax.inject.Inject
-import javax.inject.Singleton
 import java.util.LinkedHashMap
 
 /**
@@ -26,8 +24,7 @@ import java.util.LinkedHashMap
  *
  * Issue #45.
  */
-@Singleton
-class AnimeScoreRepository @Inject constructor(
+class AnimeScoreRepository constructor(
     private val armApi: ArmApi,
     private val jikanApi: JikanApi
 ) {

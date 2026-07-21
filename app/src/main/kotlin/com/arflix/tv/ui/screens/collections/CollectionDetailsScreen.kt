@@ -42,7 +42,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberCoroutineScope
@@ -77,7 +77,6 @@ import com.arflix.tv.ui.theme.appBackgroundDark
 import com.arflix.tv.ui.theme.TextPrimary
 import com.arflix.tv.ui.theme.TextSecondary
 import com.arflix.tv.util.LocalDeviceType
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,7 +85,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 enum class CollectionTab { MOVIES, SERIES }
 
@@ -110,8 +108,7 @@ data class CollectionDetailsUiState(
     val hasSeries: Boolean get() = seriesItems.isNotEmpty()
 }
 
-@HiltViewModel
-class CollectionDetailsViewModel @Inject constructor(
+class CollectionDetailsViewModel constructor(
     private val catalogRepository: CatalogRepository,
     private val mediaRepository: MediaRepository
 ) : ViewModel() {
@@ -377,7 +374,7 @@ class CollectionDetailsViewModel @Inject constructor(
 fun CollectionDetailsScreen(
     catalogId: String,
     currentProfile: com.arflix.tv.data.model.Profile? = null,
-    viewModel: CollectionDetailsViewModel = hiltViewModel(),
+    viewModel: CollectionDetailsViewModel = koinViewModel(),
     onNavigateToDetails: (MediaType, Int) -> Unit,
     onNavigateToHome: () -> Unit,
     onNavigateToSearch: () -> Unit,

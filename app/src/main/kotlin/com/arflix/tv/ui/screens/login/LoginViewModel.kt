@@ -9,13 +9,11 @@ import com.arflix.tv.data.repository.AuthState
 import com.arflix.tv.data.repository.CloudSyncRepository
 import com.arflix.tv.data.repository.StreamRepository
 import com.arflix.tv.util.AuthEmailValidator
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class LoginUiState(
     val isLoading: Boolean = false,
@@ -25,8 +23,7 @@ data class LoginUiState(
     val loginReady: Boolean = false
 )
 
-@HiltViewModel
-class LoginViewModel @Inject constructor(
+class LoginViewModel constructor(
     private val authRepository: AuthRepository,
     private val streamRepository: StreamRepository,
     private val cloudSyncRepository: CloudSyncRepository

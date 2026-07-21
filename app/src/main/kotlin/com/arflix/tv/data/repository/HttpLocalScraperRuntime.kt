@@ -17,8 +17,6 @@ import java.net.URI
 import java.net.URL
 import java.security.MessageDigest
 import java.util.Locale
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -39,8 +37,7 @@ data class HttpLocalScraperInstallCandidate(
     val transportUrl: String
 )
 
-@Singleton
-class HttpLocalScraperRuntime @Inject constructor(
+class HttpLocalScraperRuntime constructor(
     private val okHttpClient: OkHttpClient,
     private val tmdbApi: TmdbApi
 ) {

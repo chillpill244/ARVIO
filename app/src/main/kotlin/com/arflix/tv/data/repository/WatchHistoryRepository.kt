@@ -4,12 +4,11 @@ import com.arflix.tv.data.api.SupabaseApi
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.util.Constants
 import kotlinx.serialization.Serializable
-import retrofit2.HttpException
+import io.ktor.client.plugins.ResponseException
 import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Inject
 import javax.inject.Provider
-import javax.inject.Singleton
-
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 /**
  * Watch history entry for Supabase
  */
@@ -43,13 +42,12 @@ data class WatchHistoryEntry(
 /**
  * Repository for syncing watch history with Supabase
  */
-@Singleton
-class WatchHistoryRepository @Inject constructor(
-    private val authRepositoryProvider: Provider<AuthRepository>,
+class WatchHistoryRepository constructor(
     private val supabaseApi: SupabaseApi,
-    private val profileManager: ProfileManager,
-    private val realtimeSyncManagerProvider: Provider<RealtimeSyncManager>
-) {
+    private val profileManager: ProfileManager
+) : org.koin.core.component.KoinComponent {
+    private val authRepositoryProvider: kotlin.Lazy<AuthRepository> = inject()
+    private val realtimeSyncManagerProvider: kotlin.Lazy<RealtimeSyncManager> = inject()
     // In-memory cache of the last successful CW fetch. When the Supabase REST call
     // fails (network timeout, 401, etc.), we return this cached list instead of an
     // empty list — so Continue Watching never silently disappears from the UI.
@@ -126,7 +124,7 @@ class WatchHistoryRepository @Inject constructor(
         streamAddonId: String? = null,
         streamTitle: String? = null
     ) {
-        val userId = authRepositoryProvider.get().getCurrentUserId() ?: return
+        val userId = authRepositoryProvider.value.getCurrentUserId() ?: return
 
         val entry = WatchHistoryEntry(
                 user_id = userId,
@@ -156,7 +154,7 @@ class WatchHistoryRepository @Inject constructor(
                 supabaseApi.upsertWatchHistory(auth = auth, item = entry.toRecord())
             }
             saved = true
-        } catch (e: HttpException) {
+        } catch (e: ResponseException) {
             runCatching {
                 val fallback = entry.copy(stream_key = null, stream_addon_id = null, stream_title = null)
                 executeSupabaseCall("save watch progress fallback") { auth ->
@@ -190,7 +188,7 @@ class WatchHistoryRepository @Inject constructor(
                 }
             }
             cachedContinueWatchingByProfile[profileId] = cachedContinueWatching
-            runCatching { realtimeSyncManagerProvider.get().markLocalWatchHistoryWrite() }
+            runCatching { realtimeSyncManagerProvider.value.markLocalWatchHistoryWrite() }
         }
     }
 
@@ -203,7 +201,7 @@ class WatchHistoryRepository @Inject constructor(
      */
     suspend fun getWatchHistory(): List<WatchHistoryEntry> {
         val profileId = currentProfileId()
-        val userId = authRepositoryProvider.get().getCurrentUserId()
+        val userId = authRepositoryProvider.value.getCurrentUserId()
             ?: return cachedWatchHistoryByProfile[profileId].orEmpty()
 
         return try {
@@ -238,7 +236,7 @@ class WatchHistoryRepository @Inject constructor(
      */
     suspend fun getContinueWatching(): List<WatchHistoryEntry> {
         val profileId = currentProfileId()
-        val userId = authRepositoryProvider.get().getCurrentUserId()
+        val userId = authRepositoryProvider.value.getCurrentUserId()
         if (userId == null) return cachedContinueWatchingByProfile[profileId].orEmpty()
 
         return try {
@@ -274,7 +272,7 @@ class WatchHistoryRepository @Inject constructor(
         season: Int?,
         episode: Int?
     ): WatchHistoryEntry? {
-        val userId = authRepositoryProvider.get().getCurrentUserId() ?: return null
+        val userId = authRepositoryProvider.value.getCurrentUserId() ?: return null
 
         return try {
             val records = executeSupabaseCall("get watch history item") { auth ->
@@ -302,7 +300,7 @@ class WatchHistoryRepository @Inject constructor(
         mediaType: MediaType,
         tmdbId: Int
     ): WatchHistoryEntry? {
-        val userId = authRepositoryProvider.get().getCurrentUserId() ?: return null
+        val userId = authRepositoryProvider.value.getCurrentUserId() ?: return null
         val mediaTypeKey = if (mediaType == MediaType.MOVIE) "movie" else "tv"
 
         return try {
@@ -336,7 +334,7 @@ class WatchHistoryRepository @Inject constructor(
         season: Int?,
         episode: Int?
     ) {
-        val userId = authRepositoryProvider.get().getCurrentUserId() ?: return
+        val userId = authRepositoryProvider.value.getCurrentUserId() ?: return
 
         try {
             executeSupabaseCall("remove watch history item") { auth ->
@@ -359,7 +357,7 @@ class WatchHistoryRepository @Inject constructor(
      * Clear all watch history
      */
     suspend fun clearHistory() {
-        val userId = authRepositoryProvider.get().getCurrentUserId() ?: return
+        val userId = authRepositoryProvider.value.getCurrentUserId() ?: return
 
         try {
             executeSupabaseCall("clear watch history") { auth ->
@@ -389,10 +387,10 @@ class WatchHistoryRepository @Inject constructor(
         val auth = getSupabaseAuth() ?: throw IllegalStateException("Supabase auth failed")
         return try {
             block(auth)
-        } catch (e: HttpException) {
-            if (e.code() == 401) {
+        } catch (e: ResponseException) {
+            if (e.response.status.value == 401) {
                 // Unauthorized, refresh session and retry
-                val refreshed = authRepositoryProvider.get().refreshAccessToken()
+                val refreshed = authRepositoryProvider.value.refreshAccessToken()
                 if (!refreshed.isNullOrBlank()) {
                     return block("Bearer $refreshed")
                 }
@@ -402,7 +400,7 @@ class WatchHistoryRepository @Inject constructor(
     }
 
     private suspend fun getSupabaseAuth(): String? {
-        val authRepository = authRepositoryProvider.get()
+        val authRepository = authRepositoryProvider.value
         val token = authRepository.getAccessToken()
         if (!token.isNullOrBlank()) return "Bearer $token"
         val refreshed = authRepository.refreshAccessToken()

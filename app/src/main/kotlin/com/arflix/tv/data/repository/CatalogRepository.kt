@@ -23,7 +23,6 @@ import com.arflix.tv.util.ParsedCatalogUrl
 import com.arflix.tv.util.settingsDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -39,12 +38,9 @@ import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.security.MessageDigest
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class CatalogRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class CatalogRepository constructor(
+    private val context: Context,
     private val profileManager: ProfileManager,
     private val traktApi: TraktApi,
     private val okHttpClient: OkHttpClient,

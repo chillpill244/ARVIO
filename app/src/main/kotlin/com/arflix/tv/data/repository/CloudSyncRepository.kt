@@ -22,7 +22,6 @@ import com.arflix.tv.util.SKIP_PROFILE_SELECTION_KEY
 import com.arflix.tv.util.settingsDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -33,8 +32,6 @@ import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.max
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Shared cloud sync logic used by both SettingsViewModel (full push/pull on
@@ -44,9 +41,8 @@ import javax.inject.Singleton
  * push it to the server, and restore cloud state to local repositories.
  * UI-specific concerns (toasts, loading indicators) are left to the ViewModels.
  */
-@Singleton
-class CloudSyncRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class CloudSyncRepository constructor(
+    private val context: Context,
     private val authRepository: AuthRepository,
     private val profileRepository: ProfileRepository,
     private val profileManager: ProfileManager,

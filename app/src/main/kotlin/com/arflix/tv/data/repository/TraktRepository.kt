@@ -1,5 +1,7 @@
 package com.arflix.tv.data.repository
 
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 import android.content.Context
 
 import androidx.datastore.core.DataStore
@@ -18,7 +20,6 @@ import com.arflix.tv.util.Constants
 import com.arflix.tv.util.AppLogger
 import com.arflix.tv.util.settingsDataStore
 import com.arflix.tv.util.traktDataStore
-import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
@@ -49,13 +50,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import retrofit2.HttpException
+import io.ktor.client.plugins.ResponseException
 import java.text.Normalizer
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Inject
 import javax.inject.Provider
-import javax.inject.Singleton
 
 /**
  * Repository for Trakt.tv API interactions
@@ -68,21 +67,20 @@ import javax.inject.Singleton
  * - Mark watched/unwatched writes to Supabase first, then syncs to Trakt
  * - Continue Watching uses Supabase data augmented with Trakt progress API
  */
-@Singleton
-class TraktRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class TraktRepository constructor(
+    private val context: Context,
     private val traktApi: TraktApi,
     private val tmdbApi: TmdbApi,
     private val okHttpClient: OkHttpClient,
-    private val syncServiceProvider: Provider<TraktSyncService>,
     private val profileManager: ProfileManager
-) {
+) : org.koin.core.component.KoinComponent {
+    private val syncServiceProvider: kotlin.Lazy<TraktSyncService> = inject()
     private val gson = Gson()
     private val watchlistHttpClient by lazy { okHttpClient }
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
     // Lazy sync service to avoid circular dependency
-    private val syncService: TraktSyncService by lazy { syncServiceProvider.get() }
+    private val syncService: TraktSyncService by lazy { syncServiceProvider.value }
 
     // Supabase client for profile sync (lazy to avoid startup overhead)
     private val supabase: SupabaseClient by lazy {
@@ -335,12 +333,10 @@ class TraktRepository @Inject constructor(
                 saveToken(newToken)
                 tokenRefreshBackoffUntilMs = 0L
                 newToken.accessToken
-            } catch (e: HttpException) {
-                val code = e.code()
+            } catch (e: ResponseException) {
+                val code = e.response.status.value
                 if (code == 429 || code >= 500) {
-                    val retryAfterMs = e.response()
-                        ?.headers()
-                        ?.get("Retry-After")
+                    val retryAfterMs = e.response.headers["Retry-After"]
                         ?.toLongOrNull()
                         ?.times(1000L)
                         ?.coerceAtLeast(30_000L)
@@ -566,7 +562,7 @@ class TraktRepository @Inject constructor(
         } catch (e: java.io.IOException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
             emptySet()
-        } catch (e: retrofit2.HttpException) {
+        } catch (e: io.ktor.client.plugins.ResponseException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
             emptySet()
         } catch (e: Exception) {
@@ -598,7 +594,7 @@ class TraktRepository @Inject constructor(
         } catch (e: java.io.IOException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
             emptySet()
-        } catch (e: retrofit2.HttpException) {
+        } catch (e: io.ktor.client.plugins.ResponseException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
             emptySet()
         } catch (e: Exception) {
@@ -719,8 +715,8 @@ class TraktRepository @Inject constructor(
         while (attempt <= maxAttempts) {
             try {
                 return block()
-            } catch (e: HttpException) {
-                val code = e.code()
+            } catch (e: ResponseException) {
+                val code = e.response.status.value
                 val shouldRetry = code == 429 || code >= 500 || code == 401
                 if (code == 401) {
                     refreshTokenIfNeeded()
@@ -1282,8 +1278,8 @@ class TraktRepository @Inject constructor(
             // respect both hidden and reset progress sections.
             // Helper: detect HTTP 401/403 from Retrofit exceptions
             fun isAuthError(e: Exception): Boolean {
-                val httpEx = e as? retrofit2.HttpException ?: return false
-                return httpEx.code() in setOf(401, 403)
+                val httpEx = e as? io.ktor.client.plugins.ResponseException ?: return false
+                return httpEx.response.status.value in setOf(401, 403)
             }
             // Re-acquire auth if the original token was stale
             val authHolder = arrayOf(auth)
@@ -3085,7 +3081,7 @@ class TraktRepository @Inject constructor(
         } catch (e: java.io.IOException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
             emptyList()
-        } catch (e: retrofit2.HttpException) {
+        } catch (e: io.ktor.client.plugins.ResponseException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
             emptyList()
         } catch (e: Exception) {
@@ -3104,7 +3100,7 @@ class TraktRepository @Inject constructor(
         } catch (e: java.io.IOException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
             emptyList()
-        } catch (e: retrofit2.HttpException) {
+        } catch (e: io.ktor.client.plugins.ResponseException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
             emptyList()
         } catch (e: Exception) {
@@ -3205,7 +3201,7 @@ class TraktRepository @Inject constructor(
         } catch (e: java.io.IOException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
             emptyList()
-        } catch (e: retrofit2.HttpException) {
+        } catch (e: io.ktor.client.plugins.ResponseException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
             emptyList()
         } catch (e: Exception) {
@@ -3224,7 +3220,7 @@ class TraktRepository @Inject constructor(
         } catch (e: java.io.IOException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
             emptyList()
-        } catch (e: retrofit2.HttpException) {
+        } catch (e: io.ktor.client.plugins.ResponseException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
             emptyList()
         } catch (e: Exception) {
@@ -3243,7 +3239,7 @@ class TraktRepository @Inject constructor(
         } catch (e: java.io.IOException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
             emptyList()
-        } catch (e: retrofit2.HttpException) {
+        } catch (e: io.ktor.client.plugins.ResponseException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
             emptyList()
         } catch (e: Exception) {
@@ -3362,7 +3358,7 @@ class TraktRepository @Inject constructor(
         } catch (e: java.io.IOException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
             emptyList()
-        } catch (e: retrofit2.HttpException) {
+        } catch (e: io.ktor.client.plugins.ResponseException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
             emptyList()
         } catch (e: Exception) {
@@ -3384,7 +3380,7 @@ class TraktRepository @Inject constructor(
         } catch (e: java.io.IOException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
             emptyList()
-        } catch (e: retrofit2.HttpException) {
+        } catch (e: io.ktor.client.plugins.ResponseException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
             emptyList()
         } catch (e: Exception) {
@@ -3406,7 +3402,7 @@ class TraktRepository @Inject constructor(
         } catch (e: java.io.IOException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
             emptyList()
-        } catch (e: retrofit2.HttpException) {
+        } catch (e: io.ktor.client.plugins.ResponseException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
             emptyList()
         } catch (e: Exception) {
@@ -3428,7 +3424,7 @@ class TraktRepository @Inject constructor(
         } catch (e: java.io.IOException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
             emptyList()
-        } catch (e: retrofit2.HttpException) {
+        } catch (e: io.ktor.client.plugins.ResponseException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
             emptyList()
         } catch (e: Exception) {
@@ -3593,7 +3589,7 @@ class TraktRepository @Inject constructor(
         } catch (e: java.io.IOException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
             emptyList()
-        } catch (e: retrofit2.HttpException) {
+        } catch (e: io.ktor.client.plugins.ResponseException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
             emptyList()
         } catch (e: Exception) {
@@ -3612,7 +3608,7 @@ class TraktRepository @Inject constructor(
         } catch (e: java.io.IOException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
             emptyList()
-        } catch (e: retrofit2.HttpException) {
+        } catch (e: io.ktor.client.plugins.ResponseException) {
             com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
             emptyList()
         } catch (e: Exception) {

@@ -8,7 +8,6 @@ import android.util.Base64
 import com.arflix.tv.data.model.Profile
 import com.arflix.tv.util.Constants
 import com.arflix.tv.util.ProfileAvatarFiles
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -17,8 +16,6 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.MediaType.Companion.toMediaType
 import org.json.JSONObject
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlin.math.max
 import kotlin.math.min
 
@@ -27,9 +24,8 @@ data class ImportedProfileAvatar(
     val storagePath: String?
 )
 
-@Singleton
-class ProfileAvatarImageManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+class ProfileAvatarImageManager constructor(
+    private val context: Context,
     private val authRepository: AuthRepository
 ) {
     private val httpClient = OkHttpClient()

@@ -3,8 +3,9 @@ package com.arflix.tv.data.api
 import androidx.annotation.Keep
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import retrofit2.http.GET
-import retrofit2.http.Path
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.request.get
 
 /**
  * Jikan v4 is an unofficial REST API for MyAnimeList.net data.
@@ -19,9 +20,10 @@ import retrofit2.http.Path
  *
  * Docs: https://docs.api.jikan.moe/
  */
-interface JikanApi {
-    @GET("anime/{malId}")
-    suspend fun getAnime(@Path("malId") malId: Int): JikanAnimeResponse
+class JikanApi(private val client: HttpClient) {
+    suspend fun getAnime(malId: Int): JikanAnimeResponse {
+        return client.get("anime/$malId").body()
+    }
 }
 
 @Keep

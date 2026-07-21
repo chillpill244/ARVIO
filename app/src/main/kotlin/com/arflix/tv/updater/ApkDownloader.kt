@@ -4,11 +4,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class ApkDownloader @Inject constructor(
+class ApkDownloader constructor(
     private val okHttpClient: OkHttpClient
 ) {
     suspend fun download(

@@ -1,5 +1,7 @@
 package com.arflix.tv.data.repository
 
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 import android.content.Context
 import android.util.Base64
 import androidx.credentials.CredentialManager
@@ -22,7 +24,6 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
-import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.gotrue.Auth
@@ -59,9 +60,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import javax.inject.Inject
 import javax.inject.Provider
-import javax.inject.Singleton
 
 // authDataStore is defined in com.arflix.tv.util.DataStores to avoid duplicate DataStore instances
 
@@ -130,13 +129,12 @@ sealed class AuthState {
 /**
  * Repository for Supabase authentication and user profile management
  */
-@Singleton
-class AuthRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val okHttpClient: OkHttpClient,
-    private val traktRepositoryProvider: Provider<TraktRepository>,
-    private val cloudSyncRepositoryProvider: Provider<CloudSyncRepository>
-) {
+class AuthRepository constructor(
+    private val context: Context,
+    private val okHttpClient: OkHttpClient
+) : org.koin.core.component.KoinComponent {
+    private val traktRepositoryProvider: kotlin.Lazy<TraktRepository> = inject()
+    private val cloudSyncRepositoryProvider: kotlin.Lazy<CloudSyncRepository> = inject()
     private val TAG = "AuthRepository"
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val accountSyncMutationMutex = Mutex()
@@ -251,9 +249,9 @@ class AuthRepository @Inject constructor(
                     } catch (_: Exception) {
                         null
                     } ?: UserProfile(id = userId, email = email)
-                    traktRepositoryProvider.get().setUserId(userId)
+                    traktRepositoryProvider.value.setUserId(userId)
                     withTimeoutOrNull(1_500L) {
-                        traktRepositoryProvider.get().syncLocalTokensToProfileIfNeeded()
+                        traktRepositoryProvider.value.syncLocalTokensToProfileIfNeeded()
                     }
                     _userProfile.value = profile
                     _authState.value = AuthState.Authenticated(userId, email, profile)
@@ -542,7 +540,7 @@ class AuthRepository @Inject constructor(
      */
     suspend fun signOut() {
         // Push final state before signing out
-        try { cloudSyncRepositoryProvider.get().pushToCloud() } catch (_: Exception) {}
+        try { cloudSyncRepositoryProvider.value.pushToCloud() } catch (_: Exception) {}
 
         try {
             supabase.auth.signOut()
@@ -550,7 +548,7 @@ class AuthRepository @Inject constructor(
         }
 
         try {
-            traktRepositoryProvider.get().logout()
+            traktRepositoryProvider.value.logout()
         } catch (e: Exception) {
         }
 
@@ -576,13 +574,13 @@ class AuthRepository @Inject constructor(
 
             if (result != null) {
                 // Set user ID in Trakt repo for Supabase sync
-                traktRepositoryProvider.get().setUserId(userId)
+                traktRepositoryProvider.value.setUserId(userId)
 
                 // Load tokens from profile or sync local tokens if profile is empty
                 if (result.trakt_token != null) {
-                    traktRepositoryProvider.get().loadTokensFromProfile(result.trakt_token)
+                    traktRepositoryProvider.value.loadTokensFromProfile(result.trakt_token)
                 } else {
-                    traktRepositoryProvider.get().syncLocalTokensToProfileIfNeeded()
+                    traktRepositoryProvider.value.syncLocalTokensToProfileIfNeeded()
                 }
             }
 
@@ -607,8 +605,8 @@ class AuthRepository @Inject constructor(
                 )
 
             // Set user ID in Trakt repo for Supabase sync
-            traktRepositoryProvider.get().setUserId(userId)
-            traktRepositoryProvider.get().syncLocalTokensToProfileIfNeeded()
+            traktRepositoryProvider.value.setUserId(userId)
+            traktRepositoryProvider.value.syncLocalTokensToProfileIfNeeded()
         } catch (e: Exception) {
         }
 

@@ -9,7 +9,6 @@ import com.arflix.tv.util.AppLogger
 import com.arflix.tv.util.Constants
 import com.arflix.tv.util.detectDeviceType
 import com.arflix.tv.util.settingsDataStore
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -21,12 +20,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class AppUsageAnalyticsRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class AppUsageAnalyticsRepository constructor(
+    private val context: Context,
     private val okHttpClient: OkHttpClient,
     private val authRepository: AuthRepository,
     private val profileManager: ProfileManager

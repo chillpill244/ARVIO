@@ -15,8 +15,6 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Cloud sync WebSocket connection status for the UI indicator. */
 enum class CloudSyncStatus { CONNECTED, RECONNECTING, NOT_SIGNED_IN }
@@ -45,8 +43,7 @@ enum class CloudSyncStatus { CONNECTED, RECONNECTING, NOT_SIGNED_IN }
  * - Exposes a [syncStatusFlow] for the UI to show a connection indicator.
  * - Exponential backoff on reconnect (5s → 10s → 20s → 40s cap).
  */
-@Singleton
-class RealtimeSyncManager @Inject constructor(
+class RealtimeSyncManager constructor(
     private val cloudSyncRepository: CloudSyncRepository,
     private val authRepository: AuthRepository
 ) {

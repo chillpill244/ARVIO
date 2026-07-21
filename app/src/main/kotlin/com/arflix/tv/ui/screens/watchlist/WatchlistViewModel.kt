@@ -12,12 +12,10 @@ import com.arflix.tv.data.repository.MediaRepository
 import com.arflix.tv.data.repository.TraktRepository
 import com.arflix.tv.data.repository.WatchlistRepository
 import com.arflix.tv.util.AppLogger
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 enum class ToastType {
     SUCCESS, ERROR, INFO
@@ -35,8 +33,7 @@ data class WatchlistUiState(
     val allItems: List<MediaItem> get() = movies + series
 }
 
-@HiltViewModel
-class WatchlistViewModel @Inject constructor(
+class WatchlistViewModel constructor(
     private val watchlistRepository: WatchlistRepository,
     private val cloudSyncRepository: CloudSyncRepository,
     private val traktRepository: TraktRepository,

@@ -62,7 +62,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.androidx.compose.koinViewModel
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.arflix.tv.data.model.MediaItem
@@ -95,7 +95,7 @@ private enum class SeriesFocusZone {
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SeriesScreen(
-    viewModel: SeriesViewModel = hiltViewModel(),
+    viewModel: SeriesViewModel = koinViewModel(),
     currentProfile: Profile? = null,
     contentStartPadding: Dp = 0.dp,
     onNavigateToHome: () -> Unit = {},

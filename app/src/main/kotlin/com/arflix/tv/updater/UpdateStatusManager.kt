@@ -3,8 +3,6 @@ package com.arflix.tv.updater
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 sealed class UpdateStatus {
     object Idle : UpdateStatus()
@@ -17,8 +15,7 @@ sealed class UpdateStatus {
     data class Failure(val message: String, val update: AppUpdate? = null) : UpdateStatus()
 }
 
-@Singleton
-class UpdateStatusManager @Inject constructor() {
+class UpdateStatusManager constructor() {
     private val _status = MutableStateFlow<UpdateStatus>(UpdateStatus.Idle)
     val status: StateFlow<UpdateStatus> = _status.asStateFlow()
 
