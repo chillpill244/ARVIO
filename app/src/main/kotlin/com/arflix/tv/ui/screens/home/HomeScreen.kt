@@ -144,8 +144,8 @@ import com.arflix.tv.shared.util.LocalDeviceType
 import com.arflix.tv.ui.components.MediaContextMenu
 import com.arflix.tv.ui.components.rememberCardLayoutMode
 import com.arflix.tv.ui.components.rememberCatalogueRowLayoutMode
-import com.arflix.tv.ui.components.Toast
-import com.arflix.tv.ui.components.ToastType as ComponentToastType
+import com.arflix.tv.shared.components.Toast
+import com.arflix.tv.shared.components.ToastType as ComponentToastType
 import com.arflix.tv.shared.components.SidebarItem
 import com.arflix.tv.shared.components.topBarFocusedItem
 import com.arflix.tv.shared.components.topBarMaxIndex

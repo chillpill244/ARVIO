@@ -43,7 +43,7 @@ import com.arflix.tv.data.model.Profile
 import com.arflix.tv.navigation.Screen
 import com.arflix.tv.shared.components.AppTopBar
 import com.arflix.tv.shared.components.SidebarItem
-import com.arflix.tv.ui.components.SkeletonDetailsPage
+import com.arflix.tv.shared.components.SkeletonDetailsPage
 import com.arflix.tv.ui.components.TrailerPlayer
 import com.arflix.tv.shared.components.topBarFocusedItem
 import com.arflix.tv.shared.components.topBarMaxIndex

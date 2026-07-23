@@ -14,7 +14,7 @@ import com.arflix.tv.data.repository.TraktRepository
 import com.arflix.tv.data.repository.WatchHistoryRepository
 import com.arflix.tv.data.repository.WatchlistRepository
 import com.arflix.tv.data.repository.IptvRepository
-import com.arflix.tv.ui.components.ToastType
+import com.arflix.tv.shared.components.ToastType
 import com.arflix.tv.util.PinUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay

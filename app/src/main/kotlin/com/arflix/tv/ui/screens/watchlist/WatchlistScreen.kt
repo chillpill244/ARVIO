@@ -68,8 +68,8 @@ import com.arflix.tv.shared.components.LocalAppBottomBarPadding
 import com.arflix.tv.shared.components.LoadingIndicator
 import com.arflix.tv.shared.components.MediaCard
 import com.arflix.tv.shared.components.SidebarItem
-import com.arflix.tv.ui.components.Toast
-import com.arflix.tv.ui.components.ToastType as ComponentToastType
+import com.arflix.tv.shared.components.Toast
+import com.arflix.tv.shared.components.ToastType as ComponentToastType
 import com.arflix.tv.ui.components.rememberCardLayoutMode
 import com.arflix.tv.shared.components.topBarFocusedItem
 import com.arflix.tv.shared.components.topBarMaxIndex

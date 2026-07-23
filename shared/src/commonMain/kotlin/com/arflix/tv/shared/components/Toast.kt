@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -34,8 +34,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
+
+import androidx.compose.material3.Text
 import com.arflix.tv.shared.theme.ArflixTypography
 import kotlinx.coroutines.delay
 
@@ -46,7 +46,7 @@ enum class ToastType {
 /**
  * Toast notification component for temporary messages
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
+
 @Composable
 fun Toast(
     message: String,

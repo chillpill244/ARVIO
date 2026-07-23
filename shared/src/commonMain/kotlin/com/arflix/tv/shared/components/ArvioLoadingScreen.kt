@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -16,8 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
+
+import androidx.compose.material3.Text
 import com.arflix.tv.shared.theme.BackgroundOverlay
 import com.arflix.tv.shared.theme.Cyan
 import com.arflix.tv.shared.theme.ParticleCyan
@@ -38,7 +38,7 @@ import com.arflix.tv.shared.theme.TextSecondary
  * Removed heavy effects: blur, particles, multiple animated layers
  * Clean, lightweight design that runs smooth on TV hardware
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
+
 @Composable
 fun ArvioLoadingScreen(
     modifier: Modifier = Modifier,
@@ -146,7 +146,7 @@ fun SimpleLoadingDots(
 /**
  * Compact loading indicator for inline use - optimized for TV performance
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
+
 @Composable
 fun CompactLoadingIndicator(
     modifier: Modifier = Modifier,
@@ -179,7 +179,7 @@ fun CompactLoadingIndicator(
  * Overlay loading screen - optimized for TV performance
  * Removed blur, ring pulse, and sweep line effects
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
+
 @Composable
 fun LoadingOverlay(
     modifier: Modifier = Modifier,

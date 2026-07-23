@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -30,10 +30,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.tv.foundation.lazy.list.TvLazyRow
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 
-import com.arflix.tv.shared.components.SkeletonBox
-import com.arflix.tv.shared.components.shimmerBrush
 
 /**
  * Skeleton card for media items (poster style)
@@ -179,7 +178,7 @@ fun SkeletonCategoryRow(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Cards row
-        TvLazyRow(
+        LazyRow(
             contentPadding = PaddingValues(end = 48.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {

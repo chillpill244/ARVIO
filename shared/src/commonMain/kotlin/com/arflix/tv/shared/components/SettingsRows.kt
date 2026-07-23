@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,7 +26,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.arflix.tv.shared.theme.ArflixTypography
 import com.arflix.tv.shared.theme.Pink
 import com.arflix.tv.shared.theme.SuccessGreen
@@ -34,7 +33,6 @@ import com.arflix.tv.shared.theme.TextPrimary
 import com.arflix.tv.shared.theme.TextSecondary
 import com.arflix.tv.shared.skin.resolveAccentColor
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SettingsRow(
     icon: ImageVector,
@@ -117,7 +115,6 @@ fun SettingsRow(
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SettingsToggleRow(
     title: String,

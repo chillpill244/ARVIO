@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
 import com.arflix.tv.shared.components.FloatingParticles
 import com.arflix.tv.shared.components.WaveLoadingDots
@@ -26,8 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
+import androidx.compose.material3.Text
 import coil3.compose.AsyncImage
 import com.arflix.tv.shared.theme.appBackgroundDark
 import com.arflix.tv.shared.theme.BackgroundElevated
@@ -51,7 +50,6 @@ import com.arflix.tv.shared.theme.TextSecondary
  * Shows when loading video sources/buffering
  * Features blurred backdrop, animated play icon, and gradient effects
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun PlayerLoadingScreen(
     modifier: Modifier = Modifier,
@@ -278,7 +276,6 @@ fun PlayerLoadingScreen(
 /**
  * Compact buffering indicator for overlay on video
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun BufferingIndicator(
     modifier: Modifier = Modifier
@@ -336,7 +333,6 @@ fun BufferingIndicator(
 /**
  * Source loading screen - shown when resolving stream sources
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SourceLoadingScreen(
     modifier: Modifier = Modifier,

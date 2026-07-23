@@ -99,8 +99,8 @@ import androidx.compose.material3.Icon
 import com.arflix.tv.shared.components.LocalAppBottomBarPadding
 import com.arflix.tv.shared.components.LoadingIndicator
 import com.arflix.tv.ui.components.QrCodeImage
-import com.arflix.tv.ui.components.Toast
-import com.arflix.tv.ui.components.ToastType as ComponentToastType
+import com.arflix.tv.shared.components.Toast
+import com.arflix.tv.shared.components.ToastType as ComponentToastType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -142,8 +142,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.arflix.tv.ui.components.SettingsRow
-import com.arflix.tv.ui.components.SettingsToggleRow
+import com.arflix.tv.shared.components.SettingsRow
+import com.arflix.tv.shared.components.SettingsToggleRow
 import androidx.core.widget.doAfterTextChanged
 import org.koin.androidx.compose.koinViewModel
 import androidx.tv.material3.ExperimentalTvMaterial3Api

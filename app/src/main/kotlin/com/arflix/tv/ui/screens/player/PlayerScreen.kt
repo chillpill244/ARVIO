@@ -145,8 +145,8 @@ import com.arflix.tv.data.model.StreamSource
 import com.arflix.tv.data.model.Subtitle
 import com.arflix.tv.ui.components.KeepScreenOn
 import com.arflix.tv.shared.components.LoadingIndicator
-import com.arflix.tv.ui.components.Toast
-import com.arflix.tv.ui.components.ToastType
+import com.arflix.tv.shared.components.Toast
+import com.arflix.tv.shared.components.ToastType
 import com.arflix.tv.ui.components.NextEpisodeOverlay
 import com.arflix.tv.ui.components.StreamSelector
 import com.arflix.tv.shared.components.WaveLoadingDots

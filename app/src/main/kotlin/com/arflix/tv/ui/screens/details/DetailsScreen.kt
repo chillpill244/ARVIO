@@ -138,9 +138,9 @@ import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.model.Review
 import com.arflix.tv.network.OkHttpProvider
 import com.arflix.tv.ui.components.DownloadSheet
-import com.arflix.tv.ui.components.EpisodeContextMenu
+import com.arflix.tv.shared.components.EpisodeContextMenu
 import com.arflix.tv.ui.components.KeepScreenOn
-import com.arflix.tv.ui.components.SeasonContextMenu
+import com.arflix.tv.shared.components.SeasonContextMenu
 import com.arflix.tv.shared.components.LoadingIndicator
 import com.arflix.tv.shared.components.AppTopBar
 
@@ -150,14 +150,14 @@ import com.arflix.tv.ui.components.PersonModal
 import com.arflix.tv.shared.components.PosterCard
 import com.arflix.tv.ui.components.rememberCatalogueRowLayoutMode
 import com.arflix.tv.shared.components.SidebarItem
-import com.arflix.tv.ui.components.SkeletonDetailsPage
+import com.arflix.tv.shared.components.SkeletonDetailsPage
 import com.arflix.tv.ui.components.StreamSelector
 import com.arflix.tv.ui.components.TrailerPlayer
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.key.onKeyEvent
-import com.arflix.tv.ui.components.Toast
+import com.arflix.tv.shared.components.Toast
 import com.arflix.tv.shared.components.topBarFocusedItem
 import com.arflix.tv.shared.components.topBarMaxIndex
 import com.arflix.tv.ui.focus.arvioManualBringIntoViewBoundary
@@ -1112,9 +1112,9 @@ fun DetailsScreen(
             Toast(
                 message = message,
                 type = when (uiState.toastType) {
-                    com.arflix.tv.ui.screens.details.ToastType.SUCCESS -> com.arflix.tv.ui.components.ToastType.SUCCESS
-                    com.arflix.tv.ui.screens.details.ToastType.ERROR -> com.arflix.tv.ui.components.ToastType.ERROR
-                    com.arflix.tv.ui.screens.details.ToastType.INFO -> com.arflix.tv.ui.components.ToastType.INFO
+                    com.arflix.tv.ui.screens.details.ToastType.SUCCESS -> com.arflix.tv.shared.components.ToastType.SUCCESS
+                    com.arflix.tv.ui.screens.details.ToastType.ERROR -> com.arflix.tv.shared.components.ToastType.ERROR
+                    com.arflix.tv.ui.screens.details.ToastType.INFO -> com.arflix.tv.shared.components.ToastType.INFO
                 },
                 isVisible = true,
                 durationMs = if (uiState.toastType == com.arflix.tv.ui.screens.details.ToastType.ERROR) 8000 else 4000,

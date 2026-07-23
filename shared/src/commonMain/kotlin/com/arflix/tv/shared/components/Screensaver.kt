@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -27,8 +27,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
+
+import androidx.compose.material3.Text
 import com.arflix.tv.shared.theme.ArflixTypography
 import com.arflix.tv.shared.theme.Pink
 import kotlinx.coroutines.delay
@@ -42,7 +42,7 @@ import kotlin.random.Random
  * @param idleTimeoutMs Time in ms before screensaver activates (default 5 minutes)
  * @param onDismiss Callback when user interacts to dismiss
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
+
 @Composable
 fun Screensaver(
     isVisible: Boolean,

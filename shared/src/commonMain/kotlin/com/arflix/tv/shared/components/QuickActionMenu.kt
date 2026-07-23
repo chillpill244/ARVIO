@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -42,11 +42,9 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
+import androidx.compose.material3.Text
 import com.arflix.tv.shared.skin.ArvioSkin
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun QuickActionMenu(
     isVisible: Boolean,
@@ -144,7 +142,6 @@ fun QuickActionMenu(
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun QuickActionTile(
     icon: androidx.compose.ui.graphics.vector.ImageVector,

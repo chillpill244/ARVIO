@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 import com.arflix.tv.shared.components.LocalAppBottomBarPadding
 
 import androidx.compose.animation.AnimatedVisibility
@@ -57,8 +57,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
+import androidx.compose.material3.Text
 import com.arflix.tv.shared.theme.ArflixTypography
 import com.arflix.tv.shared.theme.BackgroundElevated
 import com.arflix.tv.shared.theme.Pink
@@ -96,7 +95,6 @@ object ContextActions {
 /**
  * Context menu popup for media items and episodes
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun ContextMenu(
     isVisible: Boolean,
@@ -359,7 +357,6 @@ fun ContextMenu(
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun ContextMenuItem(
     action: ContextAction,
