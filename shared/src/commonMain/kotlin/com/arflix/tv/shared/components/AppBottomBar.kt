@@ -58,6 +58,9 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Icon
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.hazeEffect
 
 data class BottomBarItem(
     val label: String,
@@ -115,6 +118,7 @@ fun AppBottomBar(
     activeDownloadProgress: Float? = null,
     hasAnyDownloads: Boolean = false,
     scrollState: AppBottomBarScrollState? = null,
+    hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     val labelFraction by animateFloatAsState(
@@ -131,14 +135,28 @@ fun AppBottomBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = horizontalPadding)
-            .padding(bottom = 12.dp),
+            .padding(bottom = 14.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(CircleShape)
-                .background(Color(0xFF1C1C1E).copy(alpha = 0.82f))
+                .then(
+                    if (hazeState != null) {
+                        Modifier.hazeEffect(
+                            state = hazeState,
+                            style = HazeStyle(
+                                backgroundColor = Color(0xFF1C1C1E),
+                                tint = null as dev.chrisbanes.haze.HazeTint?,
+                                blurRadius = 24.dp
+                            )
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
+                .background(Color(0xFF1C1C1E).copy(alpha = if (hazeState != null) 0.55f else 0.82f))
                 .padding(horizontal = 6.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
@@ -156,8 +174,8 @@ fun AppBottomBar(
                 }
                 val iconTint by animateColorAsState(
                     targetValue = when {
-                        isFocused || isSelected -> Color.White
-                        else -> Color.White.copy(alpha = 0.55f)
+                        isFocused || isSelected -> Color(0xFFF5F5F5)
+                        else -> Color(0xFF969CA3)
                     },
                     label = "iconTint"
                 )
@@ -169,7 +187,7 @@ fun AppBottomBar(
                 }
                 val iconScale = if (showAsDownloads || item.route == "search") 1.12f else 1f
                 val selectedBgColor by animateColorAsState(
-                    targetValue = if (isSelected) Color.White.copy(alpha = 0.12f) else Color.Transparent,
+                    targetValue = if (isSelected) Color(0xFFF5F5F5).copy(alpha = 0.15f) else Color.Transparent,
                     label = "bgColor"
                 )
 
@@ -177,7 +195,7 @@ fun AppBottomBar(
                     modifier = Modifier
                         .weight(1f)
                         .clip(CircleShape)
-                        .background(if (isFocused) Color.White.copy(alpha = 0.12f) else selectedBgColor)
+                        .background(if (isFocused) Color(0xFFF5F5F5).copy(alpha = 0.15f) else selectedBgColor)
                         .focusable()
                         .onFocusChanged { isFocused = it.isFocused }
                         .onKeyEvent { event ->
@@ -220,7 +238,7 @@ fun AppBottomBar(
                             contentDescription = label,
                             tint = iconTint,
                             modifier = Modifier
-                                .size(26.dp)
+                                .size(28.dp)
                                 .scale(iconScale)
                         )
                     }
@@ -234,7 +252,8 @@ fun AppBottomBar(
                             androidx.compose.material3.Text(
                                 text = label,
                                 color = iconTint,
-                                fontSize = 10.sp,
+                                fontSize = 11.sp,
+                                lineHeight = 14.sp,
                                 maxLines = 1,
                                 fontWeight = if (isSelected) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal
                             )
