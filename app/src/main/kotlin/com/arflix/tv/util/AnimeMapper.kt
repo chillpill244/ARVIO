@@ -910,7 +910,7 @@ class AnimeMapper constructor(
             var resolvedSequelId = sequelRel?.relationships?.destination?.data?.id?.toIntOrNull()
 
             // If the filtered request didn't work, try without filter and find sequel manually
-            if (resolvedSequelId == null && (response.data == null || response.data.isEmpty())) {
+            if (resolvedSequelId == null && response.data.isNullOrEmpty()) {
                 try {
                     val unfilteredUrl = "https://kitsu.io/api/edge/anime/$kitsuId/media-relationships?include=destination&page[limit]=20"
                     val unfilteredResponse = streamApi.getKitsuMediaRelationships(unfilteredUrl)

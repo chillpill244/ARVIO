@@ -1,12 +1,14 @@
 package com.arflix.tv.data.api
 
 import com.arflix.tv.data.model.IptvChannel
-import com.google.gson.Gson
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.util.concurrent.TimeUnit
+import kotlinx.serialization.json.Json
+import io.ktor.client.HttpClient
+import io.ktor.client.request.get
+import io.ktor.client.request.headers
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.encodeURLParameter
 
 /**
  * Stalker/Ministra portal API client for MAC-based IPTV authentication.
@@ -16,13 +18,9 @@ class StalkerApi(
     private val portalUrl: String,
     private val macAddress: String
 ) {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build()
-    private val gson = Gson()
+    private val client = HttpClient()
+    private val json = Json { ignoreUnknownKeys = true }
     private var token: String = ""
-    private var serialNumber: String = ""
 
     private val baseHeaders: Map<String, String>
         get() = mapOf(
@@ -37,11 +35,11 @@ class StalkerApi(
         return try {
             val url = "$portalUrl/server/load.php?type=stb&action=handshake&token=&JsHttpRequest=1-xml"
             val response = doGet(url)
-            val parsed = gson.fromJson(response, StalkerHandshakeResponse::class.java)
-            token = parsed?.js?.token ?: return false
+            val parsed = json.decodeFromString<StalkerHandshakeResponse>(response)
+            token = parsed.js?.token ?: return false
             true
         } catch (e: Exception) {
-            System.err.println("[Stalker] Handshake failed: ${e.message}")
+            println("[Stalker] Handshake failed: ${e.message}")
             false
         }
     }
@@ -62,8 +60,8 @@ class StalkerApi(
             // Get genres first for group names
             val genreUrl = "$portalUrl/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
             val genreResponse = doGet(genreUrl)
-            val genres = gson.fromJson(genreResponse, StalkerGenreResponse::class.java)
-            val genreMap = genres?.js?.mapNotNull { g -> g.id?.let { it to (g.title ?: "Unknown") } }?.toMap() ?: emptyMap()
+            val genres = json.decodeFromString<StalkerGenreResponse>(genreResponse)
+            val genreMap = genres.js?.mapNotNull { g -> g.id?.let { it to (g.title ?: "Unknown") } }?.toMap() ?: emptyMap()
 
             // Get all channels page by page
             var page = 1
@@ -71,8 +69,8 @@ class StalkerApi(
             while (hasMore) {
                 val url = "$portalUrl/server/load.php?type=itv&action=get_all_channels&p=$page&JsHttpRequest=1-xml"
                 val response = doGet(url)
-                val parsed = gson.fromJson(response, StalkerChannelResponse::class.java)
-                val data = parsed?.js?.data ?: break
+                val parsed = json.decodeFromString<StalkerChannelResponse>(response)
+                val data = parsed.js?.data ?: break
 
                 for (ch in data) {
                     val streamCmd = ch.cmd ?: continue
@@ -94,7 +92,7 @@ class StalkerApi(
                 page++
             }
         } catch (e: Exception) {
-            System.err.println("[Stalker] Get channels failed: ${e.message}")
+            println("[Stalker] Get channels failed: ${e.message}")
         }
         return channels
     }
@@ -102,55 +100,61 @@ class StalkerApi(
     /** Resolve a channel's cmd to a playable stream URL */
     suspend fun resolveStreamUrl(cmd: String): String? {
         return try {
-            val encodedCmd = java.net.URLEncoder.encode(cmd, "UTF-8")
+            val encodedCmd = cmd.encodeURLParameter()
             val url = "$portalUrl/server/load.php?type=itv&action=create_link&cmd=$encodedCmd&forced_storage=undefined&disable_ad=0&JsHttpRequest=1-xml"
             val response = doGet(url)
-            val parsed = gson.fromJson(response, StalkerLinkResponse::class.java)
-            parsed?.js?.cmd?.replace("ffmpeg ", "")?.trim()
+            val parsed = json.decodeFromString<StalkerLinkResponse>(response)
+            parsed.js?.cmd?.replace("ffmpeg ", "")?.trim()
         } catch (e: Exception) {
-            System.err.println("[Stalker] Resolve stream failed: ${e.message}")
+            println("[Stalker] Resolve stream failed: ${e.message}")
             null
         }
     }
 
-    private fun doGet(url: String): String {
-        val builder = Request.Builder().url(url)
-        baseHeaders.forEach { (k, v) -> builder.addHeader(k, v) }
-        val response = client.newCall(builder.build()).execute()
-        return response.body?.string() ?: ""
+    private suspend fun doGet(url: String): String {
+        return client.get(url) {
+            headers {
+                baseHeaders.forEach { (k, v) -> append(k, v) }
+            }
+        }.bodyAsText()
     }
 
     // ── Response models ──
 
-@Serializable
-    data class StalkerHandshakeResponse(val js: StalkerToken?)
-@Serializable
-    data class StalkerToken(val token: String?)
+    @Serializable
+    data class StalkerHandshakeResponse(val js: StalkerToken? = null)
+    
+    @Serializable
+    data class StalkerToken(val token: String? = null)
 
-@Serializable
-    data class StalkerGenreResponse(val js: List<StalkerGenre>?)
-@Serializable
-    data class StalkerGenre(val id: String?, val title: String?)
+    @Serializable
+    data class StalkerGenreResponse(val js: List<StalkerGenre>? = null)
+    
+    @Serializable
+    data class StalkerGenre(val id: String? = null, val title: String? = null)
 
-@Serializable
-    data class StalkerChannelResponse(val js: StalkerChannelData?)
-@Serializable
+    @Serializable
+    data class StalkerChannelResponse(val js: StalkerChannelData? = null)
+    
+    @Serializable
     data class StalkerChannelData(
-        val data: List<StalkerChannel>?,
-        @SerialName("total_items") val totalItems: Int?,
-        @SerialName("max_page_items") val maxPageItems: Int?
+        val data: List<StalkerChannel>? = null,
+        @SerialName("total_items") val totalItems: Int? = null,
+        @SerialName("max_page_items") val maxPageItems: Int? = null
     )
-@Serializable
+    
+    @Serializable
     data class StalkerChannel(
-        val id: Int?,
-        val name: String?,
-        val logo: String?,
-        val cmd: String?,
-        @SerialName("tv_genre_id") val tvGenreId: String?
+        val id: Int? = null,
+        val name: String? = null,
+        val logo: String? = null,
+        val cmd: String? = null,
+        @SerialName("tv_genre_id") val tvGenreId: String? = null
     )
 
-@Serializable
-    data class StalkerLinkResponse(val js: StalkerLink?)
-@Serializable
-    data class StalkerLink(val cmd: String?)
+    @Serializable
+    data class StalkerLinkResponse(val js: StalkerLink? = null)
+    
+    @Serializable
+    data class StalkerLink(val cmd: String? = null)
 }

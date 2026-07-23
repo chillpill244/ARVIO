@@ -1,6 +1,5 @@
 package com.arflix.tv.data.api
 
-import androidx.annotation.Keep
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import io.ktor.client.HttpClient
@@ -26,13 +25,11 @@ class JikanApi(private val client: HttpClient) {
     }
 }
 
-@Keep
 @Serializable
 data class JikanAnimeResponse(
     @SerialName("data") val data: JikanAnimeData?
 )
 
-@Keep
 @Serializable
 data class JikanAnimeData(
     @SerialName("mal_id") val malId: Int?,

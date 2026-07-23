@@ -1,6 +1,5 @@
 package com.arflix.tv.data.api
 
-import androidx.annotation.Keep
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import io.ktor.client.HttpClient
@@ -25,7 +24,6 @@ class IntroDbApi(private val client: HttpClient) {
     }
 }
 
-@Keep
 @Serializable
 data class IntroDbSegmentsResponse(
     @SerialName("imdb_id") val imdbId: String? = null,
@@ -36,7 +34,6 @@ data class IntroDbSegmentsResponse(
     @SerialName("outro") val outro: IntroDbSegment? = null
 )
 
-@Keep
 @Serializable
 data class IntroDbSegment(
     @SerialName("start_ms") val startMs: Long = 0L,
@@ -65,14 +62,12 @@ class AniSkipApi(private val client: HttpClient) {
     }
 }
 
-@Keep
 @Serializable
 data class AniSkipResponse(
     @SerialName("found") val found: Boolean = false,
     @SerialName("results") val results: List<AniSkipResult>? = null
 )
 
-@Keep
 @Serializable
 data class AniSkipResult(
     @SerialName("interval") val interval: AniSkipInterval,
@@ -80,7 +75,6 @@ data class AniSkipResult(
     @SerialName("skipId") val skipId: String? = null
 )
 
-@Keep
 @Serializable
 data class AniSkipInterval(
     @SerialName("startTime") val startTime: Double,
@@ -102,7 +96,6 @@ class ArmApi(private val client: HttpClient) {
     }
 }
 
-@Keep
 @Serializable
 data class ArmEntry(
     @SerialName("myanimelist") val myanimelist: Int? = null
