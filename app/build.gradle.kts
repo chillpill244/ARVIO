@@ -181,6 +181,7 @@ ksp {
 }
 
 dependencies {
+    implementation("dev.chrisbanes.haze:haze:1.2.0")
     // Core library desugaring for Java 8+ APIs
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 

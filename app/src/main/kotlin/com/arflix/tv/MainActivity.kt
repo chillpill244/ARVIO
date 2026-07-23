@@ -58,6 +58,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.arflix.tv.ui.components.AppBottomBar
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -618,6 +620,7 @@ fun ArflixApp(
         !currentRoute.contains("login")
 
     val bottomBarScrollState = rememberAppBottomBarScrollState()
+    val bottomBarHazeState = remember { HazeState() }
 
     CompositionLocalProvider(
         LocalAppBottomBarPadding provides if (showBottomBar) 72.dp else 0.dp
@@ -646,7 +649,12 @@ fun ArflixApp(
             // becomes 0 when the player hides the bars.
             .then(if (isMobile) Modifier.systemBarsPadding() else Modifier)
     ) {
-        AppNavigation(
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(state = bottomBarHazeState)
+        ) {
+            AppNavigation(
                 navController = navController,
                 startDestination = startDestination,
                 preloadedCategories = preloadedCategories,
@@ -671,6 +679,7 @@ fun ArflixApp(
                 },
                 onExitApp = onExitApp,
             )
+        }
         if (showBottomBar) {
             AppBottomBar(
                 currentRoute = currentRoute,
@@ -683,6 +692,7 @@ fun ArflixApp(
                 activeDownloadProgress = activeDownloadProgress,
                 hasAnyDownloads = hasAnyDownloads,
                 scrollState = bottomBarScrollState,
+                hazeState = bottomBarHazeState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
