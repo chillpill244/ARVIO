@@ -73,7 +73,7 @@ import com.arflix.tv.data.model.Profile
 import com.arflix.tv.data.model.ProfileColors
 import com.arflix.tv.ui.components.AvatarIcon
 import com.arflix.tv.ui.components.AvatarRegistry
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 import com.arflix.tv.util.ProfileAvatarFiles
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest

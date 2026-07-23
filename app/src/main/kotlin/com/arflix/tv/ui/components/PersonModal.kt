@@ -1,4 +1,6 @@
 package com.arflix.tv.ui.components
+import com.arflix.tv.shared.util.LocalDeviceType
+import com.arflix.tv.shared.util.KmpDateUtils
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -81,7 +83,7 @@ import java.util.Locale
 private fun formatBirthday(dateStr: String?): String {
     if (dateStr.isNullOrEmpty()) return ""
     return try {
-        com.arflix.tv.util.KmpDateUtils.formatMediumDate(dateStr)
+        com.arflix.tv.shared.util.KmpDateUtils.formatMediumDate(dateStr)
     } catch (e: Exception) {
         dateStr
     }
@@ -186,7 +188,7 @@ fun PersonModal(
                     LoadingIndicator(color = Pink, size = 64.dp)
                 }
             } else if (person != null) {
-                val isMobile = com.arflix.tv.util.LocalDeviceType.current.isTouchDevice()
+                val isMobile = com.arflix.tv.shared.util.LocalDeviceType.current.isTouchDevice()
                 if (isMobile) {
                     MobilePersonContent(
                         person = person,
@@ -268,10 +270,11 @@ fun PersonModal(
                             )
                         }
 
-                        if (person.placeOfBirth != null) {
+                        val birthPlace1 = person.placeOfBirth
+                        if (birthPlace1 != null) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = person.placeOfBirth,
+                                text = birthPlace1,
                                 style = ArflixTypography.caption.copy(fontSize = 11.sp),
                                 color = TextSecondary.copy(alpha = 0.5f),
                                 textAlign = TextAlign.Center,
@@ -450,10 +453,11 @@ private fun MobilePersonContent(
                 )
             }
 
-            if (person.placeOfBirth != null) {
+            val birthPlace2 = person.placeOfBirth
+            if (birthPlace2 != null) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = person.placeOfBirth,
+                    text = birthPlace2,
                     style = ArflixTypography.caption.copy(fontSize = 11.sp),
                     color = TextSecondary.copy(alpha = 0.5f),
                     textAlign = TextAlign.Center,

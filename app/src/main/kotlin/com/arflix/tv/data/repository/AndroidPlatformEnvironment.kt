@@ -7,7 +7,7 @@ import coil3.imageLoader
 import coil3.request.ImageRequest
 import com.arflix.tv.updater.ApkInstaller
 import com.arflix.tv.util.DeviceIpAddress
-import com.arflix.tv.util.DeviceType
+import com.arflix.tv.shared.util.DeviceType
 import com.arflix.tv.util.detectDeviceType
 import java.io.File
 

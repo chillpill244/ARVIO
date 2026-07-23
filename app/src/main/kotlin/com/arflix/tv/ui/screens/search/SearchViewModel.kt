@@ -1,4 +1,5 @@
 package com.arflix.tv.ui.screens.search
+import com.arflix.tv.shared.util.KmpDateUtils
 
 import androidx.lifecycle.ViewModel
 import com.arflix.tv.data.repository.PreferenceStore
@@ -121,9 +122,9 @@ class SearchViewModel constructor(
                 val lang = state.selectedCountry?.code
                 val isAnime = type == DiscoverType.ANIME
 
-                val today = com.arflix.tv.util.KmpDateUtils.getIsoDateDaysAgo(0)
-                val threeMonthsAgo = com.arflix.tv.util.KmpDateUtils.getIsoDateDaysAgo(90)
-                val oneYearAgo = com.arflix.tv.util.KmpDateUtils.getIsoDateYearsAgo(1)
+                val today = com.arflix.tv.shared.util.KmpDateUtils.getIsoDateDaysAgo(0)
+                val threeMonthsAgo = com.arflix.tv.shared.util.KmpDateUtils.getIsoDateDaysAgo(90)
+                val oneYearAgo = com.arflix.tv.shared.util.KmpDateUtils.getIsoDateYearsAgo(1)
 
                 val categories = withContext(Dispatchers.IO) {
                     coroutineScope {

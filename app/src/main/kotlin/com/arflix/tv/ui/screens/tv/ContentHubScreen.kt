@@ -1,4 +1,6 @@
 package com.arflix.tv.ui.screens.tv
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -34,13 +36,13 @@ import org.koin.androidx.compose.koinViewModel
 import androidx.tv.material3.Text
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.Profile
-import com.arflix.tv.ui.components.AppTopBarContentTopInset
+
 import com.arflix.tv.ui.screens.movies.MoviesScreen
 import com.arflix.tv.ui.screens.series.SeriesScreen
 import com.arflix.tv.ui.screens.tv.shared.ContentHubTab
 import com.arflix.tv.ui.screens.tv.shared.ContentMenuPanel
 import com.arflix.tv.shared.theme.ArflixTypography
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 
 @Composable
 fun ContentHubScreen(

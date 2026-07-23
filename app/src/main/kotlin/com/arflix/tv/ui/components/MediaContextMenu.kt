@@ -1,4 +1,5 @@
 package com.arflix.tv.ui.components
+import com.arflix.tv.shared.components.LocalAppBottomBarPadding
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -60,7 +61,7 @@ import com.arflix.tv.shared.theme.BackgroundElevated
 import com.arflix.tv.shared.theme.Pink
 import com.arflix.tv.shared.theme.TextPrimary
 import com.arflix.tv.shared.theme.TextSecondary
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import com.arflix.tv.R

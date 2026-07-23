@@ -7,20 +7,9 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 
-enum class DeviceType {
-    TV,
-    TABLET,
-    PHONE;
-
-    fun isTouchDevice(): Boolean = this == PHONE || this == TABLET
-
-    fun isMobile(): Boolean = isTouchDevice()
-}
-
-val LocalDeviceType = compositionLocalOf { DeviceType.TV }
-
-/** True if the physical device has a touchscreen. Use this to decide navigation style. */
-val LocalHasTouchScreen = compositionLocalOf { true }
+import com.arflix.tv.shared.util.DeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalHasTouchScreen
 
 fun deviceHasTouchScreen(context: Context): Boolean {
     return context.packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)

@@ -1,4 +1,5 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.util.KmpDateUtils
 
 import com.arflix.tv.data.api.SupabaseApi
 import com.arflix.tv.data.model.MediaType
@@ -170,7 +171,7 @@ class WatchHistoryRepository constructor(
         // trigger a redundant Home Continue Watching refresh. See issue #91 fix.
         if (saved) {
             val profileId = currentProfileId()
-            val nowIso = com.arflix.tv.util.KmpDateUtils.nowIsoString()
+            val nowIso = com.arflix.tv.shared.util.KmpDateUtils.nowIsoString()
             val cachedEntry = entry.copy(
                 paused_at = nowIso,
                 updated_at = nowIso

@@ -1,4 +1,6 @@
 package com.arflix.tv.ui.screens.watchlist
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
 
 import android.os.SystemClock
 import androidx.compose.animation.animateColorAsState
@@ -59,25 +61,25 @@ import androidx.tv.material3.Text
 import com.arflix.tv.data.db.DownloadEntity
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
-import com.arflix.tv.ui.components.AppTopBar
-import com.arflix.tv.ui.components.AppTopBarContentTopInset
+import com.arflix.tv.shared.components.AppTopBar
+
 import com.arflix.tv.ui.components.CardLayoutMode
-import com.arflix.tv.ui.components.LocalAppBottomBarPadding
+import com.arflix.tv.shared.components.LocalAppBottomBarPadding
 import com.arflix.tv.ui.components.LoadingIndicator
-import com.arflix.tv.ui.components.MediaCard
-import com.arflix.tv.ui.components.SidebarItem
+import com.arflix.tv.shared.components.MediaCard
+import com.arflix.tv.shared.components.SidebarItem
 import com.arflix.tv.ui.components.Toast
 import com.arflix.tv.ui.components.ToastType as ComponentToastType
 import com.arflix.tv.ui.components.rememberCardLayoutMode
-import com.arflix.tv.ui.components.topBarFocusedItem
-import com.arflix.tv.ui.components.topBarMaxIndex
+import com.arflix.tv.shared.components.topBarFocusedItem
+import com.arflix.tv.shared.components.topBarMaxIndex
 import com.arflix.tv.ui.screens.downloads.DownloadsTab
 import com.arflix.tv.ui.screens.downloads.DownloadsViewModel
 import com.arflix.tv.shared.theme.ArflixTypography
 import com.arflix.tv.shared.theme.Pink
 import com.arflix.tv.shared.theme.TextPrimary
 import com.arflix.tv.shared.theme.appBackgroundDark
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 import com.arflix.tv.util.tr
 import kotlinx.coroutines.delay
 
@@ -280,7 +282,12 @@ fun WatchlistScreen(
                 selectedItem = SidebarItem.WATCHLIST,
                 isFocused = isSidebarFocused,
                 focusedIndex = sidebarFocusIndex,
-                profile = currentProfile
+                hasProfile = currentProfile != null,
+                profileContent = {
+                    if (currentProfile != null) {
+                        com.arflix.tv.ui.components.ProfileAvatarVisual(profile = currentProfile)
+                    }
+                }
             )
         }
 

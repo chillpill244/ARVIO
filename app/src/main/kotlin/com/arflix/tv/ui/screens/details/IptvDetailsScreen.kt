@@ -41,14 +41,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.model.Profile
 import com.arflix.tv.navigation.Screen
-import com.arflix.tv.ui.components.AppTopBar
-import com.arflix.tv.ui.components.SidebarItem
+import com.arflix.tv.shared.components.AppTopBar
+import com.arflix.tv.shared.components.SidebarItem
 import com.arflix.tv.ui.components.SkeletonDetailsPage
 import com.arflix.tv.ui.components.TrailerPlayer
-import com.arflix.tv.ui.components.topBarFocusedItem
-import com.arflix.tv.ui.components.topBarMaxIndex
+import com.arflix.tv.shared.components.topBarFocusedItem
+import com.arflix.tv.shared.components.topBarMaxIndex
 import com.arflix.tv.shared.theme.appBackgroundDark
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 import kotlinx.coroutines.launch
 
 @Composable
@@ -379,7 +379,12 @@ fun IptvDetailsScreen(
                 selectedItem = SidebarItem.HOME,
                 isFocused = isSidebarFocused,
                 focusedIndex = sidebarFocusIndex,
-                profile = currentProfile
+                hasProfile = currentProfile != null,
+                profileContent = {
+                    if (currentProfile != null) {
+                        com.arflix.tv.ui.components.ProfileAvatarVisual(profile = currentProfile)
+                    }
+                }
             )
         }
 

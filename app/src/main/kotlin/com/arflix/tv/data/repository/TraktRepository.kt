@@ -1,4 +1,5 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.util.KmpDateUtils
 
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -179,7 +180,7 @@ class TraktRepository constructor(
     suspend fun getTokenExpirationDate(): String? {
         val expiresAt = getTokenExpiration() ?: return null
         val expirationDateMs = expiresAt * 1000L
-        return com.arflix.tv.util.KmpDateUtils.formatSyncTime(expirationDateMs).substringBefore(" at")
+        return com.arflix.tv.shared.util.KmpDateUtils.formatSyncTime(expirationDateMs).substringBefore(" at")
     }
 
     suspend fun getDeviceCode(): TraktDeviceCode {
@@ -2252,7 +2253,7 @@ class TraktRepository constructor(
 
     private fun parseIso8601(dateString: String): Long {
         return try {
-            com.arflix.tv.util.KmpDateUtils.parseIsoDate(dateString)
+            com.arflix.tv.shared.util.KmpDateUtils.parseIsoDate(dateString)
         } catch (e: Exception) {
             0L
         }
@@ -2668,7 +2669,7 @@ class TraktRepository constructor(
 
     private fun parseTraktListedAtMs(value: String?): Long {
         if (value.isNullOrBlank()) return 0L
-        return com.arflix.tv.util.KmpDateUtils.parseIsoDate(value)
+        return com.arflix.tv.shared.util.KmpDateUtils.parseIsoDate(value)
     }
 
     private suspend fun resolveWatchlistMovieTmdbId(movie: TraktMovieInfo): Int? {
@@ -3963,8 +3964,8 @@ private fun isAlreadyAiredDate(rawDate: String?): Boolean {
     val value = rawDate?.trim().orEmpty()
     if (value.isEmpty()) return false
     return try {
-        val parsedTime = com.arflix.tv.util.KmpDateUtils.parseIsoDate(value)
-        parsedTime != 0L && parsedTime <= com.arflix.tv.util.KmpDateUtils.nowEpochMillis()
+        val parsedTime = com.arflix.tv.shared.util.KmpDateUtils.parseIsoDate(value)
+        parsedTime != 0L && parsedTime <= com.arflix.tv.shared.util.KmpDateUtils.nowEpochMillis()
     } catch (_: Exception) {
         false
     }
@@ -4022,7 +4023,7 @@ private data class ContinueWatchingCandidate(
  */
 private fun formatDateString(dateStr: String?): String {
     if (dateStr.isNullOrEmpty()) return ""
-    return com.arflix.tv.util.KmpDateUtils.formatLongDate(dateStr)
+    return com.arflix.tv.shared.util.KmpDateUtils.formatLongDate(dateStr)
 }
 
 private fun buildEpisodeKey(

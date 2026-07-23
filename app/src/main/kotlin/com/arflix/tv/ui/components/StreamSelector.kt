@@ -1,4 +1,5 @@
 package com.arflix.tv.ui.components
+import com.arflix.tv.shared.components.LocalAppBottomBarPadding
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -76,7 +77,7 @@ import androidx.tv.material3.Text
 import com.arflix.tv.data.model.StreamSource
 import com.arflix.tv.ui.focus.arvioDpadFocusGroup
 import com.arflix.tv.shared.theme.ArflixTypography
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 import com.arflix.tv.shared.theme.Pink
 import com.arflix.tv.shared.theme.TextPrimary
 import com.arflix.tv.shared.theme.TextSecondary
@@ -682,7 +683,7 @@ fun StreamSelector(
                     } else {
                         LazyColumn(
                             state = mobileListState,
-                            contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp + com.arflix.tv.ui.components.LocalAppBottomBarPadding.current),
+                            contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp + com.arflix.tv.shared.components.LocalAppBottomBarPadding.current),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier
                                 .fillMaxSize()
@@ -853,7 +854,8 @@ private fun presentSource(stream: StreamSource): SourcePresentation {
         addonLower.contains("alldebrid") ||
         searchBlob.contains("magnet:", ignoreCase = true)
 
-    val hasDirectHttpUrl = !stream.url.isNullOrBlank() && stream.url.startsWith("http", true)
+    val streamUrl = stream.url
+    val hasDirectHttpUrl = !streamUrl.isNullOrBlank() && streamUrl.startsWith("http", true)
     val isIptvVod = stream.addonId == "iptv_xtream_vod" || addonLower.contains("iptv vod")
 
     val iptvLanguageScore = if (isIptvVod) {

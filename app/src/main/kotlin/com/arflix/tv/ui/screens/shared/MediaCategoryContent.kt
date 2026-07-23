@@ -61,10 +61,10 @@ import androidx.compose.animation.core.tween
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.ui.components.CardLayoutMode
 import com.arflix.tv.ui.components.LoadingIndicator
-import com.arflix.tv.ui.components.MediaCard
-import com.arflix.tv.ui.components.MediaCategoryRail
+import com.arflix.tv.shared.components.MediaCard
+import com.arflix.tv.shared.components.MediaCategoryRail
 import com.arflix.tv.ui.components.TopBarClock
-import com.arflix.tv.ui.components.LocalAppBottomBarPadding
+import com.arflix.tv.shared.components.LocalAppBottomBarPadding
 import androidx.compose.material.icons.filled.LiveTv
 import com.arflix.tv.shared.theme.ArflixTypography
 import com.arflix.tv.shared.theme.BackgroundCard

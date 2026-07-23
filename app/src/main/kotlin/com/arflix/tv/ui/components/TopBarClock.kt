@@ -1,4 +1,5 @@
 package com.arflix.tv.ui.components
+import com.arflix.tv.shared.util.KmpDateUtils
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -122,5 +123,5 @@ private fun ProfileIndicator(
 
 private fun getCurrentTime(context: Context): String {
     val timeFormat = DateFormat.getTimeFormat(context)
-    return timeFormat.format(com.arflix.tv.util.KmpDateUtils.nowEpochMillis())
+    return timeFormat.format(com.arflix.tv.shared.util.KmpDateUtils.nowEpochMillis())
 }

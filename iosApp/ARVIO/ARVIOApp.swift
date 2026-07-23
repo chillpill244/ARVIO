@@ -6,12 +6,8 @@ struct ARVIOApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environmentObject(appState)
-                .preferredColorScheme(.dark)
-                .task {
-                    await appState.bootstrap()
-                }
+            ComposeView()
+                .ignoresSafeArea()
         }
     }
 }

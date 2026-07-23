@@ -1,4 +1,5 @@
 package com.arflix.tv.ui.screens.home
+import com.arflix.tv.shared.util.KmpDateUtils
 
 import android.app.ActivityManager
 import com.arflix.tv.util.settingsDataStore
@@ -37,7 +38,7 @@ import com.arflix.tv.data.repository.WatchHistoryRepository
 import com.arflix.tv.data.repository.WatchlistRepository
 import com.arflix.tv.util.AppLogger
 import com.arflix.tv.util.Constants
-import com.arflix.tv.util.DeviceType
+import com.arflix.tv.shared.util.DeviceType
 import com.arflix.tv.util.LAST_APP_LANGUAGE_KEY
 import com.arflix.tv.util.detectDeviceType
 import kotlinx.coroutines.Job
@@ -293,7 +294,7 @@ class HomeViewModel constructor(
         fun parse(value: String?): Long {
             if (value.isNullOrBlank()) return 0L
             return try {
-                com.arflix.tv.util.KmpDateUtils.parseIsoDate(value)
+                com.arflix.tv.shared.util.KmpDateUtils.parseIsoDate(value)
             } catch (_: Exception) {
                 0L
             }
@@ -530,8 +531,8 @@ class HomeViewModel constructor(
         val value = rawAirDate.trim()
         if (value.isEmpty()) return true
         return try {
-            val parsedMs = com.arflix.tv.util.KmpDateUtils.parseIsoDate(value)
-            parsedMs <= com.arflix.tv.util.KmpDateUtils.nowEpochMillis()
+            val parsedMs = com.arflix.tv.shared.util.KmpDateUtils.parseIsoDate(value)
+            parsedMs <= com.arflix.tv.shared.util.KmpDateUtils.nowEpochMillis()
         } catch (_: Exception) {
             true
         }
@@ -610,15 +611,16 @@ class HomeViewModel constructor(
         val nowProgram = epg?.now
         val nextProgram = epg?.next ?: epg?.later ?: epg?.upcoming?.firstOrNull()
         fun fmtRange(p: com.arflix.tv.data.model.IptvProgram): String {
-            val s = com.arflix.tv.util.KmpDateUtils.formatTime24h(p.startUtcMillis)
-            val e = com.arflix.tv.util.KmpDateUtils.formatTime24h(p.endUtcMillis)
+            val s = com.arflix.tv.shared.util.KmpDateUtils.formatTime24h(p.startUtcMillis)
+            val e = com.arflix.tv.shared.util.KmpDateUtils.formatTime24h(p.endUtcMillis)
             return "$s - $e"
         }
         val overviewParts = mutableListOf<String>()
         if (nowProgram != null) {
             overviewParts.add("Now: ${fmtRange(nowProgram)}  ${nowProgram.title}")
-            if (!nowProgram.description.isNullOrBlank()) {
-                overviewParts.add(nowProgram.description)
+            val desc = nowProgram.description
+            if (!desc.isNullOrBlank()) {
+                overviewParts.add(desc)
             }
         }
         if (nextProgram != null) {

@@ -18,8 +18,8 @@ data class Profile @OptIn(ExperimentalUuidApi::class) constructor(
     val isKidsProfile: Boolean = false,
     val pin: String? = null, // 4-5 digit PIN, null if not set
     val isLocked: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis(),
-    val lastUsedAt: Long = System.currentTimeMillis()
+    val createdAt: Long = com.arflix.tv.shared.util.currentTimeMillis(),
+    val lastUsedAt: Long = com.arflix.tv.shared.util.currentTimeMillis()
 )
 
 /**

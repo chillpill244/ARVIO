@@ -1,6 +1,6 @@
-@file:OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -36,8 +36,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
+import androidx.compose.material3.Text
 import com.arflix.tv.shared.theme.ArflixTypography
 import com.arflix.tv.shared.theme.TextSecondary
 

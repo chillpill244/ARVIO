@@ -1,5 +1,7 @@
 package com.arflix.tv.data.model
 
+import kotlin.jvm.JvmInline
+
 import kotlinx.serialization.Serializable
 
 
@@ -68,7 +70,7 @@ data class IptvSnapshot(
     val hiddenGroups: List<String> = emptyList(),
     val groupOrder: List<String> = emptyList(),
     val epgWarning: String? = null,
-    val loadedAt: Long = System.currentTimeMillis()
+    val loadedAt: Long = com.arflix.tv.shared.util.currentTimeMillis()
 )
 
 /**

@@ -1,4 +1,8 @@
 package com.arflix.tv.ui.screens.details
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
+import com.arflix.tv.shared.components.LocalAppBottomBarPadding
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
+import com.arflix.tv.shared.util.KmpDateUtils
 
 import android.content.Context
 import android.os.Build
@@ -138,14 +142,14 @@ import com.arflix.tv.ui.components.EpisodeContextMenu
 import com.arflix.tv.ui.components.KeepScreenOn
 import com.arflix.tv.ui.components.SeasonContextMenu
 import com.arflix.tv.ui.components.LoadingIndicator
-import com.arflix.tv.ui.components.AppTopBar
-import com.arflix.tv.ui.components.AppTopBarContentTopInset
+import com.arflix.tv.shared.components.AppTopBar
+
 import com.arflix.tv.ui.components.CardLayoutMode
-import com.arflix.tv.ui.components.MediaCard
+import com.arflix.tv.shared.components.MediaCard
 import com.arflix.tv.ui.components.PersonModal
-import com.arflix.tv.ui.components.PosterCard
+import com.arflix.tv.shared.components.PosterCard
 import com.arflix.tv.ui.components.rememberCatalogueRowLayoutMode
-import com.arflix.tv.ui.components.SidebarItem
+import com.arflix.tv.shared.components.SidebarItem
 import com.arflix.tv.ui.components.SkeletonDetailsPage
 import com.arflix.tv.ui.components.StreamSelector
 import com.arflix.tv.ui.components.TrailerPlayer
@@ -154,8 +158,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.key.onKeyEvent
 import com.arflix.tv.ui.components.Toast
-import com.arflix.tv.ui.components.topBarFocusedItem
-import com.arflix.tv.ui.components.topBarMaxIndex
+import com.arflix.tv.shared.components.topBarFocusedItem
+import com.arflix.tv.shared.components.topBarMaxIndex
 import com.arflix.tv.ui.focus.arvioManualBringIntoViewBoundary
 import com.arflix.tv.ui.focus.arvioDpadFocusGroup
 import com.arflix.tv.ui.focus.isArvioDpadNavigationKey
@@ -172,7 +176,7 @@ import com.arflix.tv.shared.theme.Pink
 import com.arflix.tv.shared.theme.Purple
 import com.arflix.tv.shared.theme.TextPrimary
 import com.arflix.tv.shared.theme.TextSecondary
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 import com.arflix.tv.util.formatGenreName
 import com.arflix.tv.util.isInCinema
 import com.arflix.tv.util.parseRatingValue
@@ -918,7 +922,12 @@ fun DetailsScreen(
                 selectedItem = SidebarItem.HOME,
                 isFocused = isSidebarFocused,
                 focusedIndex = sidebarFocusIndex,
-                profile = currentProfile
+                hasProfile = currentProfile != null,
+                profileContent = {
+                    if (currentProfile != null) {
+                        com.arflix.tv.ui.components.ProfileAvatarVisual(profile = currentProfile)
+                    }
+                }
             )
         }
         
@@ -1948,7 +1957,7 @@ internal fun DetailsContent(
                 }
 
                 // Bottom spacing
-                Spacer(modifier = Modifier.height(32.dp + com.arflix.tv.ui.components.LocalAppBottomBarPadding.current))
+                Spacer(modifier = Modifier.height(32.dp + com.arflix.tv.shared.components.LocalAppBottomBarPadding.current))
             }
 
             // Persistent back button for phone users (hidden on tablet/TV).
@@ -3813,7 +3822,7 @@ private fun formatEpisodeAirDateLabel(rawDate: String): String? {
     val value = rawDate.trim()
     if (value.isEmpty()) return null
     return try {
-        com.arflix.tv.util.KmpDateUtils.formatMediumDate(value)
+        com.arflix.tv.shared.util.KmpDateUtils.formatMediumDate(value)
     } catch (_: Exception) {
         value
     }
@@ -3823,8 +3832,8 @@ private fun isFutureEpisodeAirDate(rawDate: String): Boolean {
     val value = rawDate.trim()
     if (value.isEmpty()) return false
     return try {
-        val parsedMs = com.arflix.tv.util.KmpDateUtils.parseIsoDate(value)
-        parsedMs > com.arflix.tv.util.KmpDateUtils.nowEpochMillis()
+        val parsedMs = com.arflix.tv.shared.util.KmpDateUtils.parseIsoDate(value)
+        parsedMs > com.arflix.tv.shared.util.KmpDateUtils.nowEpochMillis()
     } catch (_: Exception) {
         false
     }
@@ -4203,7 +4212,8 @@ private fun ReviewCard(
                     )
 
                     // Rating if available
-                    if (review.rating != null && review.rating > 0f) {
+                    val rRating = review.rating
+                    if (rRating != null && rRating > 0f) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)

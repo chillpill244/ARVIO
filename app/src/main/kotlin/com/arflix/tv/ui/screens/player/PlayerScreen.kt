@@ -1,6 +1,7 @@
 @file:Suppress("UnsafeOptInUsageError")
 
 package com.arflix.tv.ui.screens.player
+import com.arflix.tv.shared.util.KmpDateUtils
 
 import android.app.Activity
 import android.app.ActivityManager
@@ -151,7 +152,7 @@ import com.arflix.tv.ui.components.StreamSelector
 import com.arflix.tv.ui.components.WaveLoadingDots
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 import com.arflix.tv.util.settingsDataStore
 import com.arflix.tv.util.weightedSubtitleScore
 import com.arflix.tv.shared.skin.LocalAccentColorOverride
@@ -261,11 +262,11 @@ fun PlayerScreen(
     val castBlocked = streamNeedsHeaders || uiState.isOffline
     val isConstrainedPlaybackDevice = remember(context, deviceType) {
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-        deviceType == com.arflix.tv.util.DeviceType.TV &&
+        deviceType == com.arflix.tv.shared.util.DeviceType.TV &&
             (activityManager?.isLowRamDevice == true || (activityManager?.memoryClass ?: Int.MAX_VALUE) <= 384)
     }
     val preferExtensionDecoder = remember(deviceType) {
-        deviceType == com.arflix.tv.util.DeviceType.TV &&
+        deviceType == com.arflix.tv.shared.util.DeviceType.TV &&
             (
                 Build.HARDWARE.contains("amlogic", ignoreCase = true) ||
                     Build.MANUFACTURER.contains("sei", ignoreCase = true) ||
@@ -286,7 +287,7 @@ fun PlayerScreen(
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         
         val window = activity?.window
-        if (window != null && deviceType != com.arflix.tv.util.DeviceType.TV) {
+        if (window != null && deviceType != com.arflix.tv.shared.util.DeviceType.TV) {
             val controller = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
             controller.systemBarsBehavior =
                 androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -300,7 +301,7 @@ fun PlayerScreen(
                 if (previousOrientation != null) {
                     activity?.requestedOrientation = previousOrientation
                 }
-                if (window != null && deviceType != com.arflix.tv.util.DeviceType.TV) {
+                if (window != null && deviceType != com.arflix.tv.shared.util.DeviceType.TV) {
                     val controller = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
                     controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                 }
@@ -1545,18 +1546,20 @@ fun PlayerScreen(
             return@LaunchedEffect
         }
 
-        if (subtitle.isEmbedded && subtitle.groupIndex != null && subtitle.trackIndex != null) {
+        val gIndex = subtitle.groupIndex
+        val tIndex = subtitle.trackIndex
+        if (subtitle.isEmbedded && gIndex != null && tIndex != null) {
             // For embedded subs, just select the track directly
             val groups = exoPlayer.currentTracks.groups
             val params = exoPlayer.trackSelectionParameters.buildUpon()
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            if (subtitle.groupIndex in groups.indices &&
-                groups[subtitle.groupIndex].type == C.TRACK_TYPE_TEXT) {
+            if (gIndex in groups.indices &&
+                groups[gIndex].type == C.TRACK_TYPE_TEXT) {
                 params.setOverrideForType(
                     androidx.media3.common.TrackSelectionOverride(
-                        groups[subtitle.groupIndex].mediaTrackGroup,
-                        subtitle.trackIndex
+                        groups[gIndex].mediaTrackGroup,
+                        tIndex
                     )
                 )
             }
@@ -1632,18 +1635,20 @@ fun PlayerScreen(
                 it.groupIndex != null && it.trackIndex != null
         } ?: return@LaunchedEffect
 
+        val resolvedGIndex = resolved.groupIndex
+        val resolvedTIndex = resolved.trackIndex
         val groups = exoPlayer.currentTracks.groups
-        if (resolved.groupIndex != null && resolved.trackIndex != null &&
-            resolved.groupIndex in groups.indices &&
-            groups[resolved.groupIndex].type == C.TRACK_TYPE_TEXT
+        if (resolvedGIndex != null && resolvedTIndex != null &&
+            resolvedGIndex in groups.indices &&
+            groups[resolvedGIndex].type == C.TRACK_TYPE_TEXT
         ) {
             exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
                 .buildUpon()
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .setOverrideForType(
                     androidx.media3.common.TrackSelectionOverride(
-                        groups[resolved.groupIndex].mediaTrackGroup,
-                        resolved.trackIndex
+                        groups[resolvedGIndex].mediaTrackGroup,
+                        resolvedTIndex
                     )
                 )
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
@@ -3204,7 +3209,7 @@ fun PlayerScreen(
                         }
 
                         // Orientation toggle — mobile devices only
-                        if (isTouchDevice && LocalDeviceType.current != com.arflix.tv.util.DeviceType.TV) {
+                        if (isTouchDevice && LocalDeviceType.current != com.arflix.tv.shared.util.DeviceType.TV) {
                             val orientationButtonFocusRequester = remember { FocusRequester() }
                             val orientationIcon = if (isPortraitMode) Icons.Default.Fullscreen else Icons.Default.FullscreenExit
                             val orientationLabel = if (isPortraitMode) "Fullscreen" else "Portrait"
@@ -4156,7 +4161,7 @@ private fun formatPlayerClockTime(timestampMs: Long, clockFormat: String): Strin
         "12h" -> "h:mm a"
         else -> "HH:mm"
     }
-    return com.arflix.tv.util.KmpDateUtils.formatTime24h(timestampMs)
+    return com.arflix.tv.shared.util.KmpDateUtils.formatTime24h(timestampMs)
 }
 
 private fun handleSubtitleMenuKey(

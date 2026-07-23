@@ -16,8 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.arflix.tv.util.DeviceType
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.DeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 
 /**
  * A persistent, visible back button for phone layouts.

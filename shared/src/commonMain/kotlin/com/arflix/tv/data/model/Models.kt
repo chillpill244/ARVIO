@@ -339,7 +339,7 @@ data class QualityFilterConfig(
     val deviceName: String = "", // Display name (e.g., "Living Room TV", "Bedroom Fire TV")
     val regexPattern: String = "", // Regex pattern to EXCLUDE matching qualities (e.g., "4K|2160p")
     val enabled: Boolean = true, // Enable/disable filter without deleting
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = com.arflix.tv.shared.util.currentTimeMillis()
 )
 
 @Serializable

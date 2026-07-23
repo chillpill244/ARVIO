@@ -34,7 +34,7 @@ import com.arflix.tv.ui.screens.downloads.DownloadedEpisodesScreen
 import com.arflix.tv.ui.screens.tv.ContentHubScreen
 import com.arflix.tv.ui.screens.watchlist.WatchlistScreen
 import com.arflix.tv.ui.screens.profile.ProfileSelectionScreen
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 
 /**
  * Navigation destinations

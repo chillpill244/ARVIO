@@ -436,8 +436,9 @@ class DetailsViewModel constructor(
                 val languageName = mergedItem.originalLanguage?.let { languages[it] ?: it.uppercase() }
 
                 // Format budget for movies
-                val budgetDisplay = if (mediaType == MediaType.MOVIE && mergedItem.budget != null && mergedItem.budget > 0) {
-                    formatBudget(mergedItem.budget)
+                val itemBudget = mergedItem.budget
+                val budgetDisplay = if (mediaType == MediaType.MOVIE && itemBudget != null && itemBudget > 0) {
+                    formatBudget(itemBudget)
                 } else null
                 val visibleBudget = if (showBudget) budgetDisplay else null
 

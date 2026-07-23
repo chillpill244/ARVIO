@@ -1,6 +1,8 @@
 @file:OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 
 package com.arflix.tv.ui.screens.movies
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInHorizontally
@@ -67,24 +69,24 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.Profile
-import com.arflix.tv.ui.components.AppTopBar
-import com.arflix.tv.ui.components.AppTopBarContentTopInset
+import com.arflix.tv.shared.components.AppTopBar
+
 import com.arflix.tv.ui.components.CardLayoutMode
 import com.arflix.tv.ui.components.LoadingIndicator
-import com.arflix.tv.ui.components.MediaCard
-import com.arflix.tv.ui.components.SidebarItem
+import com.arflix.tv.shared.components.MediaCard
+import com.arflix.tv.shared.components.SidebarItem
 import com.arflix.tv.ui.components.rememberCardLayoutMode
-import com.arflix.tv.ui.components.topBarFocusedItem
-import com.arflix.tv.ui.components.topBarMaxIndex
-import com.arflix.tv.ui.components.topBarSelectedIndex
-import com.arflix.tv.ui.components.LocalAppBottomBarPadding
+import com.arflix.tv.shared.components.topBarFocusedItem
+import com.arflix.tv.shared.components.topBarMaxIndex
+import com.arflix.tv.shared.components.topBarSelectedIndex
+import com.arflix.tv.shared.components.LocalAppBottomBarPadding
 import com.arflix.tv.ui.screens.shared.IptvNotConfiguredPanel
 import com.arflix.tv.ui.screens.shared.MediaCategoryContent
 import com.arflix.tv.shared.theme.BackgroundDark
 import com.arflix.tv.shared.theme.Pink
 import com.arflix.tv.shared.theme.TextPrimary
 import com.arflix.tv.shared.theme.TextSecondary
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 
 private enum class MoviesFocusZone {
     TOP_BAR,
@@ -276,7 +278,12 @@ fun MoviesScreen(
                 selectedItem = SidebarItem.TV,
                 isFocused = focusZone == MoviesFocusZone.TOP_BAR,
                 focusedIndex = sidebarFocusIndex,
-                profile = currentProfile
+                hasProfile = currentProfile != null,
+                profileContent = {
+                    if (currentProfile != null) {
+                        com.arflix.tv.ui.components.ProfileAvatarVisual(profile = currentProfile)
+                    }
+                }
             )
 
             if (!uiState.isConfigured) {

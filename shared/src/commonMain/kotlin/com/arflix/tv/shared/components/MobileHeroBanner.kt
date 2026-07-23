@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,12 +24,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import coil3.compose.LocalPlatformContext
 import androidx.compose.ui.text.font.FontWeight
 import com.arflix.tv.shared.theme.JetBrainsSansFontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -75,7 +74,7 @@ fun MobileHeroBanner(
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
 
     Box(
         modifier = modifier
@@ -222,46 +221,4 @@ private fun BannerGenres(genres: List<String>) {
         maxLines = 2,
         overflow = TextOverflow.Ellipsis
     )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Previews
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Preview(showBackground = true, backgroundColor = 0xFF000000, widthDp = 360)
-@Composable
-private fun MobileHeroBannerSeriesPreview() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.Black)
-            .padding(16.dp)
-    ) {
-        MobileHeroBanner(
-            imageUrl = "",
-            title = "Stranger Things",
-            genres = listOf("Slick", "Psychological", "Thriller"),
-            year = "2022",
-            rating = "8.7"
-        )
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFF000000, widthDp = 360)
-@Composable
-private fun MobileHeroBannerFilmPreview() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.Black)
-            .padding(16.dp)
-    ) {
-        MobileHeroBanner(
-            imageUrl = "",
-            title = "Oppenheimer",
-            genres = listOf("History", "Drama", "Biography"),
-            year = "2023",
-            rating = "8.3"
-        )
-    }
 }

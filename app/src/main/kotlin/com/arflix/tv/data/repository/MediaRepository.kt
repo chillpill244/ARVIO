@@ -1,4 +1,5 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.util.KmpDateUtils
 
 import com.arflix.tv.R
 import com.arflix.tv.data.api.TmdbApi
@@ -1603,8 +1604,8 @@ class MediaRepository constructor(
             return (firstItems + secondItems).distinctBy { it.id }.take(40)
         }
 
-        val twelveMonthsAgo = com.arflix.tv.util.KmpDateUtils.getIsoDateMonthsAgo(12)
-        val eighteenMonthsAgo = com.arflix.tv.util.KmpDateUtils.getIsoDateMonthsAgo(18)
+        val twelveMonthsAgo = com.arflix.tv.shared.util.KmpDateUtils.getIsoDateMonthsAgo(12)
+        val eighteenMonthsAgo = com.arflix.tv.shared.util.KmpDateUtils.getIsoDateMonthsAgo(18)
 
         // Main trending - TMDB's daily trending for fresh content
         val trendingMovies = async { fetchUpTo40 { page -> tmdbApi.getTrendingMovies(apiKey, language = contentLanguage, page = page) } }
@@ -1667,8 +1668,8 @@ class MediaRepository constructor(
     ): CategoryPageResult {
         if (page < 1) return CategoryPageResult(emptyList(), hasMore = false)
 
-        val twelveMonthsAgo = com.arflix.tv.util.KmpDateUtils.getIsoDateMonthsAgo(12)
-        val eighteenMonthsAgo = com.arflix.tv.util.KmpDateUtils.getIsoDateMonthsAgo(18)
+        val twelveMonthsAgo = com.arflix.tv.shared.util.KmpDateUtils.getIsoDateMonthsAgo(12)
+        val eighteenMonthsAgo = com.arflix.tv.shared.util.KmpDateUtils.getIsoDateMonthsAgo(18)
 
         val response = runCatching {
             when (categoryId) {
@@ -3191,8 +3192,8 @@ class MediaRepository constructor(
                     r1.results.map { it.toMediaItem(MediaType.MOVIE) }
                 }
                 "new_releases" -> {
-                    val today = com.arflix.tv.util.KmpDateUtils.getIsoDateDaysAgo(0)
-                    val thirtyDaysAgo = com.arflix.tv.util.KmpDateUtils.getIsoDateDaysAgo(30)
+                    val today = com.arflix.tv.shared.util.KmpDateUtils.getIsoDateDaysAgo(0)
+                    val thirtyDaysAgo = com.arflix.tv.shared.util.KmpDateUtils.getIsoDateDaysAgo(30)
                     val r1 = tmdbApi.discoverMovies(apiKey, sortBy = "popularity.desc", language = contentLanguage, releaseDateGte = thirtyDaysAgo, releaseDateLte = today, page = 1)
                     r1.results.map { it.toMediaItem(MediaType.MOVIE) }
                 }
@@ -3838,7 +3839,7 @@ private fun TmdbPersonDetails.toPersonDetails(): PersonDetails {
 
 private fun formatDate(dateStr: String): String {
     if (dateStr.isEmpty()) return ""
-    return com.arflix.tv.util.KmpDateUtils.formatMediumDate(dateStr)
+    return com.arflix.tv.shared.util.KmpDateUtils.formatMediumDate(dateStr)
 }
 
 private object MediaRegexes {

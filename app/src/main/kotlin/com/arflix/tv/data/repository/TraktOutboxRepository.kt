@@ -1,4 +1,5 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.util.KmpDateUtils
 
 import android.content.Context
 import androidx.annotation.Keep
@@ -32,7 +33,7 @@ data class TraktOutboxItem(
     val season: Int? = null,
     val episode: Int? = null,
     val playbackId: Long? = null,
-    val createdAt: String = com.arflix.tv.util.KmpDateUtils.nowIsoString(),
+    val createdAt: String = com.arflix.tv.shared.util.KmpDateUtils.nowIsoString(),
     val attempts: Int = 0
 )
 

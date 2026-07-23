@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
@@ -26,14 +26,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import coil3.compose.LocalPlatformContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
+import androidx.compose.material3.Text
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.size.Precision
@@ -43,7 +42,7 @@ import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.shared.skin.ArvioFocusableSurface
 import com.arflix.tv.shared.skin.ArvioSkin
 import com.arflix.tv.shared.skin.rememberArvioCardShape
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.zIndex
@@ -64,7 +63,6 @@ private val missingArtworkBrush = Brush.linearGradient(
     )
 )
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun MediaCard(
     item: MediaItem,
@@ -141,7 +139,7 @@ fun MediaCard(
 
     val jumpBorderWidth = 2.5.dp
 
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val density = LocalDensity.current
     val overlayBrush: Brush? = null  // Gradient removed per user feedback
     // Performance: Removed context/density from keys - they're stable CompositionLocals
@@ -492,7 +490,6 @@ fun MediaCard(
  * Placeholder card shown while Continue Watching data loads.
  * Displays a skeleton animation to indicate loading state.
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun PlaceholderCard(
     width: Dp,
@@ -543,7 +540,6 @@ private fun PlaceholderCard(
  * Poster-style media card (portrait orientation).
  * Phase 5: Added proper image sizing and shimmer placeholder.
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun PosterCard(
     item: MediaItem,
@@ -571,7 +567,7 @@ fun PosterCard(
     val shape = rememberArvioCardShape(ArvioSkin.radius.md)
     val outlineColor = if (useWhiteBorder) ArvioSkin.colors.focusOutline else ArvioSkin.colors.accent
 
-    val context = LocalContext.current
+    val context = LocalPlatformContext.current
     val density = LocalDensity.current
     val aspectRatio = 2f / 3f
     val posterUrl = item.image.takeIf { it.isNotBlank() }

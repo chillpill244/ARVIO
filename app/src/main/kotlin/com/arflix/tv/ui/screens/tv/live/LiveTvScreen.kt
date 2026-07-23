@@ -1,6 +1,8 @@
 @file:Suppress("UnsafeOptInUsageError")
 
 package com.arflix.tv.ui.screens.tv.live
+import com.arflix.tv.shared.components.AppTopBarHeight
+import com.arflix.tv.shared.components.AppTopBarHeight
 
 import android.app.Activity
 import android.content.Context
@@ -81,14 +83,14 @@ import com.arflix.tv.data.model.Profile
 import com.arflix.tv.ui.screens.tv.TvUiState
 import com.arflix.tv.ui.screens.tv.TvViewModel
 import com.arflix.tv.network.OkHttpProvider
-import com.arflix.tv.ui.components.AppTopBar
+import com.arflix.tv.shared.components.AppTopBar
 import com.arflix.tv.ui.components.KeepScreenOn
-import com.arflix.tv.ui.components.AppTopBarHeight
-import com.arflix.tv.ui.components.SidebarItem
-import com.arflix.tv.ui.components.topBarFocusedItem
-import com.arflix.tv.ui.components.topBarMaxIndex
-import com.arflix.tv.ui.components.topBarSelectedIndex
-import com.arflix.tv.util.LocalDeviceType
+
+import com.arflix.tv.shared.components.SidebarItem
+import com.arflix.tv.shared.components.topBarFocusedItem
+import com.arflix.tv.shared.components.topBarMaxIndex
+import com.arflix.tv.shared.components.topBarSelectedIndex
+import com.arflix.tv.shared.util.LocalDeviceType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
@@ -2077,8 +2079,12 @@ fun LiveTvScreen(
                     selectedItem = SidebarItem.TV,
                     isFocused = focusZone == LiveTvFocusZone.TOPBAR,
                     focusedIndex = if (focusZone == LiveTvFocusZone.TOPBAR) topBarFocusIndex else -1,
-                    profile = currentProfile,
-                    profileCount = 1,
+                    hasProfile = currentProfile != null,
+                    profileContent = {
+                        if (currentProfile != null) {
+                            com.arflix.tv.ui.components.ProfileAvatarVisual(profile = currentProfile)
+                        }
+                    }
                 )
             }
         }

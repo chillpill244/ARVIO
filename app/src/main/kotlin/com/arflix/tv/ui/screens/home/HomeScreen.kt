@@ -1,6 +1,8 @@
 @file:OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 
 package com.arflix.tv.ui.screens.home
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
 
 import android.content.Context
 import androidx.compose.animation.AnimatedContent
@@ -130,23 +132,23 @@ import com.arflix.tv.data.model.CollectionTileShape
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.network.OkHttpProvider
-import com.arflix.tv.ui.components.MediaCard as ArvioMediaCard
+import com.arflix.tv.shared.components.MediaCard as ArvioMediaCard
 import com.arflix.tv.ui.components.TrailerPlayer
 import com.arflix.tv.ui.components.CardLayoutMode
-import com.arflix.tv.ui.components.AppTopBar
-import com.arflix.tv.ui.components.AppTopBarContentTopInset
-import com.arflix.tv.ui.components.LocalAppBottomBarPadding
-import com.arflix.tv.ui.components.MobileHeroBanner
+import com.arflix.tv.shared.components.AppTopBar
+
+import com.arflix.tv.shared.components.LocalAppBottomBarPadding
+import com.arflix.tv.shared.components.MobileHeroBanner
 import com.arflix.tv.ui.components.ProfileAvatarVisual
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 import com.arflix.tv.ui.components.MediaContextMenu
 import com.arflix.tv.ui.components.rememberCardLayoutMode
 import com.arflix.tv.ui.components.rememberCatalogueRowLayoutMode
 import com.arflix.tv.ui.components.Toast
 import com.arflix.tv.ui.components.ToastType as ComponentToastType
-import com.arflix.tv.ui.components.SidebarItem
-import com.arflix.tv.ui.components.topBarFocusedItem
-import com.arflix.tv.ui.components.topBarMaxIndex
+import com.arflix.tv.shared.components.SidebarItem
+import com.arflix.tv.shared.components.topBarFocusedItem
+import com.arflix.tv.shared.components.topBarMaxIndex
 import com.arflix.tv.ui.focus.arvioManualBringIntoViewBoundary
 import com.arflix.tv.ui.focus.arvioDpadFocusGroup
 import com.arflix.tv.ui.focus.isArvioDpadNavigationKey
@@ -2527,8 +2529,12 @@ private fun HomeInputLayer(
                 selectedItem = SidebarItem.HOME,
                 isFocused = focusState.isSidebarFocused,
                 focusedIndex = focusState.sidebarFocusIndex,
-                profile = currentProfile,
-                profileCount = profileCount,
+                hasProfile = currentProfile != null && profileCount > 1,
+                profileContent = {
+                    if (currentProfile != null) {
+                        com.arflix.tv.ui.components.ProfileAvatarVisual(profile = currentProfile)
+                    }
+                },
                 clockFormat = clockFormat,
                 hasUpdateBadge = hasUpdateBadge
             )
@@ -2762,7 +2768,8 @@ private fun MobileHomeRowsLayer(
                         key = { _, item ->
                             if (item.isPlaceholder) "placeholder_${category.id}_${item.id}"
                             else {
-                                val episodeSuffix = if (item.nextEpisode != null) "_S${item.nextEpisode.seasonNumber}E${item.nextEpisode.episodeNumber}" else ""
+                                val nextEp = item.nextEpisode
+                                val episodeSuffix = if (nextEp != null) "_S${nextEp.seasonNumber}E${nextEp.episodeNumber}" else ""
                                 "${item.mediaType.name}-${item.id}${episodeSuffix}"
                             }
                         },

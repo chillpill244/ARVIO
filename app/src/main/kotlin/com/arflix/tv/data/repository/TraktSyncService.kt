@@ -1,4 +1,5 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.util.KmpDateUtils
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
@@ -258,8 +259,8 @@ class TraktSyncService constructor(
                     val supabaseUserId = userId ?: return@withContext SyncResult.Success(totalMovies, totalEpisodes)
                     updateSyncState(
                         userId = supabaseUserId,
-                        lastSyncAt = com.arflix.tv.util.KmpDateUtils.nowIsoString(),
-                        lastFullSyncAt = com.arflix.tv.util.KmpDateUtils.nowIsoString(),
+                        lastSyncAt = com.arflix.tv.shared.util.KmpDateUtils.nowIsoString(),
+                        lastFullSyncAt = com.arflix.tv.shared.util.KmpDateUtils.nowIsoString(),
                         lastTraktActivitiesJson = activitiesJson,
                         moviesSynced = totalMovies,
                         episodesSynced = totalEpisodes,
@@ -450,7 +451,7 @@ class TraktSyncService constructor(
             try {
                 updateSyncState(
                     userId = safeUserId,
-                    lastSyncAt = com.arflix.tv.util.KmpDateUtils.nowIsoString(),
+                    lastSyncAt = com.arflix.tv.shared.util.KmpDateUtils.nowIsoString(),
                     lastTraktActivitiesJson = gson.toJson(currentActivities),
                     moviesSynced = (syncState?.moviesSynced ?: 0) + moviesUpdated,
                     episodesSynced = (syncState?.episodesSynced ?: 0) + episodesUpdated,
@@ -489,7 +490,7 @@ class TraktSyncService constructor(
             val hasSupabase = userId != null && getSupabaseAuth() != null
             val traktAuth = getAuthHeader()
 
-            val now = com.arflix.tv.util.KmpDateUtils.nowIsoString()
+            val now = com.arflix.tv.shared.util.KmpDateUtils.nowIsoString()
 
             // 1. Write to Supabase first (source of truth) when available
             if (hasSupabase) {
@@ -573,7 +574,7 @@ class TraktSyncService constructor(
             //    handle token refresh so expired sessions don't silently skip writes.
             if (userId != null) {
                 try {
-                    val now = com.arflix.tv.util.KmpDateUtils.nowIsoString()
+                    val now = com.arflix.tv.shared.util.KmpDateUtils.nowIsoString()
                     executeSupabaseCall("mark episode watched") { auth ->
                         supabaseApi.markEpisodeWatched(
                             auth,
@@ -671,7 +672,7 @@ class TraktSyncService constructor(
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             val userId = getUserId() ?: return@withContext false
-            val now = com.arflix.tv.util.KmpDateUtils.nowIsoString()
+            val now = com.arflix.tv.shared.util.KmpDateUtils.nowIsoString()
 
             executeSupabaseCall("mark episode watched") { auth ->
                 supabaseApi.markEpisodeWatched(
@@ -817,8 +818,8 @@ class TraktSyncService constructor(
                 progress = progress,
                 positionSeconds = positionSeconds,
                 durationSeconds = durationSeconds,
-                pausedAt = com.arflix.tv.util.KmpDateUtils.nowIsoString(),
-                updatedAt = com.arflix.tv.util.KmpDateUtils.nowIsoString(),
+                pausedAt = com.arflix.tv.shared.util.KmpDateUtils.nowIsoString(),
+                updatedAt = com.arflix.tv.shared.util.KmpDateUtils.nowIsoString(),
                 source = profileHistorySource("arvio"),
                 title = title,
                 episodeTitle = episodeTitle,
@@ -1484,7 +1485,7 @@ class TraktSyncService constructor(
             when (item.type) {
                 "movie" -> {
                     val tmdbId = item.movie?.ids?.tmdb ?: continue
-                    val updatedAt = item.pausedAt ?: com.arflix.tv.util.KmpDateUtils.nowIsoString()
+                    val updatedAt = item.pausedAt ?: com.arflix.tv.shared.util.KmpDateUtils.nowIsoString()
                     records.add(
                         WatchHistoryRecord(
                             userId = userId,
@@ -1505,7 +1506,7 @@ class TraktSyncService constructor(
                     val showTmdbId = item.show?.ids?.tmdb ?: continue
                     val season = item.episode?.season ?: continue
                     val number = item.episode?.number ?: continue
-                    val updatedAt = item.pausedAt ?: com.arflix.tv.util.KmpDateUtils.nowIsoString()
+                    val updatedAt = item.pausedAt ?: com.arflix.tv.shared.util.KmpDateUtils.nowIsoString()
                     records.add(
                         WatchHistoryRecord(
                             userId = userId,
@@ -1742,7 +1743,7 @@ class TraktSyncService constructor(
             episodesSynced = episodesSynced ?: 0,
             syncInProgress = syncInProgress ?: false,
             lastError = lastError,
-            updatedAt = com.arflix.tv.util.KmpDateUtils.nowIsoString()
+            updatedAt = com.arflix.tv.shared.util.KmpDateUtils.nowIsoString()
         )
         executeSupabaseCall("upsert sync state") { auth ->
             supabaseApi.upsertSyncState(auth, record = record)

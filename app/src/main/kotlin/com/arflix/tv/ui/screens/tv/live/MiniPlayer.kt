@@ -1,6 +1,7 @@
 @file:Suppress("UnsafeOptInUsageError")
 
 package com.arflix.tv.ui.screens.tv.live
+import com.arflix.tv.shared.util.KmpDateUtils
 
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -47,8 +48,8 @@ import androidx.tv.material3.Text
 import com.arflix.tv.data.model.IptvNowNext
 import com.arflix.tv.data.model.IptvProgram
 import com.arflix.tv.util.formatGenreName
-import com.arflix.tv.util.DeviceType
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.DeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -446,7 +447,7 @@ internal fun formatTimeWindow(p: IptvProgram?): String {
 }
 
 internal fun formatClock(utcMillis: Long): String {
-    return com.arflix.tv.util.KmpDateUtils.formatTime24h(com.arflix.tv.util.KmpDateUtils.nowEpochMillis())
+    return com.arflix.tv.shared.util.KmpDateUtils.formatTime24h(com.arflix.tv.shared.util.KmpDateUtils.nowEpochMillis())
 }
 
 internal fun remainingLabel(p: IptvProgram?): String {

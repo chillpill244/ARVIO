@@ -904,8 +904,9 @@ class PlayerViewModel constructor(
                         hasHomeServerStream ||
                         elapsedMs >= HOME_SERVER_AUTOPLAY_WAIT_MS
                     val hasCachedReadyStream = mergedStreams.any { stream ->
-                        stream.behaviorHints?.cached == true &&
-                            stream.behaviorHints.notWebReady != true &&
+                        val hints = stream.behaviorHints
+                        hints?.cached == true &&
+                            hints.notWebReady != true &&
                             !stream.url.isNullOrBlank()
                     }
                     if (!autoplaySelected && mergedStreams.isNotEmpty() && autoplayDeferredJob == null) {
@@ -1532,10 +1533,11 @@ class PlayerViewModel constructor(
         if (text.contains("dolby vision") || text.contains(" dovi") || text.contains(" dv ")) score += 30
         if (text.contains("x265") || text.contains("hevc") || text.contains("h265")) score += 30
         if (text.contains("x264") || text.contains("h264")) score += 20
+        val sUrl = stream.url
         if (stream.behaviorHints?.cached == true || text.contains(" rd+")) score += 500
         if (stream.behaviorHints?.notWebReady == true) score -= 150
-        if (!stream.url.isNullOrBlank() && stream.url.startsWith("http", ignoreCase = true)) score += 100
-        if (stream.url?.startsWith("magnet:", ignoreCase = true) == true) score -= 800
+        if (!sUrl.isNullOrBlank() && sUrl.startsWith("http", ignoreCase = true)) score += 100
+        if (sUrl?.startsWith("magnet:", ignoreCase = true) == true) score -= 800
         score += streamRepository.getAddonHealthBias(stream.addonId)
 
         return score

@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -60,27 +57,21 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.annotation.StringRes
-import androidx.compose.ui.res.stringResource
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Icon
-import com.arflix.tv.R
-import com.arflix.tv.shared.theme.AccentGreen
-import com.arflix.tv.shared.theme.appBackgroundDark
+import androidx.compose.material3.Icon
 
 data class BottomBarItem(
-    @StringRes val labelRes: Int,
+    val label: String,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector,
     val route: String
 )
 
 val bottomBarItems = listOf(
-    BottomBarItem(R.string.home, Icons.Rounded.Home, Icons.Outlined.Home, "home"),
-    BottomBarItem(R.string.search, Icons.Rounded.Search, Icons.Outlined.Search, "search"),
-    BottomBarItem(R.string.watchlist, Icons.Rounded.Archive, Icons.Outlined.Archive, "watchlist"),
-    BottomBarItem(R.string.topbar_tv, Icons.Rounded.LiveTv, Icons.Outlined.LiveTv, "tv"),
-    BottomBarItem(R.string.settings, Icons.Rounded.Settings, Icons.Outlined.Settings, "settings")
+    BottomBarItem("Home", Icons.Rounded.Home, Icons.Outlined.Home, "home"),
+    BottomBarItem("Search", Icons.Rounded.Search, Icons.Outlined.Search, "search"),
+    BottomBarItem("Watchlist", Icons.Rounded.Archive, Icons.Outlined.Archive, "watchlist"),
+    BottomBarItem("TV Shows", Icons.Rounded.LiveTv, Icons.Outlined.LiveTv, "tv"),
+    BottomBarItem("Settings", Icons.Rounded.Settings, Icons.Outlined.Settings, "settings")
 )
 
 val LocalAppBottomBarPadding = staticCompositionLocalOf { 0.dp }
@@ -117,7 +108,6 @@ fun rememberAppBottomBarScrollState(): AppBottomBarScrollState {
     return remember { AppBottomBarScrollState() }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun AppBottomBar(
     currentRoute: String?,
@@ -162,7 +152,7 @@ fun AppBottomBar(
                 var isFocused by remember { mutableStateOf(false) }
                 val label = when {
                     showAsDownloads -> "Downloads"
-                    else -> stringResource(item.labelRes)
+                    else -> item.label
                 }
                 val iconTint by animateColorAsState(
                     targetValue = when {

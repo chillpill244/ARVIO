@@ -29,7 +29,7 @@ import com.arflix.tv.data.repository.WatchlistRepository
 import com.arflix.tv.data.repository.ProfileManager
 import com.arflix.tv.util.AppLogger
 import com.arflix.tv.util.CrashlyticsProvider
-import com.arflix.tv.util.DeviceType
+import com.arflix.tv.shared.util.DeviceType
 import com.arflix.tv.util.SentryCrashReporter
 import com.arflix.tv.util.detectDeviceType
 import com.arflix.tv.worker.TraktSyncWorker

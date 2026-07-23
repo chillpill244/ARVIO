@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -32,24 +32,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
+import coil3.compose.LocalPlatformContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
-import com.arflix.tv.data.model.Profile
+import androidx.compose.material3.Text
 import com.arflix.tv.shared.skin.ArvioSkin
 import com.arflix.tv.shared.skin.resolveAccentColor
 import com.arflix.tv.shared.theme.AnimationConstants
-import com.arflix.tv.shared.theme.ArflixTypography
-import androidx.compose.ui.res.stringResource
-import com.arflix.tv.R
-import com.arflix.tv.util.settingsDataStore
-import java.util.Locale
+import com.arflix.tv.shared.util.KmpDateUtils
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 
 val AppTopBarHeight = 82.dp
 val AppTopBarTopPadding = 0.dp
@@ -86,24 +79,21 @@ fun topBarFocusedItem(focusedIndex: Int, hasProfile: Boolean): SidebarItem? {
     return NAV_ITEMS.getOrNull(itemIndex)
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun AppTopBar(
     selectedItem: SidebarItem,
     isFocused: Boolean,
     focusedIndex: Int,
-    profile: Profile? = null,
-    profileCount: Int = 1,
+    hasProfile: Boolean = false,
+    profileContent: @Composable () -> Unit = {},
     clockFormat: String = "24h",
-    syncStatus: com.arflix.tv.data.repository.CloudSyncStatus = com.arflix.tv.data.repository.CloudSyncStatus.NOT_SIGNED_IN,
     hasUpdateBadge: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     // Always show the profile avatar when a profile exists — it's clickable
     // and opens the profile switcher. The name text was removed per the mockup
     // (avatar-only, no label).
-    val showProfile = profile != null
-    val hasProfile = showProfile
+    val showProfile = hasProfile
     val currentTime = rememberTopBarTime(clockFormat)
     val selectedIndex = remember(selectedItem, hasProfile) { topBarSelectedIndex(selectedItem, hasProfile) }
     // Settings gear is always the last focusable index
@@ -133,10 +123,10 @@ fun AppTopBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // ── LEFT: Profile avatar (only if multiple profiles) ──
-            if (showProfile && profile != null) {
+            if (showProfile) {
                 TopBarProfileAvatar(
-                    profile = profile,
-                    isFocused = isFocused && focusedIndex == 0
+                    isFocused = isFocused && focusedIndex == 0,
+                    profileContent = profileContent
                 )
                 Spacer(modifier = Modifier.width(16.dp))
             }
@@ -185,7 +175,6 @@ fun AppTopBar(
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun TopBarNavChip(
     item: SidebarItem,
@@ -226,11 +215,7 @@ private fun TopBarNavChip(
         animationSpec = spring(dampingRatio = 0.75f, stiffness = 400f),
         label = "topbar_scale"
     )
-    val label = if (item == SidebarItem.TV) {
-        stringResource(R.string.topbar_tv)
-    } else {
-        stringResource(item.labelRes)
-    }
+    val label = item.label
 
     Row(
         modifier = Modifier
@@ -310,7 +295,7 @@ private fun TopBarSettingsGear(
     ) {
         Icon(
             imageVector = Icons.Outlined.Settings,
-            contentDescription = stringResource(R.string.settings),
+            contentDescription = "Settings",
             tint = iconColor,
             modifier = Modifier.size(20.dp)
         )
@@ -333,11 +318,10 @@ private fun TopBarSettingsGear(
  * Profile avatar only — no name text. Just the circular avatar with gradient/icon.
  * Shown only when multiple profiles exist.
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun TopBarProfileAvatar(
-    profile: Profile,
-    isFocused: Boolean
+    isFocused: Boolean,
+    profileContent: @Composable () -> Unit
 ) {
     val containerColor by animateColorAsState(
         targetValue = if (isFocused) Color.White.copy(alpha = 0.2f) else Color.Transparent,
@@ -368,37 +352,18 @@ private fun TopBarProfileAvatar(
                 .background(Color.Transparent),
             contentAlignment = Alignment.Center
         ) {
-            ProfileAvatarVisual(
-                profile = profile,
-                letterFontSize = 13.sp,
-                iconPadding = 4.dp
-            )
+            profileContent()
         }
     }
 }
 
 @Composable
 private fun rememberTopBarTime(clockFormat: String): String {
-    val context = LocalContext.current
-    var resolvedFormat by remember(clockFormat) { mutableStateOf(clockFormat) }
-    var currentTime by remember(resolvedFormat) { mutableStateOf(topBarCurrentTime(resolvedFormat)) }
-
-    // AppTopBar is used on multiple screens that don't all have SettingsUiState.
-    // Read the persisted clock format directly so the clock updates app-wide.
-    LaunchedEffect(context, clockFormat) {
-        runCatching {
-            val prefs = context.settingsDataStore.data.first()
-            val saved = prefs.asMap().entries
-                .firstOrNull { (key, _) -> key.name.endsWith("_clock_format") }
-                ?.value as? String
-            resolvedFormat = saved ?: clockFormat
-        }
-    }
-
-    LaunchedEffect(resolvedFormat) {
+    var currentTime by remember(clockFormat) { mutableStateOf(topBarCurrentTime(clockFormat)) }
+    LaunchedEffect(clockFormat) {
         while (true) {
-            currentTime = topBarCurrentTime(resolvedFormat)
-            val now = System.currentTimeMillis()
+            currentTime = topBarCurrentTime(clockFormat)
+            val now = KmpDateUtils.nowEpochMillis()
             val delayToNextMinute = 60_000L - (now % 60_000L)
             delay(delayToNextMinute.coerceIn(1_000L, 60_000L))
         }
@@ -411,5 +376,6 @@ private fun topBarCurrentTime(clockFormat: String): String {
         "12h" -> "h:mm a"
         else -> "HH:mm"
     }
-    return com.arflix.tv.util.KmpDateUtils.formatTime24h(com.arflix.tv.util.KmpDateUtils.nowEpochMillis())
+    // We just rely on KmpDateUtils format (which may currently just be 24h, but we can update it later)
+    return KmpDateUtils.formatTime24h(KmpDateUtils.nowEpochMillis())
 }

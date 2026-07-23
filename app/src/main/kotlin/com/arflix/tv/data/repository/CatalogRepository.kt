@@ -697,12 +697,11 @@ class CatalogRepository constructor(
 
     suspend fun addCustomCatalog(rawUrl: String): Result<CatalogConfig> {
         val validation = validateCatalogUrl(rawUrl)
-        if (!validation.isValid || validation.normalizedUrl == null || validation.sourceType == null) {
-            return Result.failure(IllegalArgumentException(validation.error ?: "Invalid URL"))
-        }
-
         val normalizedUrl = validation.normalizedUrl
         val sourceType = validation.sourceType
+        if (!validation.isValid || normalizedUrl == null || sourceType == null) {
+            return Result.failure(IllegalArgumentException(validation.error ?: "Invalid URL"))
+        }
         val resolved = resolveMetadata(normalizedUrl, sourceType)
             ?: fallbackMetadata(normalizedUrl, sourceType)
             ?: return Result.failure(IllegalArgumentException("Failed to read catalog metadata"))
@@ -739,17 +738,18 @@ class CatalogRepository constructor(
             return Result.failure(IllegalArgumentException(validation.error ?: "Invalid URL"))
         }
 
-        val normalizedUrl = validation.normalizedUrl
+        val normalizedUrl = validation.normalizedUrl ?: return Result.failure(IllegalArgumentException("Invalid URL"))
         if (current.any { it.id != catalogId && it.sourceUrl.equals(normalizedUrl, ignoreCase = true) }) {
             return Result.failure(IllegalArgumentException("Catalog already added"))
         }
 
-        val resolved = resolveMetadata(normalizedUrl, validation.sourceType)
-            ?: fallbackMetadata(normalizedUrl, validation.sourceType)
+        val sType = validation.sourceType ?: return Result.failure(IllegalArgumentException("Invalid source type"))
+        val resolved = resolveMetadata(normalizedUrl, sType)
+            ?: fallbackMetadata(normalizedUrl, sType)
             ?: return Result.failure(IllegalArgumentException("Failed to read catalog metadata"))
         val updated = existing.copy(
             title = resolved.title,
-            sourceType = validation.sourceType,
+            sourceType = sType,
             sourceUrl = normalizedUrl,
             sourceRef = resolved.sourceRef
         )

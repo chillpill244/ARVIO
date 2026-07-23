@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -25,12 +25,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
+import androidx.compose.material3.Text
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.size.Precision
-import androidx.compose.ui.platform.LocalContext
+import coil3.compose.LocalPlatformContext
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.shared.skin.ArvioFocusableSurface
@@ -44,7 +43,6 @@ import com.arflix.tv.shared.skin.rememberArvioCardShape
  * - Focus visuals are handled by `ArvioFocusableSurface` (no layout scaling).
  * - The `isFocused` param is preserved for compatibility with any external focus tracking.
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun ContinueWatchingCard(
     item: MediaItem,
@@ -76,7 +74,7 @@ fun ContinueWatchingCard(
                 val imageUrl = (item.backdrop ?: item.image).takeIf { !it.isNullOrBlank() }
                 if (imageUrl != null) {
                     AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
+                        model = ImageRequest.Builder(LocalPlatformContext.current)
                             .data(imageUrl)
                             .size(640, 360)
                             .precision(Precision.INEXACT)
@@ -208,7 +206,6 @@ fun ContinueWatchingCard(
 /**
  * Compact Continue Watching card.
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun ContinueWatchingCardCompact(
     item: MediaItem,
@@ -242,7 +239,7 @@ fun ContinueWatchingCardCompact(
                 val compactUrl = (item.backdrop ?: item.image).takeIf { !it.isNullOrBlank() }
                 if (compactUrl != null) {
                     AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
+                        model = ImageRequest.Builder(LocalPlatformContext.current)
                             .data(compactUrl)
                             .size(200, 112)
                             .precision(Precision.INEXACT)
@@ -308,4 +305,3 @@ fun ContinueWatchingCardCompact(
         }
     }
 }
-

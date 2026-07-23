@@ -1,4 +1,4 @@
-package com.arflix.tv.util
+package com.arflix.tv.shared.util
 
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DatePeriod

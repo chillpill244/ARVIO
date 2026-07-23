@@ -1,12 +1,7 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.unit.sp
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -14,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -34,44 +28,34 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.tv.material3.ExperimentalTvMaterial3Api
-import androidx.tv.material3.Text
-import com.arflix.tv.data.model.Profile
 import com.arflix.tv.shared.skin.ArvioSkin
 import com.arflix.tv.shared.skin.resolveAccentColor
 import com.arflix.tv.shared.theme.AnimationConstants
-import androidx.annotation.StringRes
-import androidx.compose.ui.res.stringResource
-import com.arflix.tv.R
-import com.arflix.tv.shared.theme.TextSecondary
 
 /**
  * Premium navigation sidebar with smooth animations
  * Ultra slim icon-only bar with animated focus states
  */
-enum class SidebarItem(val icon: ImageVector, @StringRes val labelRes: Int) {
-    SEARCH(Icons.Outlined.Search, R.string.search),
-    HOME(Icons.Outlined.Home, R.string.home),
-    WATCHLIST(Icons.Outlined.Bookmark, R.string.watchlist),
-    TV(Icons.Outlined.LiveTv, R.string.tv_shows),
-    SETTINGS(Icons.Outlined.Settings, R.string.settings)
+enum class SidebarItem(val icon: ImageVector, val label: String) {
+    SEARCH(Icons.Outlined.Search, "Search"),
+    HOME(Icons.Outlined.Home, "Home"),
+    WATCHLIST(Icons.Outlined.Bookmark, "Watchlist"),
+    TV(Icons.Outlined.LiveTv, "TV Shows"),
+    SETTINGS(Icons.Outlined.Settings, "Settings")
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun Sidebar(
     selectedItem: SidebarItem = SidebarItem.HOME,
     isSidebarFocused: Boolean = false,
     focusedIndex: Int = 1,
-    profile: Profile? = null,
+    hasProfile: Boolean = false,
+    profileContent: @Composable () -> Unit = {},
     hasUpdateBadge: Boolean = false,
     onProfileClick: () -> Unit = {},
     onItemSelected: (SidebarItem) -> Unit = {},
@@ -79,7 +63,7 @@ fun Sidebar(
 ) {
     val centerItems = listOf(SidebarItem.SEARCH, SidebarItem.HOME, SidebarItem.WATCHLIST, SidebarItem.TV)
     val bottomItem = SidebarItem.SETTINGS
-    val hasProfile = profile != null
+    
     // With profile: index 0 = profile, 1-4 = center items, 5 = settings. Without: 0-3 = center, 4 = settings.
     val centerFocusedIndex = if (hasProfile) focusedIndex - 1 else focusedIndex
     val settingsFocused = if (hasProfile) focusedIndex == 5 else focusedIndex == 4
@@ -107,8 +91,8 @@ fun Sidebar(
             if (hasProfile) {
                 Spacer(modifier = Modifier.height(7.dp))
                 SidebarProfileAvatar(
-                    profile = profile!!,
-                    isFocused = isSidebarFocused && focusedIndex == 0
+                    isFocused = isSidebarFocused && focusedIndex == 0,
+                    profileContent = profileContent
                 )
                 Spacer(modifier = Modifier.height(28.dp))
             }
@@ -145,11 +129,10 @@ fun Sidebar(
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun SidebarProfileAvatar(
-    profile: Profile,
-    isFocused: Boolean
+    isFocused: Boolean,
+    profileContent: @Composable () -> Unit
 ) {
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.12f else 1f,
@@ -195,16 +178,11 @@ private fun SidebarProfileAvatar(
                 },
             contentAlignment = Alignment.Center
         ) {
-            ProfileAvatarVisual(
-                profile = profile,
-                letterFontSize = 12.sp,
-                iconPadding = 3.dp
-            )
+            profileContent()
         }
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun SidebarIcon(
     item: SidebarItem,
@@ -259,7 +237,7 @@ private fun SidebarIcon(
         ),
         label = "sidebar_indicator_alpha"
     )
-    val label = stringResource(item.labelRes)
+    val label = item.label
 
     Box(
         modifier = Modifier
@@ -312,5 +290,3 @@ private fun SidebarIcon(
         }
     }
 }
-
-

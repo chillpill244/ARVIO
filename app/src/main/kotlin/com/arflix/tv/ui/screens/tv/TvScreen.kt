@@ -3,6 +3,9 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package com.arflix.tv.ui.screens.tv
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
+import com.arflix.tv.shared.util.KmpDateUtils
 
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
@@ -125,14 +128,14 @@ import com.arflix.tv.data.model.IptvChannel
 import com.arflix.tv.data.model.IptvNowNext
 import com.arflix.tv.data.model.IptvProgram
 import com.arflix.tv.network.OkHttpProvider
-import com.arflix.tv.ui.components.AppTopBar
+import com.arflix.tv.shared.components.AppTopBar
 import com.arflix.tv.ui.components.KeepScreenOn
-import com.arflix.tv.ui.components.AppTopBarContentTopInset
-import com.arflix.tv.util.LocalDeviceType
-import com.arflix.tv.ui.components.SidebarItem
-import com.arflix.tv.ui.components.topBarFocusedItem
-import com.arflix.tv.ui.components.topBarMaxIndex
-import com.arflix.tv.ui.components.LocalAppBottomBarPadding
+
+import com.arflix.tv.shared.util.LocalDeviceType
+import com.arflix.tv.shared.components.SidebarItem
+import com.arflix.tv.shared.components.topBarFocusedItem
+import com.arflix.tv.shared.components.topBarMaxIndex
+import com.arflix.tv.shared.components.LocalAppBottomBarPadding
 import com.arflix.tv.shared.theme.AccentGreen
 import com.arflix.tv.shared.theme.ArflixTypography
 import com.arflix.tv.shared.theme.BackgroundCard
@@ -812,7 +815,12 @@ fun TvScreen(
                 selectedItem = SidebarItem.TV,
                 isFocused = focusZone == TvFocusZone.SIDEBAR,
                 focusedIndex = sidebarFocusIndex,
-                profile = currentProfile
+                hasProfile = currentProfile != null,
+                profileContent = {
+                    if (currentProfile != null) {
+                        com.arflix.tv.ui.components.ProfileAvatarVisual(profile = currentProfile)
+                    }
+                }
             )
         }
 
@@ -1651,7 +1659,7 @@ private fun FullscreenEpgOverlay(
             }
             // Top right: Clock
             Text(
-                text = com.arflix.tv.util.KmpDateUtils.formatSyncTime(com.arflix.tv.util.KmpDateUtils.nowEpochMillis()).substringAfter("at ").trim(),
+                text = com.arflix.tv.shared.util.KmpDateUtils.formatSyncTime(com.arflix.tv.shared.util.KmpDateUtils.nowEpochMillis()).substringAfter("at ").trim(),
                 style = ArflixTypography.sectionTitle.copy(fontSize = if (isMobile) 13.sp else 18.sp),
                 color = Color.White.copy(alpha = 0.8f),
                 modifier = Modifier.align(Alignment.TopEnd)
@@ -1985,5 +1993,5 @@ private tailrec fun android.content.Context.findTvActivity(): android.app.Activi
 }
 
 private fun formatProgramTime(utcMillis: Long): String {
-    return com.arflix.tv.util.KmpDateUtils.formatSyncTime(utcMillis).substringAfter("at ").trim()
+    return com.arflix.tv.shared.util.KmpDateUtils.formatSyncTime(utcMillis).substringAfter("at ").trim()
 }

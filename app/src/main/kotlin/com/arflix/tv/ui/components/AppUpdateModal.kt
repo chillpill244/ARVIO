@@ -45,7 +45,7 @@ import androidx.tv.foundation.ExperimentalTvFoundationApi
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import com.arflix.tv.BuildConfig
 import com.arflix.tv.R
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 import com.arflix.tv.shared.theme.ArflixTypography
 import com.arflix.tv.shared.theme.BackgroundElevated
 import com.arflix.tv.shared.theme.Pink

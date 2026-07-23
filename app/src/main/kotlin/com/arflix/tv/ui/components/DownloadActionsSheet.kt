@@ -1,4 +1,5 @@
 package com.arflix.tv.ui.components
+import com.arflix.tv.shared.components.LocalAppBottomBarPadding
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn

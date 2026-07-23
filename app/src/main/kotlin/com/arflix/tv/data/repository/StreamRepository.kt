@@ -1070,8 +1070,10 @@ class StreamRepository constructor(
                     (resource.name.equals("stream", ignoreCase = true) ||
                         resource.name.equals("streams", ignoreCase = true)) &&
                         supportsResourceType(resource.types, normalizedType) &&
-                        (resource.idPrefixes == null || resource.idPrefixes.isEmpty() ||
-                            resource.idPrefixes.any { id.startsWith(it) })
+                        (run {
+                            val prefixes = resource.idPrefixes
+                            prefixes == null || prefixes.isEmpty() || prefixes.any { id.startsWith(it) }
+                        })
                 }
                 if (hasMatchingResource) return@filter true
             }
@@ -1373,11 +1375,12 @@ class StreamRepository constructor(
                 } else null
 
                 val seriesId = "$imdbId:$season:$episode"
+                val addonUrl = addon.url
                 val supportsKitsu = addon.manifest?.idPrefixes?.contains("kitsu") == true ||
-                    addon.url.contains("torrentio") ||
-                    addon.url.contains("aiostreams") ||
-                    addon.url.contains("mediafusion") ||
-                    addon.url.contains("comet")
+                    addonUrl?.contains("torrentio") == true ||
+                    addonUrl?.contains("aiostreams") == true ||
+                    addonUrl?.contains("mediafusion") == true ||
+                    addonUrl?.contains("comet") == true
 
                 val useKitsuFallback = isAnime && supportsKitsu && animeQuery != null && animeQuery != seriesId
                 fun streamUrl(contentId: String): String {

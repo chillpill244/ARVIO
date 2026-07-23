@@ -1,4 +1,6 @@
 package com.arflix.tv.ui.screens.search
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
 
 import android.os.SystemClock
 import androidx.compose.animation.core.animateFloatAsState
@@ -77,15 +79,15 @@ import androidx.tv.material3.Text
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.model.Category
-import com.arflix.tv.ui.components.LocalAppBottomBarPadding
+import com.arflix.tv.shared.components.LocalAppBottomBarPadding
 import com.arflix.tv.ui.components.LoadingIndicator
 import com.arflix.tv.ui.components.CardLayoutMode
-import com.arflix.tv.ui.components.AppTopBar
-import com.arflix.tv.ui.components.AppTopBarContentTopInset
-import com.arflix.tv.ui.components.MediaCard
-import com.arflix.tv.ui.components.SidebarItem
-import com.arflix.tv.ui.components.topBarFocusedItem
-import com.arflix.tv.ui.components.topBarMaxIndex
+import com.arflix.tv.shared.components.AppTopBar
+
+import com.arflix.tv.shared.components.MediaCard
+import com.arflix.tv.shared.components.SidebarItem
+import com.arflix.tv.shared.components.topBarFocusedItem
+import com.arflix.tv.shared.components.topBarMaxIndex
 import com.arflix.tv.ui.components.rememberCatalogueRowLayoutMode
 import com.arflix.tv.ui.focus.arvioDpadFocusGroup
 import com.arflix.tv.shared.skin.ArvioFocusableSurface
@@ -99,7 +101,7 @@ import com.arflix.tv.shared.theme.AccentGreen
 import com.arflix.tv.shared.theme.Pink
 import com.arflix.tv.shared.theme.TextPrimary
 import com.arflix.tv.shared.theme.TextSecondary
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -468,7 +470,7 @@ fun SearchScreen(
     } else Modifier
 
     Box(modifier = Modifier.fillMaxSize().background(appBackgroundDark()).then(dpadModifier)) {
-        if (!isTouchDevice) AppTopBar(selectedItem = SidebarItem.SEARCH, isFocused = focusZone == FocusZone.SIDEBAR, focusedIndex = sidebarFocusIndex, profile = currentProfile)
+        if (!isTouchDevice) AppTopBar(selectedItem = SidebarItem.SEARCH, isFocused = focusZone == FocusZone.SIDEBAR, focusedIndex = sidebarFocusIndex, hasProfile = currentProfile != null, profileContent = { if (currentProfile != null) com.arflix.tv.ui.components.ProfileAvatarVisual(profile = currentProfile) })
 
         Column(modifier = Modifier.fillMaxSize().padding(top = if (isTouchDevice) 16.dp else AppTopBarContentTopInset).padding(horizontal = if (isTouchDevice) 12.dp else if (isCompactHeight) 20.dp else 28.dp)) {
             // ── Search Bar ──

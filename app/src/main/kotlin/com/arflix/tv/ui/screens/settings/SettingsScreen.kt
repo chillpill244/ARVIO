@@ -1,4 +1,6 @@
 package com.arflix.tv.ui.screens.settings
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
+import com.arflix.tv.shared.components.AppTopBarContentTopInset
 
 import android.content.Context
 import android.content.Intent
@@ -94,7 +96,7 @@ import androidx.tv.material3.Surface
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.Icon
-import com.arflix.tv.ui.components.LocalAppBottomBarPadding
+import com.arflix.tv.shared.components.LocalAppBottomBarPadding
 import com.arflix.tv.ui.components.LoadingIndicator
 import com.arflix.tv.ui.components.QrCodeImage
 import com.arflix.tv.ui.components.Toast
@@ -155,16 +157,16 @@ import com.arflix.tv.data.model.RuntimeKind
 import com.arflix.tv.data.repository.HomeServerConnection
 import com.arflix.tv.data.repository.HomeServerKind
 import com.arflix.tv.data.repository.IptvPlaylistEntry
-import com.arflix.tv.ui.components.AppTopBar
-import com.arflix.tv.ui.components.AppTopBarContentTopInset
+import com.arflix.tv.shared.components.AppTopBar
+
 import com.arflix.tv.ui.components.CatalogueRowLayoutToggleButton
-import com.arflix.tv.util.LocalDeviceType
+import com.arflix.tv.shared.util.LocalDeviceType
 import com.arflix.tv.util.tr
 import com.arflix.tv.util.trUpper
-import com.arflix.tv.ui.components.SidebarItem
+import com.arflix.tv.shared.components.SidebarItem
 import com.arflix.tv.ui.components.toggleCatalogueRowLayoutMode
-import com.arflix.tv.ui.components.topBarFocusedItem
-import com.arflix.tv.ui.components.topBarMaxIndex
+import com.arflix.tv.shared.components.topBarFocusedItem
+import com.arflix.tv.shared.components.topBarMaxIndex
 import com.arflix.tv.ui.focus.arvioDpadFocusGroup
 import com.arflix.tv.shared.skin.resolveAccentColor
 import com.arflix.tv.shared.theme.ArflixTypography
@@ -1106,7 +1108,12 @@ fun SettingsScreen(
                 selectedItem = SidebarItem.SETTINGS,
                 isFocused = activeZone == Zone.SIDEBAR,
                 focusedIndex = sidebarFocusIndex,
-                profile = currentProfile
+                hasProfile = currentProfile != null,
+                profileContent = {
+                    if (currentProfile != null) {
+                        com.arflix.tv.ui.components.ProfileAvatarVisual(profile = currentProfile)
+                    }
+                }
             )
 
             Row(
@@ -6481,9 +6488,10 @@ private fun CatalogDiscoveryResultRow(
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
-            if (!result.description.isNullOrBlank()) {
+            val desc = result.description
+            if (!desc.isNullOrBlank()) {
                 Text(
-                    text = result.description,
+                    text = desc,
                     style = ArflixTypography.caption,
                     color = TextSecondary.copy(alpha = 0.82f),
                     maxLines = 2,
@@ -6625,9 +6633,10 @@ private fun CatalogDiscoveryResultRow(
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
-            if (!result.description.isNullOrBlank()) {
+            val desc = result.description
+            if (!desc.isNullOrBlank()) {
                 Text(
-                    text = result.description,
+                    text = desc,
                     style = ArflixTypography.caption,
                     color = TextSecondary.copy(alpha = 0.82f),
                     maxLines = 2,

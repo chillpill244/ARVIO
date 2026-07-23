@@ -32,58 +32,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.foundation.lazy.list.TvLazyRow
 
-/**
- * Shared shimmer animation state - only one animation for all skeleton loaders
- * This prevents multiple infinite animations from running simultaneously
- */
-object ShimmerState {
-    private var cachedTranslation: Float = 0f
-
-    @Composable
-    fun getShimmerBrush(): Brush {
-        val transition = rememberInfiniteTransition(label = "globalShimmer")
-        val translateAnim by transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1000f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1200, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "shimmerTranslate"
-        )
-
-        return Brush.linearGradient(
-            colors = listOf(
-                Color(0xFF151520),
-                Color(0xFF1F1F2A),
-                Color(0xFF151520)
-            ),
-            start = Offset(translateAnim - 500f, 0f),
-            end = Offset(translateAnim, 0f)
-        )
-    }
-}
-
-/**
- * Shimmer effect brush for skeleton loaders - uses shared animation
- */
-@Composable
-fun shimmerBrush(): Brush = ShimmerState.getShimmerBrush()
-
-/**
- * Basic skeleton box with shimmer effect
- */
-@Composable
-fun SkeletonBox(
-    modifier: Modifier = Modifier,
-    shape: RoundedCornerShape = RoundedCornerShape(8.dp)
-) {
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .background(shimmerBrush())
-    )
-}
+import com.arflix.tv.shared.components.SkeletonBox
+import com.arflix.tv.shared.components.shimmerBrush
 
 /**
  * Skeleton card for media items (poster style)
