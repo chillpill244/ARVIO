@@ -217,6 +217,7 @@ private const val PIP_ACTION_PLAY_PAUSE = "com.arflix.tv.pip.PLAY_PAUSE"
 private const val PIP_ACTION_FORWARD = "com.arflix.tv.pip.FORWARD"
 
 private var activePlayerScreenCount = 0
+private var originalOrientation: Int? = null
 
 /**
  * Netflix-style Player UI for Android TV
@@ -282,8 +283,10 @@ fun PlayerScreen(
     // briefly has both screens in the composition, and we don't want the exiting screen 
     // to restore the system bars and portrait mode while the new one is active.
     DisposableEffect(activity, deviceType) {
+        if (activePlayerScreenCount == 0) {
+            originalOrientation = activity?.requestedOrientation
+        }
         activePlayerScreenCount++
-        val previousOrientation = activity?.requestedOrientation
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         
         val window = activity?.window
@@ -298,8 +301,9 @@ fun PlayerScreen(
             activePlayerScreenCount--
             if (activePlayerScreenCount <= 0) {
                 activePlayerScreenCount = 0
-                if (previousOrientation != null) {
-                    activity?.requestedOrientation = previousOrientation
+                if (originalOrientation != null) {
+                    activity?.requestedOrientation = originalOrientation!!
+                    originalOrientation = null
                 }
                 if (window != null && deviceType != com.arflix.tv.util.DeviceType.TV) {
                     val controller = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
