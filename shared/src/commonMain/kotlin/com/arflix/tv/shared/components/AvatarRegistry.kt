@@ -1,4 +1,4 @@
-package com.arflix.tv.ui.components
+package com.arflix.tv.shared.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
@@ -6,8 +6,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import com.arflix.tv.R
+import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.DrawableResource
+import arvio.shared.generated.resources.*
 
 /**
  * Registry of 84 avatar images using Microsoft Fluent Emoji 3D (MIT License).
@@ -32,103 +33,103 @@ object AvatarRegistry {
     )
 
     /** Map avatar ID to drawable resource. */
-    private val drawableResources: Map<Int, Int> = mapOf(
+    private val drawableResources: Map<Int, DrawableResource> = mapOf(
         // Original Animals (1-6)
-        1 to R.drawable.avatar_1,    // Cat
-        2 to R.drawable.avatar_2,    // Dog
-        3 to R.drawable.avatar_3,    // Fox
-        4 to R.drawable.avatar_4,    // Owl
-        5 to R.drawable.avatar_5,    // Penguin
-        6 to R.drawable.avatar_6,    // Panda
+        1 to Res.drawable.avatar_1,    // Cat
+        2 to Res.drawable.avatar_2,    // Dog
+        3 to Res.drawable.avatar_3,    // Fox
+        4 to Res.drawable.avatar_4,    // Owl
+        5 to Res.drawable.avatar_5,    // Penguin
+        6 to Res.drawable.avatar_6,    // Panda
         // Original Characters (7-12)
-        7 to R.drawable.avatar_7,    // Robot
-        8 to R.drawable.avatar_8,    // Alien
-        9 to R.drawable.avatar_9,    // Ghost
-        10 to R.drawable.avatar_10,  // Disguise
-        11 to R.drawable.avatar_11,  // Skull
-        12 to R.drawable.avatar_12,  // Space Invader
+        7 to Res.drawable.avatar_7,    // Robot
+        8 to Res.drawable.avatar_8,    // Alien
+        9 to Res.drawable.avatar_9,    // Ghost
+        10 to Res.drawable.avatar_10,  // Disguise
+        11 to Res.drawable.avatar_11,  // Skull
+        12 to Res.drawable.avatar_12,  // Space Invader
         // Original Media (13-18)
-        13 to R.drawable.avatar_13,  // Popcorn
-        14 to R.drawable.avatar_14,  // Clapper
-        15 to R.drawable.avatar_15,  // Gamepad
-        16 to R.drawable.avatar_16,  // Rocket
-        17 to R.drawable.avatar_17,  // Star
-        18 to R.drawable.avatar_18,  // Fire
+        13 to Res.drawable.avatar_13,  // Popcorn
+        14 to Res.drawable.avatar_14,  // Clapper
+        15 to Res.drawable.avatar_15,  // Gamepad
+        16 to Res.drawable.avatar_16,  // Rocket
+        17 to Res.drawable.avatar_17,  // Star
+        18 to Res.drawable.avatar_18,  // Fire
         // Original Nature (19-24)
-        19 to R.drawable.avatar_19,  // Cactus
-        20 to R.drawable.avatar_20,  // Mushroom
-        21 to R.drawable.avatar_21,  // Unicorn
-        22 to R.drawable.avatar_22,  // Dragon
-        23 to R.drawable.avatar_23,  // T-Rex
-        24 to R.drawable.avatar_24,  // Sunflower
+        19 to Res.drawable.avatar_19,  // Cactus
+        20 to Res.drawable.avatar_20,  // Mushroom
+        21 to Res.drawable.avatar_21,  // Unicorn
+        22 to Res.drawable.avatar_22,  // Dragon
+        23 to Res.drawable.avatar_23,  // T-Rex
+        24 to Res.drawable.avatar_24,  // Sunflower
         // Extended Animals (25-39)
-        25 to R.drawable.avatar_25,  // Bear
-        26 to R.drawable.avatar_26,  // Rabbit
-        27 to R.drawable.avatar_27,  // Hamster
-        28 to R.drawable.avatar_28,  // Frog
-        29 to R.drawable.avatar_29,  // Monkey
-        30 to R.drawable.avatar_30,  // Lion
-        31 to R.drawable.avatar_31,  // Tiger
-        32 to R.drawable.avatar_32,  // Koala
-        33 to R.drawable.avatar_33,  // Mouse
-        34 to R.drawable.avatar_34,  // Dolphin
-        35 to R.drawable.avatar_35,  // Octopus
-        36 to R.drawable.avatar_36,  // Butterfly
-        37 to R.drawable.avatar_37,  // Turtle
-        38 to R.drawable.avatar_38,  // Raccoon
-        39 to R.drawable.avatar_39,  // Hedgehog
+        25 to Res.drawable.avatar_25,  // Bear
+        26 to Res.drawable.avatar_26,  // Rabbit
+        27 to Res.drawable.avatar_27,  // Hamster
+        28 to Res.drawable.avatar_28,  // Frog
+        29 to Res.drawable.avatar_29,  // Monkey
+        30 to Res.drawable.avatar_30,  // Lion
+        31 to Res.drawable.avatar_31,  // Tiger
+        32 to Res.drawable.avatar_32,  // Koala
+        33 to Res.drawable.avatar_33,  // Mouse
+        34 to Res.drawable.avatar_34,  // Dolphin
+        35 to Res.drawable.avatar_35,  // Octopus
+        36 to Res.drawable.avatar_36,  // Butterfly
+        37 to Res.drawable.avatar_37,  // Turtle
+        38 to Res.drawable.avatar_38,  // Raccoon
+        39 to Res.drawable.avatar_39,  // Hedgehog
         // Extended Characters (40-54)
-        40 to R.drawable.avatar_40,  // Sunglasses
-        41 to R.drawable.avatar_41,  // Nerd
-        42 to R.drawable.avatar_42,  // Clown
-        43 to R.drawable.avatar_43,  // Cowboy
-        44 to R.drawable.avatar_44,  // Party
-        45 to R.drawable.avatar_45,  // Zany
-        46 to R.drawable.avatar_46,  // Heart-eyes
-        47 to R.drawable.avatar_47,  // Star-struck
-        48 to R.drawable.avatar_48,  // Halo
-        49 to R.drawable.avatar_49,  // Shushing
-        50 to R.drawable.avatar_50,  // Pumpkin
-        51 to R.drawable.avatar_51,  // Ogre
-        52 to R.drawable.avatar_52,  // Goblin
-        53 to R.drawable.avatar_53,  // Cold
-        54 to R.drawable.avatar_54,  // Exploding
+        40 to Res.drawable.avatar_40,  // Sunglasses
+        41 to Res.drawable.avatar_41,  // Nerd
+        42 to Res.drawable.avatar_42,  // Clown
+        43 to Res.drawable.avatar_43,  // Cowboy
+        44 to Res.drawable.avatar_44,  // Party
+        45 to Res.drawable.avatar_45,  // Zany
+        46 to Res.drawable.avatar_46,  // Heart-eyes
+        47 to Res.drawable.avatar_47,  // Star-struck
+        48 to Res.drawable.avatar_48,  // Halo
+        49 to Res.drawable.avatar_49,  // Shushing
+        50 to Res.drawable.avatar_50,  // Pumpkin
+        51 to Res.drawable.avatar_51,  // Ogre
+        52 to Res.drawable.avatar_52,  // Goblin
+        53 to Res.drawable.avatar_53,  // Cold
+        54 to Res.drawable.avatar_54,  // Exploding
         // Extended Media (55-69)
-        55 to R.drawable.avatar_55,  // Movie Camera
-        56 to R.drawable.avatar_56,  // Microphone
-        57 to R.drawable.avatar_57,  // Guitar
-        58 to R.drawable.avatar_58,  // Headphone
-        59 to R.drawable.avatar_59,  // Trophy
-        60 to R.drawable.avatar_60,  // Crystal Ball
-        61 to R.drawable.avatar_61,  // Joystick
-        62 to R.drawable.avatar_62,  // Television
-        63 to R.drawable.avatar_63,  // Camera
-        64 to R.drawable.avatar_64,  // Theater
-        65 to R.drawable.avatar_65,  // Art Palette
-        66 to R.drawable.avatar_66,  // Gem
-        67 to R.drawable.avatar_67,  // Puzzle
-        68 to R.drawable.avatar_68,  // Bowling
-        69 to R.drawable.avatar_69,  // Bullseye
+        55 to Res.drawable.avatar_55,  // Movie Camera
+        56 to Res.drawable.avatar_56,  // Microphone
+        57 to Res.drawable.avatar_57,  // Guitar
+        58 to Res.drawable.avatar_58,  // Headphone
+        59 to Res.drawable.avatar_59,  // Trophy
+        60 to Res.drawable.avatar_60,  // Crystal Ball
+        61 to Res.drawable.avatar_61,  // Joystick
+        62 to Res.drawable.avatar_62,  // Television
+        63 to Res.drawable.avatar_63,  // Camera
+        64 to Res.drawable.avatar_64,  // Theater
+        65 to Res.drawable.avatar_65,  // Art Palette
+        66 to Res.drawable.avatar_66,  // Gem
+        67 to Res.drawable.avatar_67,  // Puzzle
+        68 to Res.drawable.avatar_68,  // Bowling
+        69 to Res.drawable.avatar_69,  // Bullseye
         // Extended Nature (70-84)
-        70 to R.drawable.avatar_70,  // Rainbow
-        71 to R.drawable.avatar_71,  // Snowflake
-        72 to R.drawable.avatar_72,  // Cherry Blossom
-        73 to R.drawable.avatar_73,  // Rose
-        74 to R.drawable.avatar_74,  // Tulip
-        75 to R.drawable.avatar_75,  // Hibiscus
-        76 to R.drawable.avatar_76,  // Evergreen
-        77 to R.drawable.avatar_77,  // Palm Tree
-        78 to R.drawable.avatar_78,  // Volcano
-        79 to R.drawable.avatar_79,  // Comet
-        80 to R.drawable.avatar_80,  // Four Leaf Clover
-        81 to R.drawable.avatar_81,  // Crescent Moon
-        82 to R.drawable.avatar_82,  // Lotus
-        83 to R.drawable.avatar_83,  // Maple Leaf
-        84 to R.drawable.avatar_84   // Seedling
+        70 to Res.drawable.avatar_70,  // Rainbow
+        71 to Res.drawable.avatar_71,  // Snowflake
+        72 to Res.drawable.avatar_72,  // Cherry Blossom
+        73 to Res.drawable.avatar_73,  // Rose
+        74 to Res.drawable.avatar_74,  // Tulip
+        75 to Res.drawable.avatar_75,  // Hibiscus
+        76 to Res.drawable.avatar_76,  // Evergreen
+        77 to Res.drawable.avatar_77,  // Palm Tree
+        78 to Res.drawable.avatar_78,  // Volcano
+        79 to Res.drawable.avatar_79,  // Comet
+        80 to Res.drawable.avatar_80,  // Four Leaf Clover
+        81 to Res.drawable.avatar_81,  // Crescent Moon
+        82 to Res.drawable.avatar_82,  // Lotus
+        83 to Res.drawable.avatar_83,  // Maple Leaf
+        84 to Res.drawable.avatar_84   // Seedling
     )
 
-    fun getDrawableRes(avatarId: Int): Int =
-        drawableResources[avatarId] ?: R.drawable.avatar_1
+    fun getDrawableRes(avatarId: Int): DrawableResource =
+        drawableResources[avatarId] ?: Res.drawable.avatar_1
 
     /**
      * Gradient background colors per avatar - dark tones that complement each 3D icon.
@@ -236,7 +237,7 @@ object AvatarRegistry {
 @Composable
 fun AvatarIcon(avatarId: Int, modifier: Modifier = Modifier) {
     Image(
-        painter = painterResource(id = AvatarRegistry.getDrawableRes(avatarId)),
+        painter = painterResource(AvatarRegistry.getDrawableRes(avatarId)),
         contentDescription = "Avatar",
         modifier = modifier.fillMaxSize(),
         contentScale = ContentScale.Fit

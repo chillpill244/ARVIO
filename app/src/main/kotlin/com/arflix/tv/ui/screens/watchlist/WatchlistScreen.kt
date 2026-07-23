@@ -65,7 +65,7 @@ import com.arflix.tv.shared.components.AppTopBar
 
 import com.arflix.tv.ui.components.CardLayoutMode
 import com.arflix.tv.shared.components.LocalAppBottomBarPadding
-import com.arflix.tv.ui.components.LoadingIndicator
+import com.arflix.tv.shared.components.LoadingIndicator
 import com.arflix.tv.shared.components.MediaCard
 import com.arflix.tv.shared.components.SidebarItem
 import com.arflix.tv.ui.components.Toast

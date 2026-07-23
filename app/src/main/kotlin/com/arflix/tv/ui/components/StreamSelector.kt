@@ -1,4 +1,6 @@
 package com.arflix.tv.ui.components
+
+import com.arflix.tv.shared.components.LoadingIndicator
 import com.arflix.tv.shared.components.LocalAppBottomBarPadding
 
 import androidx.compose.animation.AnimatedVisibility

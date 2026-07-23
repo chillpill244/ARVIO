@@ -1,5 +1,8 @@
 package com.arflix.tv.ui.components
 
+import com.arflix.tv.shared.components.AvatarIcon
+import com.arflix.tv.shared.components.AvatarRegistry
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize

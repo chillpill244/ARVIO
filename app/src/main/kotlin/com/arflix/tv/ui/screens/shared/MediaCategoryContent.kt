@@ -60,7 +60,7 @@ import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.tween
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.ui.components.CardLayoutMode
-import com.arflix.tv.ui.components.LoadingIndicator
+import com.arflix.tv.shared.components.LoadingIndicator
 import com.arflix.tv.shared.components.MediaCard
 import com.arflix.tv.shared.components.MediaCategoryRail
 import com.arflix.tv.ui.components.TopBarClock

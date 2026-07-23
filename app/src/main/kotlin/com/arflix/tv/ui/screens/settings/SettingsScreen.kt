@@ -97,7 +97,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.Icon
 import com.arflix.tv.shared.components.LocalAppBottomBarPadding
-import com.arflix.tv.ui.components.LoadingIndicator
+import com.arflix.tv.shared.components.LoadingIndicator
 import com.arflix.tv.ui.components.QrCodeImage
 import com.arflix.tv.ui.components.Toast
 import com.arflix.tv.ui.components.ToastType as ComponentToastType

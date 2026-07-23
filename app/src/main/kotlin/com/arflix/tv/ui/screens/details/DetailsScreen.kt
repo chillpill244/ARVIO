@@ -141,7 +141,7 @@ import com.arflix.tv.ui.components.DownloadSheet
 import com.arflix.tv.ui.components.EpisodeContextMenu
 import com.arflix.tv.ui.components.KeepScreenOn
 import com.arflix.tv.ui.components.SeasonContextMenu
-import com.arflix.tv.ui.components.LoadingIndicator
+import com.arflix.tv.shared.components.LoadingIndicator
 import com.arflix.tv.shared.components.AppTopBar
 
 import com.arflix.tv.ui.components.CardLayoutMode
@@ -1963,7 +1963,7 @@ internal fun DetailsContent(
             // Persistent back button for phone users (hidden on tablet/TV).
             // Sits on top of the scrolling Column so it's always reachable even
             // when the system nav bar auto-hides. Issue #43.
-            com.arflix.tv.ui.components.MobileBackButton(
+            com.arflix.tv.shared.components.MobileBackButton(
                 onBack = onBack,
                 modifier = Modifier.align(Alignment.TopStart).statusBarsPadding()
             )
