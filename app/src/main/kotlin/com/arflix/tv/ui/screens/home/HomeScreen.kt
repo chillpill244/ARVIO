@@ -2088,7 +2088,6 @@ private fun MobileHeroCarousel(
             state = pagerState,
             contentPadding = PaddingValues(horizontal = 64.dp),
             pageSpacing = 18.dp,
-            beyondBoundsPageCount = 1,
             modifier = Modifier.fillMaxWidth()
         ) { page ->
             val item = heroItems[page % heroItems.size]
