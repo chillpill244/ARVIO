@@ -1,4 +1,4 @@
-package com.arflix.tv.util
+package com.arflix.tv.shared.util
 
 data class EpisodePointer(val season: Int, val episode: Int)
 

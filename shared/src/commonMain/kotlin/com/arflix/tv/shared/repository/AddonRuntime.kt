@@ -1,4 +1,7 @@
-package com.arflix.tv.data.repository
+package com.arflix.tv.shared.repository
+import com.arflix.tv.shared.repository.ProfileManager
+import com.arflix.tv.shared.repository.AuthRepository
+
 
 import com.arflix.tv.data.model.Addon
 import com.arflix.tv.data.model.RuntimeKind

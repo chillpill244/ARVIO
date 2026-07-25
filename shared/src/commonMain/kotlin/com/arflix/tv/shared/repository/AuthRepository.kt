@@ -1,29 +1,11 @@
-package com.arflix.tv.data.repository
+package com.arflix.tv.shared.repository
 
 import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
-import android.content.Context
-import android.util.Base64
-import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.GetCredentialResponse
-import androidx.credentials.exceptions.GetCredentialException
+// import org.koin.core.component.inject
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.arflix.tv.util.AppLogger
-import com.arflix.tv.util.Constants
-import com.arflix.tv.util.AuthEmailValidator
-import com.arflix.tv.util.authDataStore
-import com.arflix.tv.util.settingsDataStore
-import com.arflix.tv.util.hash
-import com.arflix.tv.util.sanitizeEmail
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.gotrue.Auth
@@ -53,14 +35,12 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
-import javax.inject.Provider
+import com.arflix.tv.shared.util.ArvioJsonObject as JSONObject
+// removed javax.inject.Provider
 
 // authDataStore is defined in com.arflix.tv.util.DataStores to avoid duplicate DataStore instances
 
@@ -129,14 +109,15 @@ sealed class AuthState {
 /**
  * Repository for Supabase authentication and user profile management
  */
+@OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
 class AuthRepository constructor(
-    private val context: Context,
-    private val okHttpClient: OkHttpClient
+    private val authDataStore: DataStore<Preferences>,
+    private val settingsDataStore: DataStore<Preferences>
+    
 ) : org.koin.core.component.KoinComponent {
-    private val traktRepositoryProvider: kotlin.Lazy<TraktRepository> = inject()
-    private val cloudSyncRepositoryProvider: kotlin.Lazy<CloudSyncRepository> = inject()
+    private val traktRepositoryProvider: kotlin.Lazy<TraktRepository> = lazy { TODO("Inject TraktRepository") }
+    private val cloudSyncRepositoryProvider: kotlin.Lazy<CloudSyncRepository> = lazy { TODO("Inject CloudSyncRepository") }
     private val TAG = "AuthRepository"
-    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val accountSyncMutationMutex = Mutex()
     private val ACCOUNT_SYNC_PAYLOAD_KEY = "accountSyncPayload"
     private val ACCOUNT_SYNC_UPDATED_AT_KEY = "accountSyncUpdatedAt"
@@ -153,13 +134,13 @@ class AuthRepository constructor(
     }
 
     // Keep reference to session manager for explicit saves
-    private val sessionManager = DataStoreSessionManager(context.authDataStore)
+    private val sessionManager = DataStoreSessionManager(authDataStore)
 
     // Supabase client (lazy to avoid startup overhead when unauthenticated)
     private val supabase: SupabaseClient by lazy {
         createSupabaseClient(
-            supabaseUrl = Constants.SUPABASE_URL,
-            supabaseKey = Constants.SUPABASE_ANON_KEY
+            supabaseUrl = "",
+            supabaseKey = ""
         ) {
             install(Auth) {
                 sessionManager = this@AuthRepository.sessionManager
@@ -185,7 +166,7 @@ class AuthRepository constructor(
      */
     suspend fun checkAuthState() {
         try {
-            val prefs = context.authDataStore.data.first()
+            val prefs = authDataStore.data.first()
             val accessToken = prefs[PrefsKeys.ACCESS_TOKEN]
             val refreshToken = prefs[PrefsKeys.REFRESH_TOKEN]
             val cachedUserId = prefs[PrefsKeys.USER_ID]
@@ -270,13 +251,13 @@ class AuthRepository constructor(
      * Sign in with email and password
      */
     suspend fun signIn(email: String, password: String): Result<Unit> {
-        val normalizedEmail = AuthEmailValidator.normalize(email)
-        AuthEmailValidator.validate(normalizedEmail, rejectDisposable = false)?.let { message ->
+        val normalizedEmail = email.trim().lowercase()
+        // Skipping validation for KMP stub
+        null?.let { message: String ->
             _authState.value = AuthState.Error(message)
             return Result.failure(Exception(message))
         }
         return try {
-            AppLogger.breadcrumb("Auth", "email_sign_in_start")
             _authState.value = AuthState.Loading
 
             supabase.auth.signInWith(Email) {
@@ -298,18 +279,15 @@ class AuthRepository constructor(
 
                 _userProfile.value = profile
                 _authState.value = AuthState.Authenticated(user.id, user.email ?: normalizedEmail, profile)
-                AppLogger.breadcrumb("Auth", "email_sign_in_success")
                 Result.success(Unit)
             } else {
                 val message = safeErrorMessage(null, "Sign in failed")
                 _authState.value = AuthState.Error(message)
-                AppLogger.breadcrumb("Auth", "email_sign_in_no_session", severity = "warning")
                 Result.failure(Exception(message))
             }
         } catch (e: Exception) {
             val message = safeErrorMessage(e, "Sign in failed")
             _authState.value = AuthState.Error(message)
-            AppLogger.breadcrumb("Auth", "email_sign_in_failed ${e::class.java.simpleName}", severity = "warning")
             Result.failure(Exception(message))
         }
     }
@@ -318,32 +296,24 @@ class AuthRepository constructor(
      * Sign up with email and password
      */
     suspend fun signUp(email: String, password: String): Result<Unit> {
-        val normalizedEmail = AuthEmailValidator.normalize(email)
-        AuthEmailValidator.validate(normalizedEmail)?.let { message ->
+        val normalizedEmail = email.trim().lowercase()
+        // Skipping validation for KMP stub
+        null?.let { message: String ->
             _authState.value = AuthState.Error(message)
             return Result.failure(Exception(message))
         }
         return try {
-            AppLogger.breadcrumb("Auth", "email_sign_up_start")
             _authState.value = AuthState.Loading
 
             val tokens = createCloudAccountSession(normalizedEmail, password)
             signInWithSessionTokens(tokens.accessToken, tokens.refreshToken).also {
                 if (it.isSuccess) {
-                    AppLogger.breadcrumb("Auth", "email_sign_up_success")
-                }
+                    }
             }
         } catch (e: Exception) {
             val message = safeErrorMessage(e, "Sign up failed")
             _authState.value = AuthState.Error(message)
-            AppLogger.recordException(
-                throwable = e,
-                context = mapOf(
-                    "error_area" to "Auth",
-                    "auth_flow" to "email_sign_up",
-                    "auth_error" to message
-                )
-            )
+            // AppLogger stubbed for KMP
             Result.failure(Exception(message))
         }
     }
@@ -354,36 +324,7 @@ class AuthRepository constructor(
     )
 
     private suspend fun createCloudAccountSession(email: String, password: String): CloudAccountSession {
-        return withContext(Dispatchers.IO) {
-            val payload = JSONObject()
-                .put("email", email)
-                .put("password", password)
-                .toString()
-
-            val request = Request.Builder()
-                .url(Constants.CLOUD_AUTH_EMAIL_URL)
-                .header("apikey", Constants.SUPABASE_ANON_KEY)
-                .header("Authorization", "Bearer ${Constants.SUPABASE_ANON_KEY}")
-                .post(payload.toRequestBody(jsonMediaType))
-                .build()
-
-            okHttpClient.newCall(request).execute().use { response ->
-                val body = response.body?.string().orEmpty()
-                val json = runCatching { JSONObject(body) }.getOrNull()
-                if (!response.isSuccessful) {
-                    val message = json?.optString("error")?.takeIf { it.isNotBlank() }
-                        ?: "Unable to create account"
-                    throw IllegalStateException(message)
-                }
-
-                val accessToken = json?.optString("access_token").orEmpty()
-                val refreshToken = json?.optString("refresh_token").orEmpty()
-                if (accessToken.isBlank() || refreshToken.isBlank()) {
-                    throw IllegalStateException("Auth response incomplete")
-                }
-                CloudAccountSession(accessToken, refreshToken)
-            }
-        }
+        throw IllegalStateException("Stubbed for KMP migration")
     }
 
     /**
@@ -405,7 +346,7 @@ class AuthRepository constructor(
             val resolvedUserId = session?.user?.id ?: extractUserIdFromAccessToken(accessToken)
             val resolvedEmail = session?.user?.email
                 ?: extractUserEmailFromAccessToken(accessToken)
-                ?: context.authDataStore.data.first()[PrefsKeys.USER_EMAIL]
+                ?: authDataStore.data.first()[PrefsKeys.USER_EMAIL]
 
             if (session != null) {
                 storeSession(session)
@@ -429,111 +370,24 @@ class AuthRepository constructor(
                     resolvedEmail ?: profile.email,
                     profile
                 )
-                AppLogger.breadcrumb("Auth", "session_import_success")
                 Result.success(Unit)
             } else {
                 _authState.value = AuthState.Error("Failed to import auth session")
-                AppLogger.breadcrumb("Auth", "session_import_missing_user", severity = "warning")
                 Result.failure(Exception("Failed to import auth session"))
             }
         } catch (e: Exception) {
             val message = safeErrorMessage(e, "Sign in failed")
             _authState.value = AuthState.Error(message)
-            AppLogger.recordException(
-                throwable = e,
-                context = mapOf(
-                    "error_area" to "Auth",
-                    "auth_flow" to "session_import",
-                    "auth_error" to message
-                )
-            )
+            // AppLogger stubbed for KMP
             Result.failure(Exception(message))
         }
     }
 
-    /**
-     * Sign in with Google using Credential Manager
-     * Returns the GetCredentialRequest for the Activity to handle
-     * Uses GetSignInWithGoogleOption which works better on TV devices
-     */
-    fun getGoogleSignInRequest(): GetCredentialRequest {
-        // Use GetSignInWithGoogleOption for TV - this opens the Google Sign-In UI
-        val signInWithGoogleOption = GetSignInWithGoogleOption.Builder(Constants.GOOGLE_WEB_CLIENT_ID)
-            .setNonce(generateNonce())
-            .build()
+    
 
-        return GetCredentialRequest.Builder()
-            .addCredentialOption(signInWithGoogleOption)
-            .build()
-    }
+    
 
-    /**
-     * Generate a random nonce for Google Sign-In security
-     */
-    private fun generateNonce(): String {
-        val bytes = ByteArray(16)
-        java.security.SecureRandom().nextBytes(bytes)
-        return bytes.joinToString("") { "%02x".format(it) }
-    }
-
-    /**
-     * Handle Google Sign-In credential response
-     */
-    suspend fun handleGoogleSignInResult(result: GetCredentialResponse): Result<Unit> {
-        return try {
-            _authState.value = AuthState.Loading
-
-            val credential = result.credential
-
-            when (credential) {
-                is CustomCredential -> {
-                    if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                        val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                        val idToken = googleIdTokenCredential.idToken
-
-                        // Sign in to Supabase with the Google ID token
-                        supabase.auth.signInWith(IDToken) {
-                            this.idToken = idToken
-                            provider = Google
-                        }
-
-                        val session = supabase.auth.currentSessionOrNull()
-                        val user = session?.user
-
-                        if (user != null) {
-                            storeSession(session)
-
-                            // Load or create profile
-                            var profile = loadUserProfile(user.id)
-                            if (profile == null) {
-                                profile = createDefaultProfile(user.id, user.email ?: "")
-                            }
-
-                            _userProfile.value = profile
-                            _authState.value = AuthState.Authenticated(user.id, user.email ?: "", profile)
-                            Result.success(Unit)
-                        } else {
-                            _authState.value = AuthState.Error("Google Sign-In failed")
-                            Result.failure(Exception("Google Sign-In failed"))
-                        }
-                    } else {
-                        _authState.value = AuthState.Error("Unexpected credential type")
-                        Result.failure(Exception("Unexpected credential type"))
-                    }
-                }
-                else -> {
-                    _authState.value = AuthState.Error("Unexpected credential type")
-                    Result.failure(Exception("Unexpected credential type"))
-                }
-            }
-        } catch (e: GoogleIdTokenParsingException) {
-            _authState.value = AuthState.Error("Failed to parse Google credentials")
-            Result.failure(e)
-        } catch (e: Exception) {
-            _authState.value = AuthState.Error(e.message ?: "Google Sign-In failed")
-            Result.failure(e)
-        }
-    }
+    
 
     /**
      * Sign out
@@ -553,8 +407,8 @@ class AuthRepository constructor(
         }
 
         // Clear ALL local data (auth + settings + user preferences)
-        context.authDataStore.edit { prefs -> prefs.clear() }
-        context.settingsDataStore.edit { prefs -> prefs.clear() }
+        authDataStore.edit { prefs -> prefs.clear() }
+        settingsDataStore.edit { prefs -> prefs.clear() }
 
         _userProfile.value = null
         _authState.value = AuthState.NotAuthenticated
@@ -679,13 +533,13 @@ class AuthRepository constructor(
             return session.accessToken
         }
 
-        val prefs = context.authDataStore.data.first()
+        val prefs = authDataStore.data.first()
         val cached = prefs[PrefsKeys.ACCESS_TOKEN]
         return if (!cached.isNullOrBlank() && !isJwtExpired(cached)) cached else refreshAccessToken()
     }
 
     suspend fun refreshAccessToken(): String? {
-        val prefs = context.authDataStore.data.first()
+        val prefs = authDataStore.data.first()
         val refreshToken = prefs[PrefsKeys.REFRESH_TOKEN]
         if (refreshToken.isNullOrBlank()) return null
 
@@ -712,7 +566,7 @@ class AuthRepository constructor(
             return session
         }
 
-        val prefs = context.authDataStore.data.first()
+        val prefs = authDataStore.data.first()
         val refreshToken = prefs[PrefsKeys.REFRESH_TOKEN]
         if (refreshToken.isNullOrBlank()) {
             return null
@@ -746,10 +600,7 @@ class AuthRepository constructor(
         return try {
             val parts = token.split(".")
             if (parts.size < 2) return true
-            val payload = String(
-                Base64.decode(parts[1], Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP),
-                Charsets.UTF_8
-            )
+            val payload = Base64.UrlSafe.decode(parts[1].padEnd(parts[1].length + (4 - parts[1].length % 4) % 4, '=')).decodeToString()
             val json = JSONObject(payload)
             // SECURITY FIX: Reject tokens without exp claim
             if (!json.has("exp")) {
@@ -774,7 +625,7 @@ class AuthRepository constructor(
         }
 
         // 2. Also save tokens directly (fallback for manual restoration)
-        context.authDataStore.edit { prefs ->
+        authDataStore.edit { prefs ->
             prefs[PrefsKeys.ACCESS_TOKEN] = session.accessToken
             prefs[PrefsKeys.REFRESH_TOKEN] = session.refreshToken
             val user = session.user
@@ -791,7 +642,7 @@ class AuthRepository constructor(
         userId: String,
         email: String?
     ) {
-        context.authDataStore.edit { prefs ->
+        authDataStore.edit { prefs ->
             prefs[PrefsKeys.ACCESS_TOKEN] = accessToken
             prefs[PrefsKeys.REFRESH_TOKEN] = refreshToken
             prefs[PrefsKeys.USER_ID] = userId
@@ -813,10 +664,7 @@ class AuthRepository constructor(
         return try {
             val parts = token.split(".")
             if (parts.size < 2) return null
-            val payload = String(
-                Base64.decode(parts[1], Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP),
-                Charsets.UTF_8
-            )
+            val payload = Base64.UrlSafe.decode(parts[1].padEnd(parts[1].length + (4 - parts[1].length % 4) % 4, '=')).decodeToString()
             JSONObject(payload)
         } catch (e: Exception) {
             null
@@ -1081,7 +929,7 @@ class AuthRepository constructor(
             }.getOrNull()
 
             val updatedSettings = buildJsonObject {
-                existingSettings?.forEach { (key, value) -> put(key, value) }
+                existingSettings?.forEach { entry -> put(entry.key, entry.value) }
                 put(ACCOUNT_SYNC_PAYLOAD_KEY, JsonPrimitive(payload))
                 put(ACCOUNT_SYNC_UPDATED_AT_KEY, JsonPrimitive(Clock.System.now().toString()))
             }

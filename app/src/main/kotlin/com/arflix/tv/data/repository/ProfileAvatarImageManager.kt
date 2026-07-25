@@ -1,4 +1,9 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.repository.ProfileManager
+import com.arflix.tv.shared.repository.AuthRepository
+
+
+import com.arflix.tv.shared.repository.AuthState
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -82,9 +87,9 @@ class ProfileAvatarImageManager constructor(
 
     fun buildInlineAvatarImagesJson(
         profiles: List<Profile>,
-        existingImagesById: JSONObject? = null
-    ): JSONObject {
-        val result = JSONObject()
+        existingImagesById: com.arflix.tv.shared.util.ArvioJsonObject? = null
+    ): com.arflix.tv.shared.util.ArvioJsonObject {
+        val result = com.arflix.tv.shared.util.ArvioJsonObject()
         profiles
             .filter { it.avatarImageVersion > 0L }
             .forEach { profile ->

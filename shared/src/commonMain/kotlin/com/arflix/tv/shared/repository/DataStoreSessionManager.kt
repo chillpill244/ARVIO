@@ -1,4 +1,4 @@
-package com.arflix.tv.data.repository
+package com.arflix.tv.shared.repository
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -12,7 +12,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import com.arflix.tv.util.AppLogger
 
 /**
  * DataStore-backed SessionManager for Supabase Auth.
@@ -38,7 +37,7 @@ class DataStoreSessionManager(
                     prefs[sessionKey] = payload
                 }
             } catch (e: Exception) {
-                AppLogger.e(TAG, "Failed to save session", e)
+                println("DataStoreSessionManager Logger stub")
                 throw e
             }
         }
@@ -55,13 +54,13 @@ class DataStoreSessionManager(
                 session
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                AppLogger.e(TAG, "Failed to load session", e)
+                println("DataStoreSessionManager Logger stub")
                 // Clear corrupted data
                 try {
                     dataStore.edit { prefs -> prefs.remove(sessionKey) }
                 } catch (clearError: Exception) {
                     if (clearError is CancellationException) throw clearError
-                    AppLogger.e(TAG, "Failed to clear corrupted session data", clearError)
+                    println("DataStoreSessionManager Logger stub")
                 }
                 null
             }
@@ -73,7 +72,7 @@ class DataStoreSessionManager(
             try {
                 dataStore.edit { prefs -> prefs.remove(sessionKey) }
             } catch (e: Exception) {
-                AppLogger.e(TAG, "Failed to delete session", e)
+                println("DataStoreSessionManager Logger stub")
                 throw e
             }
         }

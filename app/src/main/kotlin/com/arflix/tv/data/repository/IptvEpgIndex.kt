@@ -1,4 +1,7 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.repository.ProfileManager
+import com.arflix.tv.shared.repository.AuthRepository
+
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase

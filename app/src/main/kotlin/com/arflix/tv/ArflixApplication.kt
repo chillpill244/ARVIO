@@ -20,13 +20,13 @@ import coil3.memory.MemoryCache
 import okio.Path.Companion.toOkioPath
 import com.arflix.tv.network.OkHttpProvider
 import com.arflix.tv.data.repository.AppUsageAnalyticsRepository
-import com.arflix.tv.data.repository.AuthRepository
-import com.arflix.tv.data.repository.AuthState
+import com.arflix.tv.shared.repository.AuthRepository
+import com.arflix.tv.shared.repository.AuthState
 import com.arflix.tv.data.repository.CloudSyncCoordinator
 import com.arflix.tv.data.repository.CloudSyncRepository
 import com.arflix.tv.data.repository.RealtimeSyncManager
-import com.arflix.tv.data.repository.WatchlistRepository
-import com.arflix.tv.data.repository.ProfileManager
+import com.arflix.tv.shared.repository.WatchlistRepository
+import com.arflix.tv.shared.repository.ProfileManager
 import com.arflix.tv.util.AppLogger
 import com.arflix.tv.util.CrashlyticsProvider
 import com.arflix.tv.shared.util.DeviceType

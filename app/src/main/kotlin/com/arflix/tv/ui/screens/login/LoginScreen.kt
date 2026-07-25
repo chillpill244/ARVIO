@@ -35,7 +35,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import com.arflix.tv.data.repository.AuthState
+import com.arflix.tv.shared.repository.AuthState
 import com.arflix.tv.ui.components.*
 import com.arflix.tv.shared.components.*
 import com.arflix.tv.shared.theme.*

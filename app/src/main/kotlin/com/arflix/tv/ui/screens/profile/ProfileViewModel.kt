@@ -7,12 +7,12 @@ import androidx.lifecycle.viewModelScope
 import com.arflix.tv.data.model.Profile
 import com.arflix.tv.data.model.ProfileColors
 import com.arflix.tv.data.repository.CloudSyncRepository
-import com.arflix.tv.data.repository.ProfileManager
+import com.arflix.tv.shared.repository.ProfileManager
 import com.arflix.tv.data.repository.ProfileAvatarImageManager
 import com.arflix.tv.data.repository.ProfileRepository
-import com.arflix.tv.data.repository.TraktRepository
+import com.arflix.tv.shared.repository.TraktRepository
 import com.arflix.tv.data.repository.WatchHistoryRepository
-import com.arflix.tv.data.repository.WatchlistRepository
+import com.arflix.tv.shared.repository.WatchlistRepository
 import com.arflix.tv.data.repository.IptvRepository
 import com.arflix.tv.shared.components.ToastType
 import com.arflix.tv.util.PinUtil

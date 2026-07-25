@@ -1,4 +1,9 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.repository.ProfileManager
+import com.arflix.tv.shared.repository.AuthRepository
+
+
+import com.arflix.tv.shared.repository.AuthState
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
@@ -200,8 +205,8 @@ class ProfileRepository constructor(
         val profiles = getProfiles()
         val activeProfileId = getActiveProfileId()
         authRepository.mutateAccountSyncPayload { root ->
-            root.put("activeProfileId", activeProfileId ?: JSONObject.NULL)
-            root.put("profiles", JSONArray(json.encodeToString(profiles)))
+            root.put("activeProfileId", activeProfileId)
+            root.put("profiles", json.parseToJsonElement(json.encodeToString(profiles)))
             root.put(
                 "profileAvatarImagesById",
                 profileAvatarImageManager.buildInlineAvatarImagesJson(

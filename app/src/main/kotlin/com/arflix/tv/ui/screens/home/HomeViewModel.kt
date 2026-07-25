@@ -22,20 +22,20 @@ import com.arflix.tv.data.model.CollectionGroupKind
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.repository.MediaRepository
-import com.arflix.tv.data.repository.TraktRepository
-import com.arflix.tv.data.repository.TraktSyncService
-import com.arflix.tv.data.repository.ContinueWatchingItem
+import com.arflix.tv.shared.repository.TraktRepository
+import com.arflix.tv.shared.repository.TraktSyncService
+import com.arflix.tv.shared.repository.ContinueWatchingItem
 import com.arflix.tv.data.repository.CatalogRepository
 import com.arflix.tv.data.repository.CloudSyncRepository
 import com.arflix.tv.data.repository.LauncherContinueWatchingRepository
-import com.arflix.tv.data.repository.ProfileManager
+import com.arflix.tv.shared.repository.ProfileManager
 import com.arflix.tv.data.repository.StreamRepository
 import com.arflix.tv.data.repository.IptvRepository
 import com.arflix.tv.data.repository.HomeServerRepository
 import com.arflix.tv.data.repository.CloudSyncStatus
 import com.arflix.tv.data.repository.CollectionTemplateManifest
 import com.arflix.tv.data.repository.WatchHistoryRepository
-import com.arflix.tv.data.repository.WatchlistRepository
+import com.arflix.tv.shared.repository.WatchlistRepository
 import com.arflix.tv.util.AppLogger
 import com.arflix.tv.util.Constants
 import com.arflix.tv.shared.util.DeviceType
@@ -1501,7 +1501,7 @@ class HomeViewModel constructor(
         }
         viewModelScope.launch {
             traktSyncService.syncEvents.collect { status ->
-                if (status == com.arflix.tv.data.repository.SyncStatus.COMPLETED) {
+                if (status == com.arflix.tv.shared.repository.SyncStatus.COMPLETED) {
                     refreshContinueWatchingOnly(force = true)
                 }
             }

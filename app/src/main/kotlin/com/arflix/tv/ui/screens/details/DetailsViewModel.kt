@@ -19,13 +19,13 @@ import com.arflix.tv.data.repository.CloudSyncRepository
 import com.arflix.tv.data.repository.HomeServerRepository
 import com.arflix.tv.data.repository.LauncherContinueWatchingRepository
 import com.arflix.tv.data.repository.MediaRepository
-import com.arflix.tv.data.repository.ProfileManager
+import com.arflix.tv.shared.repository.ProfileManager
 import com.arflix.tv.data.repository.StreamRepository
-import com.arflix.tv.data.repository.TraktRepository
+import com.arflix.tv.shared.repository.TraktRepository
 import com.arflix.tv.data.db.DownloadEntity
 import com.arflix.tv.data.repository.DownloadsRepository
 import com.arflix.tv.data.repository.WatchHistoryRepository
-import com.arflix.tv.data.repository.WatchlistRepository
+import com.arflix.tv.shared.repository.WatchlistRepository
 import com.arflix.tv.util.Constants
 import com.arflix.tv.util.settingsDataStore
 import kotlinx.coroutines.CancellationException

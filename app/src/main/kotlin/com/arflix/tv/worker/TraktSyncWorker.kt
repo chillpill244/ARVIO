@@ -3,8 +3,8 @@ package com.arflix.tv.worker
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.arflix.tv.data.repository.TraktRepository
-import com.arflix.tv.data.repository.TraktSyncService
+import com.arflix.tv.shared.repository.TraktRepository
+import com.arflix.tv.shared.repository.TraktSyncService
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlinx.coroutines.flow.first
@@ -21,8 +21,8 @@ class TraktSyncWorker(
     params: WorkerParameters
 ) : CoroutineWorker(appContext, params), KoinComponent {
 
-    private val traktRepository: com.arflix.tv.data.repository.TraktRepository by inject()
-    private val syncService: com.arflix.tv.data.repository.TraktSyncService by inject()
+    private val traktRepository: com.arflix.tv.shared.repository.TraktRepository by inject()
+    private val syncService: com.arflix.tv.shared.repository.TraktSyncService by inject()
 
     companion object {
         const val TAG = "TraktSyncWorker"

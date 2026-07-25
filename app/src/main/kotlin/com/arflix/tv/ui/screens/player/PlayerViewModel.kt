@@ -16,13 +16,13 @@ import com.arflix.tv.data.model.Subtitle
 import com.arflix.tv.data.repository.MediaRepository
 import com.arflix.tv.data.repository.HomeServerRepository
 import com.arflix.tv.data.repository.PlaybackTelemetryRepository
-import com.arflix.tv.data.repository.ProfileManager
+import com.arflix.tv.shared.repository.ProfileManager
 import com.arflix.tv.data.repository.SkipInterval
 import com.arflix.tv.data.repository.SkipIntroRepository
 import com.arflix.tv.data.repository.StreamRepository
 import com.arflix.tv.data.repository.CloudSyncRepository
 import com.arflix.tv.data.repository.LauncherContinueWatchingRepository
-import com.arflix.tv.data.repository.TraktRepository
+import com.arflix.tv.shared.repository.TraktRepository
 import com.arflix.tv.data.repository.WatchHistoryEntry
 import com.arflix.tv.data.repository.WatchHistoryRepository
 import com.arflix.tv.data.db.DownloadStatus

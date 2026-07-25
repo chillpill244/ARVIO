@@ -111,7 +111,7 @@ suspend fun toggleCatalogueRowLayoutMode(
     rowKey: String
 ) {
     val normalizedRowKey = normalizeCatalogueRowLayoutKey(rowKey)
-    val profileManager = org.koin.java.KoinJavaComponent.getKoin().get<com.arflix.tv.data.repository.ProfileManager>()
+    val profileManager = org.koin.java.KoinJavaComponent.getKoin().get<com.arflix.tv.shared.repository.ProfileManager>()
     val profileId = profileManager.getProfileId()
     val key = profileCatalogueRowLayoutModeKey(profileId, normalizedRowKey)
     context.settingsDataStore.edit { prefs ->

@@ -1,4 +1,7 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.repository.ProfileManager
+import com.arflix.tv.shared.repository.AuthRepository
+
 
 import android.content.Context
 import com.arflix.tv.util.Logger
@@ -20,6 +23,9 @@ import com.arflix.tv.data.model.RuntimeKind
 import com.arflix.tv.data.model.ProxyHeaders as ModelProxyHeaders
 import com.arflix.tv.data.model.StreamBehaviorHints as ModelStreamBehaviorHints
 import com.arflix.tv.data.model.StreamSource
+import com.arflix.tv.shared.repository.AddonRuntime
+import com.arflix.tv.shared.repository.MovieRuntimeRequest
+import com.arflix.tv.shared.repository.EpisodeRuntimeRequest
 import com.arflix.tv.data.model.Subtitle
 import com.arflix.tv.network.OkHttpProvider
 import com.arflix.tv.util.AnimeMapper

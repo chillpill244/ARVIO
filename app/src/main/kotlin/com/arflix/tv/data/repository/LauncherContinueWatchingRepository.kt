@@ -1,4 +1,10 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.repository.TraktRepository
+import com.arflix.tv.shared.repository.ContinueWatchingItem
+
+import com.arflix.tv.shared.repository.ProfileManager
+import com.arflix.tv.shared.repository.AuthRepository
+
 
 import android.content.ContentUris
 import android.content.ContentValues

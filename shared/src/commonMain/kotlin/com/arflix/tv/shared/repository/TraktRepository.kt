@@ -1,9 +1,24 @@
-package com.arflix.tv.data.repository
+package com.arflix.tv.shared.repository
+
+import com.arflix.tv.shared.util.ContinueWatchingSelector
+import com.arflix.tv.shared.util.EpisodePointer
+import com.arflix.tv.shared.util.EpisodeProgressSnapshot
+import com.arflix.tv.shared.util.WatchedEpisodeSnapshot
+import kotlinx.serialization.json.Json
+
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import com.arflix.tv.shared.util.ArvioJsonObject
+import com.arflix.tv.shared.util.ConcurrentHashMap
+import com.arflix.tv.shared.util.SharedConstants
+
 import com.arflix.tv.shared.util.KmpDateUtils
 
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-import android.content.Context
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -13,14 +28,6 @@ import com.arflix.tv.data.api.*
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.model.NextEpisode
-import com.arflix.tv.util.ContinueWatchingSelector
-import com.arflix.tv.util.EpisodePointer
-import com.arflix.tv.util.EpisodeProgressSnapshot
-import com.arflix.tv.util.WatchedEpisodeSnapshot
-import com.arflix.tv.util.Constants
-import com.arflix.tv.util.AppLogger
-import com.arflix.tv.util.settingsDataStore
-import com.arflix.tv.util.traktDataStore
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
@@ -40,22 +47,9 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.put
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
 import io.ktor.client.plugins.ResponseException
-import java.text.Normalizer
-import java.util.Locale
-import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Provider
 
 /**
  * Repository for Trakt.tv API interactions
@@ -69,16 +63,12 @@ import javax.inject.Provider
  * - Continue Watching uses Supabase data augmented with Trakt progress API
  */
 class TraktRepository constructor(
-    private val context: Context,
+    private val prefsDataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
     private val traktApi: TraktApi,
     private val tmdbApi: TmdbApi,
-    private val okHttpClient: OkHttpClient,
     private val profileManager: ProfileManager
 ) : org.koin.core.component.KoinComponent {
-    private val syncServiceProvider: kotlin.Lazy<TraktSyncService> = inject()
-    private val gson = Gson()
-    private val watchlistHttpClient by lazy { okHttpClient }
-    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    private val syncServiceProvider: kotlin.Lazy<TraktSyncService> = lazy { getKoin().get<TraktSyncService>() }
 
     // Lazy sync service to avoid circular dependency
     private val syncService: TraktSyncService by lazy { syncServiceProvider.value }
@@ -86,8 +76,8 @@ class TraktRepository constructor(
     // Supabase client for profile sync (lazy to avoid startup overhead)
     private val supabase: SupabaseClient by lazy {
         createSupabaseClient(
-            supabaseUrl = Constants.SUPABASE_URL,
-            supabaseKey = Constants.SUPABASE_ANON_KEY
+            supabaseUrl = SharedConstants.SUPABASE_URL,
+            supabaseKey = SharedConstants.SUPABASE_ANON_KEY
         ) {
             install(Postgrest)
         }
@@ -95,8 +85,8 @@ class TraktRepository constructor(
 
     // User ID key for Supabase sync (shared across profiles)
     private val USER_ID_KEY = stringPreferencesKey("user_id")
-    private val clientId = Constants.TRAKT_CLIENT_ID
-    private val clientSecret = Constants.TRAKT_CLIENT_SECRET
+    private val clientId = SharedConstants.TRAKT_CLIENT_ID
+    private val clientSecret = SharedConstants.TRAKT_CLIENT_SECRET
     // Profile-scoped preference keys - each profile has its own Trakt connection
     private fun accessTokenKey() = profileManager.profileStringKey("trakt_access_token")
     private fun refreshTokenKey() = profileManager.profileStringKey("trakt_refresh_token")
@@ -162,7 +152,7 @@ class TraktRepository constructor(
     /**
      * Check if current profile is authenticated with Trakt
      */
-    val isAuthenticated: Flow<Boolean> = context.traktDataStore.data.map { prefs ->
+    val isAuthenticated: Flow<Boolean> = prefsDataStore.data.map { prefs ->
         prefs[accessTokenKey()] != null
     }
 
@@ -170,7 +160,7 @@ class TraktRepository constructor(
      * Get token expiration timestamp (seconds since epoch) for current profile
      */
     suspend fun getTokenExpiration(): Long? {
-        val prefs = context.traktDataStore.data.first()
+        val prefs = prefsDataStore.data.first()
         return prefs[expiresAtKey()]
     }
 
@@ -190,7 +180,7 @@ class TraktRepository constructor(
     suspend fun pollForToken(deviceCode: String): TraktToken {
         val token = requestTraktToken(
             path = "/oauth/device/token",
-            payload = JSONObject().put("code", deviceCode),
+            payload = ArvioJsonObject().put("code", deviceCode),
             directFallback = {
                 traktApi.pollToken(
                     TokenPollRequest(
@@ -207,7 +197,7 @@ class TraktRepository constructor(
 
     private suspend fun requestTraktToken(
         path: String,
-        payload: JSONObject,
+        payload: ArvioJsonObject,
         directFallback: suspend () -> TraktToken
     ): TraktToken {
         return directFallback()
@@ -229,7 +219,7 @@ class TraktRepository constructor(
     }
 
     private suspend fun clearInvalidTraktToken() {
-        context.traktDataStore.edit { prefs ->
+        prefsDataStore.edit { prefs ->
             prefs.remove(accessTokenKey())
             prefs.remove(refreshTokenKey())
             prefs.remove(expiresAtKey())
@@ -238,15 +228,15 @@ class TraktRepository constructor(
         clearProfileScopedMemoryCaches(clearPreloaded = false)
     }
 
-//    private suspend fun requestTraktTokenViaProxy(path: String, payload: JSONObject): TraktToken = withContext(Dispatchers.IO) {
-//        val url = Constants.TRAKT_PROXY_URL.toHttpUrl().newBuilder()
+//    private suspend fun requestTraktTokenViaProxy(path: String, payload: ArvioJsonObject): TraktToken = withContext(Dispatchers.IO) {
+//        val url = SharedConstants.TRAKT_PROXY_URL.toHttpUrl().newBuilder()
 //            .addQueryParameter("path", path)
 //            .addQueryParameter("method", "POST")
 //            .build()
 //        val request = Request.Builder()
 //            .url(url)
-//            .header("apikey", Constants.SUPABASE_ANON_KEY)
-//            .header("Authorization", "Bearer ${Constants.SUPABASE_ANON_KEY}")
+//            .header("apikey", SharedConstants.SUPABASE_ANON_KEY)
+//            .header("Authorization", "Bearer ${SharedConstants.SUPABASE_ANON_KEY}")
 //            .post(payload.toString().toRequestBody(jsonMediaType))
 //            .build()
 //
@@ -270,7 +260,7 @@ class TraktRepository constructor(
 
 //    private fun parseTraktProxyError(body: String, fallback: String): String {
 //        return runCatching {
-//            val json = JSONObject(body)
+//            val json = ArvioJsonObject(body)
 //            json.optString("error_description").ifBlank {
 //                json.optString("error").ifBlank {
 //                    json.optString("message").ifBlank { fallback }
@@ -282,7 +272,7 @@ class TraktRepository constructor(
     private suspend fun refreshTraktToken(refreshToken: String): TraktToken {
         return requestTraktToken(
             path = "/oauth/token",
-            payload = JSONObject()
+            payload = ArvioJsonObject()
                 .put("refresh_token", refreshToken)
                 .put("grant_type", "refresh_token"),
             directFallback = {
@@ -299,7 +289,7 @@ class TraktRepository constructor(
 
     suspend fun refreshTokenIfNeeded(): String? {
         ensureProfileCacheScope()
-        val prefs = context.traktDataStore.data.first()
+        val prefs = prefsDataStore.data.first()
         val accessToken = prefs[accessTokenKey()] ?: return null
         val refreshToken = prefs[refreshTokenKey()]
         val expiresAt = prefs[expiresAtKey()]
@@ -310,7 +300,7 @@ class TraktRepository constructor(
         }
 
         return tokenRefreshMutex.withLock {
-            val lockedPrefs = context.traktDataStore.data.first()
+            val lockedPrefs = prefsDataStore.data.first()
             val lockedAccessToken = lockedPrefs[accessTokenKey()] ?: return@withLock null
             val lockedRefreshToken = lockedPrefs[refreshTokenKey()] ?: return@withLock lockedAccessToken
             val lockedExpiresAt = lockedPrefs[expiresAtKey()] ?: return@withLock lockedAccessToken
@@ -366,7 +356,7 @@ class TraktRepository constructor(
 
     private suspend fun saveToken(token: TraktToken) {
         ensureProfileCacheScope()
-        context.traktDataStore.edit { prefs ->
+        prefsDataStore.edit { prefs ->
             prefs[accessTokenKey()] = token.accessToken
             prefs[refreshTokenKey()] = token.refreshToken
             prefs[expiresAtKey()] = token.createdAt + token.expiresIn
@@ -377,7 +367,7 @@ class TraktRepository constructor(
      * Set the user ID for Supabase sync (called after login)
      */
     suspend fun setUserId(userId: String) {
-        context.traktDataStore.edit { prefs ->
+        prefsDataStore.edit { prefs ->
             prefs[USER_ID_KEY] = userId
         }
     }
@@ -392,7 +382,7 @@ class TraktRepository constructor(
 
     suspend fun logout() {
         ensureProfileCacheScope()
-        context.traktDataStore.edit { prefs ->
+        prefsDataStore.edit { prefs ->
             prefs.remove(accessTokenKey())
             prefs.remove(refreshTokenKey())
             prefs.remove(expiresAtKey())
@@ -404,7 +394,7 @@ class TraktRepository constructor(
      * Export Trakt tokens for multiple profiles (for cloud backup).
      */
     suspend fun exportTokensForProfiles(profileIds: List<String>): Map<String, CloudTraktToken> {
-        val prefs = context.traktDataStore.data.first()
+        val prefs = prefsDataStore.data.first()
         val out = LinkedHashMap<String, CloudTraktToken>()
         profileIds.forEach { profileId ->
             val access = prefs[profileManager.profileStringKeyFor(profileId, "trakt_access_token")] ?: return@forEach
@@ -420,7 +410,7 @@ class TraktRepository constructor(
      */
     suspend fun importTokensForProfiles(tokens: Map<String, CloudTraktToken>) {
         if (tokens.isEmpty()) return
-        context.traktDataStore.edit { prefs ->
+        prefsDataStore.edit { prefs ->
             tokens.forEach { (profileId, token) ->
                 prefs[profileManager.profileStringKeyFor(profileId, "trakt_access_token")] = token.accessToken
                 token.refreshToken?.let { prefs[profileManager.profileStringKeyFor(profileId, "trakt_refresh_token")] = it }
@@ -431,7 +421,7 @@ class TraktRepository constructor(
     }
 
     suspend fun exportDismissedContinueWatchingForProfiles(profileIds: List<String>): Map<String, String> {
-        val prefs = context.settingsDataStore.data.first()
+        val prefs = prefsDataStore.data.first()
         val out = LinkedHashMap<String, String>()
         profileIds.forEach { profileId ->
             val key = profileManager.profileStringKeyFor(profileId, "trakt_dismissed_continue_watching_v1")
@@ -444,7 +434,7 @@ class TraktRepository constructor(
     }
 
     suspend fun importDismissedContinueWatchingForProfiles(values: Map<String, String>) {
-        context.settingsDataStore.edit { prefs ->
+        prefsDataStore.edit { prefs ->
             values.forEach { (profileId, raw) ->
                 val key = profileManager.profileStringKeyFor(profileId, "trakt_dismissed_continue_watching_v1")
                 val value = raw.trim()
@@ -458,7 +448,7 @@ class TraktRepository constructor(
     }
 
     suspend fun exportLocalContinueWatchingForProfiles(profileIds: List<String>): Map<String, List<ContinueWatchingItem>> {
-        val prefs = context.traktDataStore.data.first()
+        val prefs = prefsDataStore.data.first()
         val out = LinkedHashMap<String, List<ContinueWatchingItem>>()
         profileIds.forEach { profileId ->
             val key = profileManager.profileStringKeyFor(profileId, "local_continue_watching_v1")
@@ -473,20 +463,20 @@ class TraktRepository constructor(
     }
 
     suspend fun importLocalContinueWatchingForProfiles(values: Map<String, List<ContinueWatchingItem>>) {
-        context.traktDataStore.edit { prefs ->
+        prefsDataStore.edit { prefs ->
             values.forEach { (profileId, items) ->
                 val key = profileManager.profileStringKeyFor(profileId, "local_continue_watching_v1")
                 if (items.isEmpty()) {
                     prefs.remove(key)
                 } else {
-                    prefs[key] = gson.toJson(items.take(Constants.MAX_CONTINUE_WATCHING))
+                    prefs[key] = Json.encodeToString(items.take(SharedConstants.MAX_CONTINUE_WATCHING))
                 }
             }
         }
     }
 
     suspend fun exportLocalWatchedMoviesForProfiles(profileIds: List<String>): Map<String, List<Int>> {
-        val prefs = context.traktDataStore.data.first()
+        val prefs = prefsDataStore.data.first()
         val out = LinkedHashMap<String, List<Int>>()
         profileIds.forEach { profileId ->
             val key = profileManager.profileStringKeyFor(profileId, "local_watched_movies_v1")
@@ -501,20 +491,20 @@ class TraktRepository constructor(
     }
 
     suspend fun importLocalWatchedMoviesForProfiles(values: Map<String, List<Int>>) {
-        context.traktDataStore.edit { prefs ->
+        prefsDataStore.edit { prefs ->
             values.forEach { (profileId, ids) ->
                 val key = profileManager.profileStringKeyFor(profileId, "local_watched_movies_v1")
                 if (ids.isEmpty()) {
                     prefs.remove(key)
                 } else {
-                    prefs[key] = gson.toJson(ids.distinct())
+                    prefs[key] = Json.encodeToString(ids.distinct())
                 }
             }
         }
     }
 
     suspend fun exportLocalWatchedEpisodesForProfiles(profileIds: List<String>): Map<String, List<String>> {
-        val prefs = context.traktDataStore.data.first()
+        val prefs = prefsDataStore.data.first()
         val out = LinkedHashMap<String, List<String>>()
         profileIds.forEach { profileId ->
             val key = profileManager.profileStringKeyFor(profileId, "local_watched_episodes_v1")
@@ -529,13 +519,13 @@ class TraktRepository constructor(
     }
 
     suspend fun importLocalWatchedEpisodesForProfiles(values: Map<String, List<String>>) {
-        context.traktDataStore.edit { prefs ->
+        prefsDataStore.edit { prefs ->
             values.forEach { (profileId, keys) ->
                 val key = profileManager.profileStringKeyFor(profileId, "local_watched_episodes_v1")
                 if (keys.isEmpty()) {
                     prefs.remove(key)
                 } else {
-                    prefs[key] = gson.toJson(keys.distinct())
+                    prefs[key] = Json.encodeToString(keys.distinct())
                 }
             }
         }
@@ -549,7 +539,7 @@ class TraktRepository constructor(
 
     private suspend fun hasStoredTraktTokenForCurrentProfile(): Boolean {
         ensureProfileCacheScope()
-        val prefs = context.traktDataStore.data.first()
+        val prefs = prefsDataStore.data.first()
         return !prefs[accessTokenKey()].isNullOrBlank()
     }
 
@@ -560,14 +550,14 @@ class TraktRepository constructor(
         return try {
             val watched = traktApi.getWatchedMovies(auth, clientId)
             watched.mapNotNull { it.movie.ids.tmdb }.toSet()
-        } catch (e: java.io.IOException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
+        } catch (e: Exception) {
+            
             emptySet()
         } catch (e: io.ktor.client.plugins.ResponseException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
+            
             emptySet()
         } catch (e: Exception) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Unknown error fetching data, returning default", e)
+            
             emptySet()
         }
     }
@@ -592,14 +582,14 @@ class TraktRepository constructor(
                 }
             }
             episodes
-        } catch (e: java.io.IOException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
+        } catch (e: Exception) {
+            
             emptySet()
         } catch (e: io.ktor.client.plugins.ResponseException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
+            
             emptySet()
         } catch (e: Exception) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Unknown error fetching data, returning default", e)
+            
             emptySet()
         }
     }
@@ -655,7 +645,7 @@ class TraktRepository constructor(
             val traktShowId = tmdbToTraktIdCache[showTmdbId]
             syncService.markEpisodeWatched(showTmdbId, season, episode, traktShowId)
         } catch (e: Exception) {
-            AppLogger.e("TraktRepository", "Failed to mark episode watched", e)
+            
         }
     }
 
@@ -673,7 +663,7 @@ class TraktRepository constructor(
             val traktShowId = tmdbToTraktIdCache[showTmdbId]
             syncService.markEpisodeWatchedInSupabaseOnly(showTmdbId, season, episode, traktShowId)
         } catch (e: Exception) {
-            AppLogger.e("TraktRepository", "Failed to mark episode watched in Supabase", e)
+            
         }
     }
 
@@ -821,7 +811,7 @@ class TraktRepository constructor(
         }
 
         // Auto-mark as watched if progress >= threshold
-        if (progress >= Constants.WATCHED_THRESHOLD) {
+        if (progress >= SharedConstants.WATCHED_THRESHOLD) {
             if (mediaType == MediaType.MOVIE) {
                 markMovieWatched(tmdbId)
                 updateWatchedCache(tmdbId, null, null, true)
@@ -956,7 +946,7 @@ class TraktRepository constructor(
                     return watchedEpisodesCache.filter { it.startsWith(prefix) }.toSet()
                 }
             } catch (e: Exception) {
-                AppLogger.e("TraktRepository", "Failed to resolve show TMDB ID to Trakt ID", e)
+                
             }
 
             return result
@@ -1085,7 +1075,7 @@ class TraktRepository constructor(
                 return@withContext false
             }
 
-            val includeSpecials = context.settingsDataStore.data.first()[includeSpecialsKey()] ?: false
+            val includeSpecials = prefsDataStore.data.first()[includeSpecialsKey()] ?: false
             val progress = traktApi.getShowProgress(
                 auth,
                 clientId,
@@ -1232,11 +1222,7 @@ class TraktRepository constructor(
         if (auth == null) {
             if (hasStoredTraktTokenForCurrentProfile()) {
                 val cached = loadContinueWatchingCache()
-                AppLogger.breadcrumb(
-                    tag = "Trakt",
-                    message = "cw_auth_missing_using_cache count=${cached.size}",
-                    severity = "warning"
-                )
+                
                 cachedContinueWatching = cached
                 cachedContinueWatchingProfileId = requestProfileId
                 return@coroutineScope cached
@@ -1313,11 +1299,7 @@ class TraktRepository constructor(
                     }
                 } catch (e: Exception) {
                     System.err.println("TraktRepo:getCW: getHiddenShows failed: ${e.message}")
-                    AppLogger.breadcrumb(
-                        tag = "Trakt",
-                        message = "cw_hidden_shows_failed error=${e::class.java.simpleName}",
-                        severity = "warning"
-                    )
+                    
                     emptyList()
                 }
             }
@@ -1328,11 +1310,7 @@ class TraktRepository constructor(
                     }
                 } catch (e: Exception) {
                     System.err.println("TraktRepo:getCW: getHiddenResetShows failed: ${e.message}")
-                    AppLogger.breadcrumb(
-                        tag = "Trakt",
-                        message = "cw_hidden_reset_failed error=${e::class.java.simpleName}",
-                        severity = "warning"
-                    )
+                    
                     emptyList()
                 }
             }
@@ -1358,7 +1336,7 @@ class TraktRepository constructor(
                 val playbackItems = playbackDeferred.await()
                 playbackFetched = true
                 for (item in playbackItems) {
-                    if (item.progress < Constants.MIN_PROGRESS_THRESHOLD || item.progress >= Constants.WATCHED_THRESHOLD) continue
+                    if (item.progress < SharedConstants.MIN_PROGRESS_THRESHOLD || item.progress >= SharedConstants.WATCHED_THRESHOLD) continue
 
                     if (item.type == "movie") {
                         val movie = item.movie ?: continue
@@ -1421,17 +1399,11 @@ class TraktRepository constructor(
                 }
             } catch (e: Exception) {
                 System.err.println("TraktRepo:getCW: playback progress failed: ${e.message}")
-                AppLogger.recordException(
-                    throwable = e,
-                    context = mapOf(
-                        "error_area" to "Trakt",
-                        "trakt_phase" to "cw_playback_progress"
-                    )
-                )
+                
             }
 
             try {
-                val includeSpecials = context.settingsDataStore.data.first()[includeSpecialsKey()] ?: false
+                val includeSpecials = prefsDataStore.data.first()[includeSpecialsKey()] ?: false
                 val allWatchedShows = watchedShowsDeferred.await()
                     .asSequence()
                     .filter { watched ->
@@ -1447,7 +1419,7 @@ class TraktRepository constructor(
                     parseIso8601(watched.lastWatchedAt ?: watched.lastUpdatedAt ?: "") >= recentCutoffMs
                 }
                 val watchedShows = (if (recentWatchedShows.size >= 8) recentWatchedShows else allWatchedShows)
-                    .take(Constants.MAX_PROGRESS_ENTRIES)
+                    .take(SharedConstants.MAX_PROGRESS_ENTRIES)
 
                 val semaphore = Semaphore(8)
                 val watchedProgressCandidates = watchedShows.map { watched ->
@@ -1470,11 +1442,7 @@ class TraktRepository constructor(
                                 }
                             } catch (e: Exception) {
                                 System.err.println("TraktRepo:getCW: show progress failed for ${show.title}: ${e.message}")
-                                AppLogger.breadcrumb(
-                                    tag = "Trakt",
-                                    message = "cw_show_progress_failed error=${e::class.java.simpleName}",
-                                    severity = "warning"
-                                )
+                                
                                 return@withPermit null
                             }
 
@@ -1523,13 +1491,7 @@ class TraktRepository constructor(
                 watchedProgressFetched = true
             } catch (e: Exception) {
                 System.err.println("TraktRepo:getCW: watched progress failed: ${e.message}")
-                AppLogger.recordException(
-                    throwable = e,
-                    context = mapOf(
-                        "error_area" to "Trakt",
-                        "trakt_phase" to "cw_watched_progress"
-                    )
-                )
+                
             }
 
             // Filter out dismissed items
@@ -1565,12 +1527,8 @@ class TraktRepository constructor(
                 candidates
             }
 
-            val topCandidates = filteredCandidates.sortedByDescending { it.lastActivityAt }.take(Constants.MAX_CONTINUE_WATCHING)
-            AppLogger.breadcrumb(
-                tag = "Trakt",
-                message = "cw_candidates playback=$playbackFetched watched=$watchedProgressFetched candidates=${candidates.size} filtered=${filteredCandidates.size} top=${topCandidates.size}",
-                severity = if (topCandidates.isEmpty() && (playbackFetched || watchedProgressFetched)) "warning" else "info"
-            )
+            val topCandidates = filteredCandidates.sortedByDescending { it.lastActivityAt }.take(SharedConstants.MAX_CONTINUE_WATCHING)
+            
             if (topCandidates.isEmpty() && playbackFetched && watchedProgressFetched) {
                 cachedContinueWatching = emptyList()
                 cachedContinueWatchingProfileId = requestProfileId
@@ -1584,14 +1542,7 @@ class TraktRepository constructor(
             // Ensure we never lose items due to TMDB validation failures - prioritize local status
             // If hydration returned empty despite having candidates, fall back to local data
             if (hydratedItems.isEmpty() && topCandidates.isNotEmpty()) {
-                AppLogger.recordException(
-                    throwable = IllegalStateException("Trakt continue watching hydration returned zero items"),
-                    context = mapOf(
-                        "error_area" to "Trakt",
-                        "trakt_phase" to "cw_hydration_empty",
-                        "candidate_count" to topCandidates.size.toString()
-                    )
-                )
+                
                 // Map candidates back to items without TMDB enrichment
                 // Filter out items with null season/episode (already validated at candidate creation)
                 val fallbackItems = topCandidates.map { it.item }
@@ -1633,17 +1584,17 @@ class TraktRepository constructor(
                 try {
                     val item = candidate.item
                     if (item.mediaType == MediaType.MOVIE) {
-                        val details = tmdbApi.getMovieDetails(item.id, Constants.TMDB_API_KEY)
+                        val details = tmdbApi.getMovieDetails(item.id, SharedConstants.TMDB_API_KEY)
                         item.copy(
-                            backdropPath = details.backdropPath?.let { "${Constants.BACKDROP_BASE_LARGE}$it" },
-                            posterPath = details.posterPath?.let { "${Constants.IMAGE_BASE}$it" },
+                            backdropPath = details.backdropPath?.let { "${SharedConstants.BACKDROP_BASE_LARGE}$it" },
+                            posterPath = details.posterPath?.let { "${SharedConstants.IMAGE_BASE}$it" },
                             overview = details.overview ?: "",
-                            tmdbRating = String.format(Locale.US, "%.1f", details.voteAverage),
+                            tmdbRating = ((kotlin.math.round((details.voteAverage)?.toDouble() ?: 0.0 * 10.0) / 10.0).toString()),
                             duration = details.runtime?.let { formatRuntime(it) } ?: item.duration,
                             durationSeconds = maxOf(item.durationSeconds, runtimeMinutesToSeconds(details.runtime))
                         )
                     } else {
-                        val details = tmdbApi.getTvDetails(item.id, Constants.TMDB_API_KEY)
+                        val details = tmdbApi.getTvDetails(item.id, SharedConstants.TMDB_API_KEY)
                         // Allow items where Trakt says there's a next episode even if
                         // TMDB hasn't updated its season count yet. Trakt's progress
                         // API is authoritative for "what to watch next" — TMDB often
@@ -1656,10 +1607,10 @@ class TraktRepository constructor(
                             item
                         }
                         validatedItem?.copy(
-                            backdropPath = details.backdropPath?.let { "${Constants.BACKDROP_BASE_LARGE}$it" },
-                            posterPath = details.posterPath?.let { "${Constants.IMAGE_BASE}$it" },
+                            backdropPath = details.backdropPath?.let { "${SharedConstants.BACKDROP_BASE_LARGE}$it" },
+                            posterPath = details.posterPath?.let { "${SharedConstants.IMAGE_BASE}$it" },
                             overview = details.overview ?: "",
-                            tmdbRating = String.format(Locale.US, "%.1f", details.voteAverage),
+                            tmdbRating = ((kotlin.math.round((details.voteAverage)?.toDouble() ?: 0.0 * 10.0) / 10.0).toString()),
                             duration = details.episodeRunTime.firstOrNull()?.let { "${it}m" } ?: item.duration,
                             durationSeconds = maxOf(item.durationSeconds, runtimeMinutesToSeconds(details.episodeRunTime.firstOrNull())),
                             totalEpisodes = item.totalEpisodes,
@@ -1704,7 +1655,7 @@ class TraktRepository constructor(
         // causing the code to incorrectly fall back to local CW for Trakt
         // profiles. That loaded cloud-synced non-Trakt items into the CW row.
         val hasTraktToken = runCatching {
-            val prefs = context.traktDataStore.data.first()
+            val prefs = prefsDataStore.data.first()
             val tokenKey = profileManager.profileStringKey("trakt_access_token")
             !prefs[tokenKey].isNullOrBlank()
         }.getOrDefault(false)
@@ -1745,7 +1696,7 @@ class TraktRepository constructor(
 
         try {
             val tokenKey = stringPreferencesKey("profile_${profileId}_trakt_access_token")
-            val prefs = context.traktDataStore.data.first()
+            val prefs = prefsDataStore.data.first()
             if (!prefs[tokenKey].isNullOrBlank()) {
                 // Do not seed profile selection from the persisted Trakt CW cache.
                 // That cache can lag behind real progress and causes the Home row
@@ -1756,9 +1707,7 @@ class TraktRepository constructor(
             // Directly access the cache with the specific profile's key
             val cacheKey = stringPreferencesKey("profile_${profileId}_trakt_continue_watching_cache_v1")
             val json = prefs[cacheKey] ?: return
-
-            val type = TypeToken.getParameterized(MutableList::class.java, ContinueWatchingItem::class.java).type
-            val parsed: List<ContinueWatchingItem> = gson.fromJson(json, type)
+            val parsed: List<ContinueWatchingItem> = Json.decodeFromString(json)
             val filtered = filterDismissedContinueWatchingItems(parsed, profileId)
             preloadedProfileCache[profileId] = filtered
 
@@ -1821,7 +1770,7 @@ class TraktRepository constructor(
         cachedContinueWatchingProfileId = null
         lastContinueWatchingFetch = 0L
         preloadedProfileCache.clear()
-        context.traktDataStore.edit { prefs ->
+        prefsDataStore.edit { prefs ->
             prefs.remove(continueWatchingCacheKey())
             prefs.remove(localContinueWatchingKey())
         }
@@ -1888,9 +1837,9 @@ class TraktRepository constructor(
 
         // Keep accidental taps out, but still keep real partial sessions on long content
         // where percent can be low while position is already meaningful.
-        if ((progress < Constants.MIN_PROGRESS_THRESHOLD && !hasMeaningfulPosition) || progress >= Constants.WATCHED_THRESHOLD) {
+        if ((progress < SharedConstants.MIN_PROGRESS_THRESHOLD && !hasMeaningfulPosition) || progress >= SharedConstants.WATCHED_THRESHOLD) {
             // If watched (>= threshold), remove from Continue Watching
-            if (progress >= Constants.WATCHED_THRESHOLD) {
+            if (progress >= SharedConstants.WATCHED_THRESHOLD) {
                 removeFromLocalContinueWatching(tmdbId, season, episode)
             }
             return
@@ -1928,12 +1877,12 @@ class TraktRepository constructor(
         existingItems.add(0, item)
 
         // Keep only top items
-        val trimmed = existingItems.take(Constants.MAX_CONTINUE_WATCHING)
+        val trimmed = existingItems.take(SharedConstants.MAX_CONTINUE_WATCHING)
 
         // Persist
-        val json = gson.toJson(trimmed)
+        val json = Json.encodeToString(trimmed)
         val saveKey = localContinueWatchingKey()
-        context.traktDataStore.edit { prefs ->
+        prefsDataStore.edit { prefs ->
             prefs[saveKey] = json
         }
 
@@ -1964,8 +1913,8 @@ class TraktRepository constructor(
         }
 
         if (existingItems.size != sizeBefore) {
-            val json = gson.toJson(existingItems)
-            context.traktDataStore.edit { prefs ->
+            val json = Json.encodeToString(existingItems)
+            prefsDataStore.edit { prefs ->
                 prefs[localContinueWatchingKey()] = json
             }
         }
@@ -1974,23 +1923,23 @@ class TraktRepository constructor(
     private suspend fun persistLocalWatchedSnapshotForCurrentProfile() {
         val movieIds = watchedMoviesCache.toList().distinct().sorted()
         val episodeKeys = watchedEpisodesCache.toList().distinct().sorted()
-        context.traktDataStore.edit { prefs ->
+        prefsDataStore.edit { prefs ->
             if (movieIds.isEmpty()) {
                 prefs.remove(localWatchedMoviesKey())
             } else {
-                prefs[localWatchedMoviesKey()] = gson.toJson(movieIds)
+                prefs[localWatchedMoviesKey()] = Json.encodeToString(movieIds)
             }
 
             if (episodeKeys.isEmpty()) {
                 prefs.remove(localWatchedEpisodesKey())
             } else {
-                prefs[localWatchedEpisodesKey()] = gson.toJson(episodeKeys)
+                prefs[localWatchedEpisodesKey()] = Json.encodeToString(episodeKeys)
             }
         }
     }
 
     private suspend fun loadLocalWatchedSnapshotForCurrentProfile(): Pair<Set<Int>, Set<String>> {
-        val prefs = context.traktDataStore.data.first()
+        val prefs = prefsDataStore.data.first()
         val movies = decodeIntList(prefs[localWatchedMoviesKey()].orEmpty()).toSet()
         val episodes = decodeStringList(prefs[localWatchedEpisodesKey()].orEmpty()).toSet()
         return movies to episodes
@@ -1999,8 +1948,7 @@ class TraktRepository constructor(
     private fun decodeContinueWatchingList(json: String): List<ContinueWatchingItem> {
         if (json.isBlank()) return emptyList()
         return try {
-            val type = TypeToken.getParameterized(MutableList::class.java, ContinueWatchingItem::class.java).type
-            val items: List<ContinueWatchingItem> = gson.fromJson(json, type)
+            val items: List<ContinueWatchingItem> = Json.decodeFromString(json)
             items.distinctBy { "${it.mediaType}:${it.id}" }
         } catch (_: Exception) {
             emptyList()
@@ -2010,8 +1958,7 @@ class TraktRepository constructor(
     private fun decodeIntList(json: String): List<Int> {
         if (json.isBlank()) return emptyList()
         return try {
-            val type = TypeToken.getParameterized(MutableList::class.java, Int::class.javaObjectType).type
-            val items: List<Int> = gson.fromJson(json, type)
+            val items: List<Int> = Json.decodeFromString(json)
             items.distinct()
         } catch (_: Exception) {
             emptyList()
@@ -2021,8 +1968,7 @@ class TraktRepository constructor(
     private fun decodeStringList(json: String): List<String> {
         if (json.isBlank()) return emptyList()
         return try {
-            val type = TypeToken.getParameterized(MutableList::class.java, String::class.java).type
-            val items: List<String> = gson.fromJson(json, type)
+            val items: List<String> = Json.decodeFromString(json)
             items.filter { it.isNotBlank() }.distinct()
         } catch (_: Exception) {
             emptyList()
@@ -2034,7 +1980,7 @@ class TraktRepository constructor(
      */
     private suspend fun loadLocalContinueWatchingRaw(): List<ContinueWatchingItem> {
         val key = localContinueWatchingKey()
-        val prefs = context.traktDataStore.data.first()
+        val prefs = prefsDataStore.data.first()
         val json = prefs[key]
         if (json == null) {
             return emptyList()
@@ -2130,7 +2076,7 @@ class TraktRepository constructor(
             return@coroutineScope item
         }
 
-        val apiKey = Constants.TMDB_API_KEY
+        val apiKey = SharedConstants.TMDB_API_KEY
         try {
             return@coroutineScope if (item.mediaType == MediaType.TV) {
                 val details = try {
@@ -2164,8 +2110,8 @@ class TraktRepository constructor(
                 val episodeInfo = seasonDetails?.episodes?.find { it.episodeNumber == item.episode }
 
                 // Use SHOW's backdrop and overview (like Trakt does), not episode's
-                val backdropUrl = details?.backdropPath?.let { "${Constants.BACKDROP_BASE_LARGE}$it" }
-                val posterUrl = details?.posterPath?.let { "${Constants.IMAGE_BASE}$it" }
+                val backdropUrl = details?.backdropPath?.let { "${SharedConstants.BACKDROP_BASE_LARGE}$it" }
+                val posterUrl = details?.posterPath?.let { "${SharedConstants.IMAGE_BASE}$it" }
                 val totalEpisodeCount = if (item.totalEpisodes > 0) {
                     item.totalEpisodes
                 } else {
@@ -2191,7 +2137,7 @@ class TraktRepository constructor(
                     backdropPath = backdropUrl ?: item.backdropPath,  // Show backdrop, not episode still
                     posterPath = posterUrl ?: item.posterPath,
                     year = details?.firstAirDate?.take(4) ?: item.year,
-                    tmdbRating = details?.voteAverage?.let { String.format(Locale.US, "%.1f", it) } ?: item.tmdbRating.orEmpty(),
+                    tmdbRating = details?.voteAverage?.let { ((kotlin.math.round((it)?.toDouble() ?: 0.0 * 10.0) / 10.0).toString()) } ?: item.tmdbRating.orEmpty(),
                     duration = runtimeMinutes?.let { "${it}m" } ?: item.duration,
                     durationSeconds = maxOf(item.durationSeconds, runtimeMinutesToSeconds(runtimeMinutes)),
                     episodeTitle = item.episodeTitle ?: episodeInfo?.name,
@@ -2204,15 +2150,15 @@ class TraktRepository constructor(
                 } catch (_: Exception) { null }
 
                 // Build full URLs for images
-                val backdropUrl = details?.backdropPath?.let { "${Constants.BACKDROP_BASE_LARGE}$it" }
-                val posterUrl = details?.posterPath?.let { "${Constants.IMAGE_BASE}$it" }
+                val backdropUrl = details?.backdropPath?.let { "${SharedConstants.BACKDROP_BASE_LARGE}$it" }
+                val posterUrl = details?.posterPath?.let { "${SharedConstants.IMAGE_BASE}$it" }
 
                 item.copy(
                     overview = details?.overview ?: item.overview,
                     backdropPath = backdropUrl ?: item.backdropPath,
                     posterPath = posterUrl ?: item.posterPath,
                     year = details?.releaseDate?.take(4) ?: item.year,
-                    tmdbRating = details?.voteAverage?.let { String.format(Locale.US, "%.1f", it) } ?: item.tmdbRating.orEmpty(),
+                    tmdbRating = details?.voteAverage?.let { ((kotlin.math.round((it)?.toDouble() ?: 0.0 * 10.0) / 10.0).toString()) } ?: item.tmdbRating.orEmpty(),
                     duration = details?.runtime?.let { formatRuntime(it) } ?: item.duration,
                     durationSeconds = maxOf(item.durationSeconds, runtimeMinutesToSeconds(details?.runtime))
                 )
@@ -2260,12 +2206,12 @@ class TraktRepository constructor(
     }
 
     private suspend fun loadDismissedContinueWatching(): Map<String, Long> {
-        val raw = context.settingsDataStore.data.first()[dismissedContinueWatchingKey()]
+        val raw = prefsDataStore.data.first()[dismissedContinueWatchingKey()]
         return parseDismissedMap(raw)
     }
 
     private suspend fun persistDismissedContinueWatching(map: Map<String, Long>) {
-        context.settingsDataStore.edit { prefs ->
+        prefsDataStore.edit { prefs ->
             if (map.isEmpty()) {
                 prefs.remove(dismissedContinueWatchingKey())
             } else {
@@ -2278,7 +2224,7 @@ class TraktRepository constructor(
         val key = buildContinueWatchingKey(item) ?: return
         val showKey = buildContinueWatchingShowKey(item.mediaType, item.id)
         val now = System.currentTimeMillis()
-        context.settingsDataStore.edit { prefs ->
+        prefsDataStore.edit { prefs ->
             val map = parseDismissedMap(prefs[dismissedContinueWatchingKey()])
             map[key] = now
             map[showKey] = now
@@ -2369,7 +2315,7 @@ class TraktRepository constructor(
         val dismissed = if (profileId.isNullOrBlank()) {
             loadDismissedContinueWatching()
         } else {
-            val prefs = context.settingsDataStore.data.first()
+            val prefs = prefsDataStore.data.first()
             val key = profileManager.profileStringKeyFor(profileId, "trakt_dismissed_continue_watching_v1")
             parseDismissedMap(prefs[key])
         }
@@ -2383,19 +2329,18 @@ class TraktRepository constructor(
     }
 
     private suspend fun persistContinueWatchingCache(items: List<ContinueWatchingItem>) {
-        val trimmed = items.take(Constants.MAX_CONTINUE_WATCHING)
-        val json = gson.toJson(trimmed)
-        context.traktDataStore.edit { prefs ->
+        val trimmed = items.take(SharedConstants.MAX_CONTINUE_WATCHING)
+        val json = Json.encodeToString(trimmed)
+        prefsDataStore.edit { prefs ->
             prefs[continueWatchingCacheKey()] = json
         }
     }
 
     private suspend fun loadContinueWatchingCache(): List<ContinueWatchingItem> {
-        val prefs = context.traktDataStore.data.first()
+        val prefs = prefsDataStore.data.first()
         val json = prefs[continueWatchingCacheKey()] ?: return emptyList()
         return try {
-            val type = TypeToken.getParameterized(MutableList::class.java, ContinueWatchingItem::class.java).type
-            val parsed: List<ContinueWatchingItem> = gson.fromJson(json, type)
+            val parsed: List<ContinueWatchingItem> = Json.decodeFromString(json)
             parsed
         } catch (_: Exception) {
             emptyList()
@@ -2420,20 +2365,12 @@ class TraktRepository constructor(
 
     suspend fun getWatchlistSyncResultWithAuthState(): Pair<Boolean, WatchlistSyncResult?> {
         val auth = getAuthHeader() ?: run {
-            AppLogger.breadcrumb(
-                tag = "Trakt",
-                message = "watchlist_no_auth",
-                severity = "warning"
-            )
+            
             return false to null
         }
         val watchlist = fetchAllWatchlistItems(auth)
         val items = hydrateWatchlistItems(watchlist)
-        AppLogger.breadcrumb(
-            tag = "Trakt",
-            message = "watchlist_hydrated raw=${watchlist.size} hydrated=${items.size}",
-            severity = if (watchlist.isNotEmpty() && items.isEmpty()) "warning" else "info"
-        )
+        
         return true to WatchlistSyncResult(items = items, rawCount = watchlist.size)
     }
 
@@ -2500,11 +2437,7 @@ class TraktRepository constructor(
                     sort = "added"
                 )
             } catch (error: Exception) {
-                AppLogger.breadcrumb(
-                    tag = "Trakt",
-                    message = "watchlist_page_type_failed type=$type page=$page error=${error::class.java.simpleName}",
-                    severity = "warning"
-                )
+                
                 return WatchlistFetchResult(all, complete = false)
             }
 
@@ -2547,11 +2480,7 @@ class TraktRepository constructor(
                     sort = null
                 )
             } catch (error: Exception) {
-                AppLogger.breadcrumb(
-                    tag = "Trakt",
-                    message = "watchlist_page_fallback_failed page=$page error=${error::class.java.simpleName}",
-                    severity = "warning"
-                )
+                
                 return WatchlistFetchResult(all, complete = false)
             }
 
@@ -2590,46 +2519,38 @@ class TraktRepository constructor(
         page: Int,
         limit: Int,
         sort: String?
-    ): WatchlistPageResult = withContext(Dispatchers.IO) {
-        val urlBuilder = Constants.TRAKT_API_URL.toHttpUrl().newBuilder()
-            .addPathSegment("users")
-            .addPathSegment("me")
-            .addPathSegment("watchlist")
-        if (!type.isNullOrBlank()) {
-            urlBuilder.addPathSegment(type)
-            if (!sort.isNullOrBlank()) {
-                urlBuilder.addPathSegment(sort)
+    ): WatchlistPageResult {
+        val response = traktApi.client.get {
+            url {
+                takeFrom(SharedConstants.TRAKT_API_URL)
+                appendPathSegments("users", "me", "watchlist")
+                if (!type.isNullOrBlank()) {
+                    appendPathSegments(type)
+                    if (!sort.isNullOrBlank()) {
+                        appendPathSegments(sort)
+                    }
+                }
+                parameter("extended", "full")
+                parameter("page", page.toString())
+                parameter("limit", limit.toString())
             }
+            header("Authorization", auth)
+            header("trakt-api-key", clientId)
+            header("trakt-api-version", "2")
         }
-        val url = urlBuilder
-            .addQueryParameter("extended", "full")
-            .addQueryParameter("page", page.toString())
-            .addQueryParameter("limit", limit.toString())
-            .build()
 
-        val request = Request.Builder()
-            .url(url)
-            .get()
-            .addHeader("Authorization", auth)
-            .addHeader("trakt-api-key", clientId)
-            .addHeader("trakt-api-version", "2")
-            .build()
-
-        watchlistHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                return@withContext WatchlistPageResult(emptyList(), totalPages = null, complete = false)
-            }
-            val body = response.body?.string().orEmpty()
-            val listType = TypeToken.getParameterized(List::class.java, TraktWatchlistItem::class.java).type
-            val items: List<TraktWatchlistItem> = runCatching {
-                gson.fromJson<List<TraktWatchlistItem>>(body, listType)
-            }.getOrNull().orEmpty()
-            WatchlistPageResult(
-                items = items,
-                totalPages = response.header("X-Pagination-Page-Count")?.toIntOrNull(),
-                complete = true
-            )
+        if (!response.status.isSuccess()) {
+            return WatchlistPageResult(emptyList(), totalPages = null, complete = false)
         }
+        val body = response.bodyAsText()
+        val items: List<TraktWatchlistItem> = runCatching {
+            Json.decodeFromString<List<TraktWatchlistItem>>(body)
+        }.getOrNull().orEmpty()
+        return WatchlistPageResult(
+            items = items,
+            totalPages = response.headers["X-Pagination-Page-Count"]?.toIntOrNull(),
+            complete = true
+        )
     }
 
     private suspend fun mapWatchlistItemFast(item: TraktWatchlistItem): MediaItem? {
@@ -2709,11 +2630,11 @@ class TraktRepository constructor(
                         subtitle = "Movie",
                         overview = details.overview ?: "",
                         year = details.releaseDate?.take(4) ?: "",
-                        tmdbRating = String.format(Locale.US, "%.1f", details.voteAverage),
+                        tmdbRating = ((kotlin.math.round((details.voteAverage)?.toDouble() ?: 0.0 * 10.0) / 10.0).toString()),
                         mediaType = MediaType.MOVIE,
-                        image = details.posterPath?.let { "${Constants.IMAGE_BASE}$it" }
-                            ?: details.backdropPath?.let { "${Constants.BACKDROP_BASE}$it" } ?: "",
-                        backdrop = details.backdropPath?.let { "${Constants.BACKDROP_BASE_LARGE}$it" },
+                        image = details.posterPath?.let { "${SharedConstants.IMAGE_BASE}$it" }
+                            ?: details.backdropPath?.let { "${SharedConstants.BACKDROP_BASE}$it" } ?: "",
+                        backdrop = details.backdropPath?.let { "${SharedConstants.BACKDROP_BASE_LARGE}$it" },
                         addedAt = listedAtMs,
                         sourceOrder = sourceOrder
                     )
@@ -2730,11 +2651,11 @@ class TraktRepository constructor(
                         subtitle = "TV Series",
                         overview = details.overview ?: "",
                         year = details.firstAirDate?.take(4) ?: "",
-                        tmdbRating = String.format(Locale.US, "%.1f", details.voteAverage),
+                        tmdbRating = ((kotlin.math.round((details.voteAverage)?.toDouble() ?: 0.0 * 10.0) / 10.0).toString()),
                         mediaType = MediaType.TV,
-                        image = details.posterPath?.let { "${Constants.IMAGE_BASE}$it" }
-                            ?: details.backdropPath?.let { "${Constants.BACKDROP_BASE}$it" } ?: "",
-                        backdrop = details.backdropPath?.let { "${Constants.BACKDROP_BASE_LARGE}$it" },
+                        image = details.posterPath?.let { "${SharedConstants.IMAGE_BASE}$it" }
+                            ?: details.backdropPath?.let { "${SharedConstants.BACKDROP_BASE}$it" } ?: "",
+                        backdrop = details.backdropPath?.let { "${SharedConstants.BACKDROP_BASE_LARGE}$it" },
                         addedAt = listedAtMs,
                         sourceOrder = sourceOrder
                     )
@@ -2791,7 +2712,7 @@ class TraktRepository constructor(
         val ids = buildList {
             imdbId?.let { id ->
                 runCatching {
-                    tmdbApi.findByExternalId(id, Constants.TMDB_API_KEY).movieResults
+                    tmdbApi.findByExternalId(id, SharedConstants.TMDB_API_KEY).movieResults
                         .mapNotNull { it.id.takeIf { tmdbId -> tmdbId > 0 } }
                 }.getOrNull()?.let { addAll(it) }
             }
@@ -2800,7 +2721,7 @@ class TraktRepository constructor(
 
         val exactIdMatches = mutableListOf<TmdbMovieDetails>()
         for (id in ids) {
-            val details = runCatching { tmdbApi.getMovieDetails(id, Constants.TMDB_API_KEY) }.getOrNull() ?: continue
+            val details = runCatching { tmdbApi.getMovieDetails(id, SharedConstants.TMDB_API_KEY) }.getOrNull() ?: continue
             val sameTitle = isSameWatchlistTitle(movie.title, details.title) ||
                 details.originalTitle?.let { isSameWatchlistTitle(movie.title, it) } == true
             val sameYear = yearCompatible(movie.year, details.releaseDate?.take(4)?.toIntOrNull())
@@ -2819,14 +2740,14 @@ class TraktRepository constructor(
 
         val searchMatch = searchTmdbWatchlistMatch(movie.title, movie.year, MediaType.MOVIE)
         if (searchMatch != null) {
-            return runCatching { tmdbApi.getMovieDetails(searchMatch, Constants.TMDB_API_KEY) }.getOrNull()
+            return runCatching { tmdbApi.getMovieDetails(searchMatch, SharedConstants.TMDB_API_KEY) }.getOrNull()
         }
 
         return if (movie.year == null) {
             exactIdMatches.firstOrNull()
         } else if (normalizeWatchlistTitle(movie.title).isBlank()) {
             ids.firstNotNullOfOrNull { id ->
-                runCatching { tmdbApi.getMovieDetails(id, Constants.TMDB_API_KEY) }.getOrNull()
+                runCatching { tmdbApi.getMovieDetails(id, SharedConstants.TMDB_API_KEY) }.getOrNull()
             }
         } else {
             null
@@ -2838,7 +2759,7 @@ class TraktRepository constructor(
         val ids = buildList {
             imdbId?.let { id ->
                 runCatching {
-                    tmdbApi.findByExternalId(id, Constants.TMDB_API_KEY).tvResults
+                    tmdbApi.findByExternalId(id, SharedConstants.TMDB_API_KEY).tvResults
                         .mapNotNull { it.id.takeIf { tmdbId -> tmdbId > 0 } }
                 }.getOrNull()?.let { addAll(it) }
             }
@@ -2846,7 +2767,7 @@ class TraktRepository constructor(
                 runCatching {
                     tmdbApi.findByExternalId(
                         tvdbId.toString(),
-                        Constants.TMDB_API_KEY,
+                        SharedConstants.TMDB_API_KEY,
                         externalSource = "tvdb_id"
                     ).tvResults.mapNotNull { it.id.takeIf { tmdbId -> tmdbId > 0 } }
                 }.getOrNull()?.let { addAll(it) }
@@ -2856,7 +2777,7 @@ class TraktRepository constructor(
 
         val exactIdMatches = mutableListOf<TmdbTvDetails>()
         for (id in ids) {
-            val details = runCatching { tmdbApi.getTvDetails(id, Constants.TMDB_API_KEY) }.getOrNull() ?: continue
+            val details = runCatching { tmdbApi.getTvDetails(id, SharedConstants.TMDB_API_KEY) }.getOrNull() ?: continue
             val sameTitle = isSameWatchlistTitle(show.title, details.name) ||
                 details.originalName?.let { isSameWatchlistTitle(show.title, it) } == true
             val sameYear = yearCompatible(show.year, details.firstAirDate?.take(4)?.toIntOrNull())
@@ -2880,14 +2801,14 @@ class TraktRepository constructor(
             allowTitleOnly = ids.isEmpty()
         )
         if (searchMatch != null) {
-            return runCatching { tmdbApi.getTvDetails(searchMatch, Constants.TMDB_API_KEY) }.getOrNull()
+            return runCatching { tmdbApi.getTvDetails(searchMatch, SharedConstants.TMDB_API_KEY) }.getOrNull()
         }
 
         return if (show.year == null) {
             exactIdMatches.firstOrNull()
         } else if (normalizeWatchlistTitle(show.title).isBlank()) {
             ids.firstNotNullOfOrNull { id ->
-                runCatching { tmdbApi.getTvDetails(id, Constants.TMDB_API_KEY) }.getOrNull()
+                runCatching { tmdbApi.getTvDetails(id, SharedConstants.TMDB_API_KEY) }.getOrNull()
             }
         } else {
             null
@@ -2907,14 +2828,14 @@ class TraktRepository constructor(
         return runCatching {
             val results = when (mediaType) {
                 MediaType.MOVIE -> tmdbApi.searchMovies(
-                    apiKey = Constants.TMDB_API_KEY,
+                    apiKey = SharedConstants.TMDB_API_KEY,
                     query = title,
                     page = 1,
                     primaryReleaseYear = year,
                     year = year
                 ).results
                 MediaType.TV -> tmdbApi.searchTv(
-                    apiKey = Constants.TMDB_API_KEY,
+                    apiKey = SharedConstants.TMDB_API_KEY,
                     query = title,
                     page = 1,
                     firstAirDateYear = year
@@ -2964,9 +2885,9 @@ class TraktRepository constructor(
     }
 
     private fun normalizeWatchlistTitle(title: String): String {
-        return Normalizer.normalize(title, Normalizer.Form.NFD)
+        return title
             .replace(TraktRepoRegexes.DIACRITICS_REGEX, "")
-            .lowercase(Locale.US)
+            .lowercase()
             .replace("&", "and")
             .replace(TraktRepoRegexes.NON_ALPHA_NUM_REGEX, " ")
             .trim()
@@ -3079,14 +3000,14 @@ class TraktRepository constructor(
         val auth = getAuthHeader() ?: return emptyList()
         return try {
             traktApi.getCollectionMovies(auth, clientId)
-        } catch (e: java.io.IOException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
+        } catch (e: Exception) {
+            
             emptyList()
         } catch (e: io.ktor.client.plugins.ResponseException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
+            
             emptyList()
         } catch (e: Exception) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Unknown error fetching data, returning default", e)
+            
             emptyList()
         }
     }
@@ -3098,14 +3019,14 @@ class TraktRepository constructor(
         val auth = getAuthHeader() ?: return emptyList()
         return try {
             traktApi.getCollectionShows(auth, clientId)
-        } catch (e: java.io.IOException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
+        } catch (e: Exception) {
+            
             emptyList()
         } catch (e: io.ktor.client.plugins.ResponseException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
+            
             emptyList()
         } catch (e: Exception) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Unknown error fetching data, returning default", e)
+            
             emptyList()
         }
     }
@@ -3199,14 +3120,14 @@ class TraktRepository constructor(
         val auth = getAuthHeader() ?: return emptyList()
         return try {
             traktApi.getRatingsMovies(auth, clientId)
-        } catch (e: java.io.IOException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
+        } catch (e: Exception) {
+            
             emptyList()
         } catch (e: io.ktor.client.plugins.ResponseException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
+            
             emptyList()
         } catch (e: Exception) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Unknown error fetching data, returning default", e)
+            
             emptyList()
         }
     }
@@ -3218,14 +3139,14 @@ class TraktRepository constructor(
         val auth = getAuthHeader() ?: return emptyList()
         return try {
             traktApi.getRatingsShows(auth, clientId)
-        } catch (e: java.io.IOException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
+        } catch (e: Exception) {
+            
             emptyList()
         } catch (e: io.ktor.client.plugins.ResponseException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
+            
             emptyList()
         } catch (e: Exception) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Unknown error fetching data, returning default", e)
+            
             emptyList()
         }
     }
@@ -3237,14 +3158,14 @@ class TraktRepository constructor(
         val auth = getAuthHeader() ?: return emptyList()
         return try {
             traktApi.getRatingsEpisodes(auth, clientId)
-        } catch (e: java.io.IOException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
+        } catch (e: Exception) {
+            
             emptyList()
         } catch (e: io.ktor.client.plugins.ResponseException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
+            
             emptyList()
         } catch (e: Exception) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Unknown error fetching data, returning default", e)
+            
             emptyList()
         }
     }
@@ -3356,14 +3277,14 @@ class TraktRepository constructor(
     suspend fun getMovieComments(mediaId: String, page: Int = 1, limit: Int = 10, sort: String = "newest"): List<TraktComment> {
         return try {
             traktApi.getMovieComments(clientId, "2", mediaId, sort, page, limit)
-        } catch (e: java.io.IOException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
+        } catch (e: Exception) {
+            
             emptyList()
         } catch (e: io.ktor.client.plugins.ResponseException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
+            
             emptyList()
         } catch (e: Exception) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Unknown error fetching data, returning default", e)
+            
             emptyList()
         }
     }
@@ -3378,14 +3299,14 @@ class TraktRepository constructor(
     suspend fun getShowComments(mediaId: String, page: Int = 1, limit: Int = 10, sort: String = "newest"): List<TraktComment> {
         return try {
             traktApi.getShowComments(clientId, "2", mediaId, sort, page, limit)
-        } catch (e: java.io.IOException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
+        } catch (e: Exception) {
+            
             emptyList()
         } catch (e: io.ktor.client.plugins.ResponseException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
+            
             emptyList()
         } catch (e: Exception) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Unknown error fetching data, returning default", e)
+            
             emptyList()
         }
     }
@@ -3400,14 +3321,14 @@ class TraktRepository constructor(
     suspend fun getSeasonComments(showId: String, season: Int, page: Int = 1, limit: Int = 10, sort: String = "newest"): List<TraktComment> {
         return try {
             traktApi.getSeasonComments(clientId, "2", showId, season, sort, page, limit)
-        } catch (e: java.io.IOException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
+        } catch (e: Exception) {
+            
             emptyList()
         } catch (e: io.ktor.client.plugins.ResponseException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
+            
             emptyList()
         } catch (e: Exception) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Unknown error fetching data, returning default", e)
+            
             emptyList()
         }
     }
@@ -3422,14 +3343,14 @@ class TraktRepository constructor(
     suspend fun getEpisodeComments(showId: String, season: Int, episode: Int, page: Int = 1, limit: Int = 10, sort: String = "newest"): List<TraktComment> {
         return try {
             traktApi.getEpisodeComments(clientId, "2", showId, season, episode, sort, page, limit)
-        } catch (e: java.io.IOException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
+        } catch (e: Exception) {
+            
             emptyList()
         } catch (e: io.ktor.client.plugins.ResponseException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
+            
             emptyList()
         } catch (e: Exception) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Unknown error fetching data, returning default", e)
+            
             emptyList()
         }
     }
@@ -3587,14 +3508,14 @@ class TraktRepository constructor(
         val auth = getAuthHeader() ?: return emptyList()
         return try {
             traktApi.getHistoryMovies(auth, clientId, "2", page, limit)
-        } catch (e: java.io.IOException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
+        } catch (e: Exception) {
+            
             emptyList()
         } catch (e: io.ktor.client.plugins.ResponseException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
+            
             emptyList()
         } catch (e: Exception) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Unknown error fetching data, returning default", e)
+            
             emptyList()
         }
     }
@@ -3606,14 +3527,14 @@ class TraktRepository constructor(
         val auth = getAuthHeader() ?: return emptyList()
         return try {
             traktApi.getHistoryEpisodes(auth, clientId, "2", page, limit)
-        } catch (e: java.io.IOException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Network or IO error, returning default", e)
+        } catch (e: Exception) {
+            
             emptyList()
         } catch (e: io.ktor.client.plugins.ResponseException) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "HTTP error fetching data, returning default", e)
+            
             emptyList()
         } catch (e: Exception) {
-            com.arflix.tv.util.AppLogger.e("TraktRepository", "Unknown error fetching data, returning default", e)
+            
             emptyList()
         }
     }
@@ -3999,7 +3920,7 @@ private fun formatTimeRemainingCompact(totalSeconds: Long): String? {
 }
 
 private fun parseRuntimeLabelSeconds(label: String): Long {
-    val normalized = label.lowercase(Locale.US)
+    val normalized = label.lowercase()
     if (normalized.isBlank()) return 0L
 
     var minutes = 0L

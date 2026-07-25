@@ -1,4 +1,7 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.repository.ProfileManager
+import com.arflix.tv.shared.repository.AuthRepository
+
 
 import com.arflix.tv.data.api.TmdbApi
 import com.arflix.tv.data.model.Addon

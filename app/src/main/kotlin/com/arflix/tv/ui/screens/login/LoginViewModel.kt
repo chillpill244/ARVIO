@@ -4,8 +4,8 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.GetCredentialResponse
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.arflix.tv.data.repository.AuthRepository
-import com.arflix.tv.data.repository.AuthState
+import com.arflix.tv.shared.repository.AuthRepository
+import com.arflix.tv.shared.repository.AuthState
 import com.arflix.tv.data.repository.CloudSyncRepository
 import com.arflix.tv.data.repository.StreamRepository
 import com.arflix.tv.util.AuthEmailValidator
@@ -119,13 +119,14 @@ class LoginViewModel constructor(
     /**
      * Initiate Google Sign-In - returns the request for the Activity to handle
      */
-    fun getGoogleSignInRequest(): GetCredentialRequest {
-        return authRepository.getGoogleSignInRequest()
-    }
+    // fun getGoogleSignInRequest(): GetCredentialRequest {
+    //     return authRepository.getGoogleSignInRequest()
+    // }
 
     /**
      * Handle Google Sign-In result from the Activity
      */
+    /*
     fun handleGoogleSignInResult(result: GetCredentialResponse) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
@@ -146,6 +147,7 @@ class LoginViewModel constructor(
             }
         }
     }
+    */
 
     fun onLoginNavigationHandled() {
         _uiState.update { it.copy(loginReady = false) }

@@ -21,7 +21,7 @@ import com.arflix.tv.data.model.Category
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.model.Profile
-import com.arflix.tv.data.repository.AuthState
+import com.arflix.tv.shared.repository.AuthState
 import com.arflix.tv.ui.screens.details.DetailsScreen
 import com.arflix.tv.ui.screens.details.IptvDetailsScreen
 import com.arflix.tv.ui.screens.home.HomeScreen

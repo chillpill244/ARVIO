@@ -11,7 +11,7 @@ import io.ktor.http.contentType
 /**
  * Trakt.tv API interface
  */
-class TraktApi(private val client: HttpClient) {
+class TraktApi(val client: HttpClient) {
     
     // ========== Authentication ==========
     

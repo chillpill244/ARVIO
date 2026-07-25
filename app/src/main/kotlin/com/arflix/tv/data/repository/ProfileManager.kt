@@ -1,4 +1,7 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.repository.ProfileManager
+import com.arflix.tv.shared.repository.AuthRepository
+
 
 import android.content.Context
 import androidx.datastore.preferences.core.Preferences
@@ -21,10 +24,10 @@ import kotlinx.coroutines.flow.map
  * Example: Instead of "access_token", use profileManager.profileKey("access_token")
  * which returns "profile_<id>_access_token"
  */
-class ProfileManager constructor(
+class ProfileManagerImpl constructor(
     private val context: Context,
     private val profileRepository: ProfileRepository
-) {
+) : com.arflix.tv.shared.repository.ProfileManager {
     // Default profile ID used when no profile is selected (for backwards compatibility)
     private val DEFAULT_PROFILE_ID = "default"
 
@@ -37,7 +40,7 @@ class ProfileManager constructor(
     /**
      * Flow of the current profile ID
      */
-    val activeProfileId: Flow<String> = profileRepository.activeProfileId.map { id ->
+    override val activeProfileId: Flow<String> = profileRepository.activeProfileId.map { id ->
         val profileId = id ?: DEFAULT_PROFILE_ID
         _currentProfileId.value = profileId
         profileId
@@ -54,12 +57,12 @@ class ProfileManager constructor(
      * Get the current profile ID synchronously (cached value)
      * Use this when you need immediate access without suspend
      */
-    fun getProfileIdSync(): String = _currentProfileId.value
+    override fun getProfileIdSync(): String = _currentProfileId.value
 
     /**
      * Get the current profile ID (suspend version, always fresh)
      */
-    suspend fun getProfileId(): String {
+    override suspend fun getProfileId(): String {
         val id = profileRepository.getActiveProfileId() ?: DEFAULT_PROFILE_ID
         _currentProfileId.value = id
         return id
@@ -68,7 +71,7 @@ class ProfileManager constructor(
     /**
      * Initialize the profile manager - call this early in app startup
      */
-    suspend fun initialize() {
+    override suspend fun initialize() {
         val active = profileRepository.getActiveProfile()
         val id = active?.id ?: DEFAULT_PROFILE_ID
         _currentProfileId.value = id
@@ -80,14 +83,14 @@ class ProfileManager constructor(
      * Directly update the current profile ID - use when switching profiles
      * to ensure the cached ID is updated before any profile-scoped operations
      */
-    fun setCurrentProfileId(profileId: String) {
+    override fun setCurrentProfileId(profileId: String) {
         _currentProfileId.value = profileId
         if (_currentProfileName.value.isBlank()) {
             _currentProfileName.value = profileId
         }
     }
 
-    fun setCurrentProfileName(profileName: String) {
+    override fun setCurrentProfileName(profileName: String) {
         val normalized = profileName.lowercase().trim()
         if (normalized.isNotBlank()) {
             _currentProfileName.value = normalized
@@ -99,7 +102,7 @@ class ProfileManager constructor(
     /**
      * Create a profile-scoped string preference key
      */
-    fun profileStringKey(name: String): Preferences.Key<String> {
+    override fun profileStringKey(name: String): Preferences.Key<String> {
         return stringPreferencesKey("profile_${getProfileIdSync()}_$name")
     }
 
@@ -107,14 +110,14 @@ class ProfileManager constructor(
      * Create a profile-scoped string preference key for a specific profile ID
      * (does not mutate current profile state).
      */
-    fun profileStringKeyFor(profileId: String, name: String): Preferences.Key<String> {
+    override fun profileStringKeyFor(profileId: String, name: String): Preferences.Key<String> {
         return stringPreferencesKey("profile_${profileId}_$name")
     }
 
     /**
      * Create a profile-scoped long preference key
      */
-    fun profileLongKey(name: String): Preferences.Key<Long> {
+    override fun profileLongKey(name: String): Preferences.Key<Long> {
         return longPreferencesKey("profile_${getProfileIdSync()}_$name")
     }
 
@@ -122,14 +125,14 @@ class ProfileManager constructor(
      * Create a profile-scoped long preference key for a specific profile ID
      * (does not mutate current profile state).
      */
-    fun profileLongKeyFor(profileId: String, name: String): Preferences.Key<Long> {
+    override fun profileLongKeyFor(profileId: String, name: String): Preferences.Key<Long> {
         return longPreferencesKey("profile_${profileId}_$name")
     }
 
     /**
      * Create a profile-scoped boolean preference key
      */
-    fun profileBooleanKey(name: String): Preferences.Key<Boolean> {
+    override fun profileBooleanKey(name: String): Preferences.Key<Boolean> {
         return booleanPreferencesKey("profile_${getProfileIdSync()}_$name")
     }
 
@@ -137,25 +140,25 @@ class ProfileManager constructor(
      * Create a profile-scoped boolean preference key for a specific profile ID
      * (does not mutate current profile state).
      */
-    fun profileBooleanKeyFor(profileId: String, name: String): Preferences.Key<Boolean> {
+    override fun profileBooleanKeyFor(profileId: String, name: String): Preferences.Key<Boolean> {
         return booleanPreferencesKey("profile_${profileId}_$name")
     }
 
     /**
      * Get the key prefix for the current profile
      */
-    fun getKeyPrefix(): String = "profile_${getProfileIdSync()}_"
+    override fun getKeyPrefix(): String = "profile_${getProfileIdSync()}_"
 
     /**
      * Get the current profile name synchronously (for cross-device matching).
      * Falls back to profile ID if name lookup fails.
      */
-    fun getProfileNameSync(): String {
+    override fun getProfileNameSync(): String {
         return _currentProfileName.value.takeUnless { it.isBlank() } ?: getProfileIdSync()
     }
 
     /**
      * Check if this is the default profile (no user profile selected)
      */
-    fun isDefaultProfile(): Boolean = getProfileIdSync() == DEFAULT_PROFILE_ID
+    override fun isDefaultProfile(): Boolean = getProfileIdSync() == DEFAULT_PROFILE_ID
 }

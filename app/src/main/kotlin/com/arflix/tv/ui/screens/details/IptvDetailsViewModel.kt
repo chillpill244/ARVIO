@@ -15,8 +15,8 @@ import com.arflix.tv.data.model.MediaType
 import com.arflix.tv.data.model.StreamSource
 import com.arflix.tv.data.repository.IptvRepository
 import com.arflix.tv.data.repository.MediaRepository
-import com.arflix.tv.data.repository.TraktRepository
-import com.arflix.tv.data.repository.WatchlistRepository
+import com.arflix.tv.shared.repository.TraktRepository
+import com.arflix.tv.shared.repository.WatchlistRepository
 import com.arflix.tv.util.settingsDataStore
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow

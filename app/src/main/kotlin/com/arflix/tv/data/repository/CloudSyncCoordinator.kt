@@ -1,4 +1,9 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.repository.ProfileManager
+import com.arflix.tv.shared.repository.AuthRepository
+
+
+import com.arflix.tv.shared.repository.AuthState
 
 import com.arflix.tv.util.Logger
 import kotlinx.coroutines.CoroutineScope

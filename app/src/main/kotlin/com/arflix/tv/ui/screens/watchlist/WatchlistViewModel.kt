@@ -9,8 +9,8 @@ import com.arflix.tv.data.model.MediaType.MOVIE
 import com.arflix.tv.data.model.MediaType.TV
 import com.arflix.tv.data.repository.CloudSyncRepository
 import com.arflix.tv.data.repository.MediaRepository
-import com.arflix.tv.data.repository.TraktRepository
-import com.arflix.tv.data.repository.WatchlistRepository
+import com.arflix.tv.shared.repository.TraktRepository
+import com.arflix.tv.shared.repository.WatchlistRepository
 import com.arflix.tv.util.AppLogger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

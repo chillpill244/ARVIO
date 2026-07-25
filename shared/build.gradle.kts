@@ -40,6 +40,11 @@ kotlin {
             implementation("io.coil-kt.coil3:coil-compose:3.0.4")
             implementation("io.coil-kt.coil3:coil-network-ktor2:3.0.4")
             implementation("dev.chrisbanes.haze:haze:1.2.0")
+            implementation("androidx.datastore:datastore-preferences-core:1.1.1")
+            implementation("com.squareup.okio:okio:3.9.0")
+            implementation("io.insert-koin:koin-core:3.5.3")
+            implementation("io.github.jan-tennert.supabase:postgrest-kt:2.0.4")
+            implementation("io.github.jan-tennert.supabase:gotrue-kt:2.0.4")
         }
         
         androidMain.dependencies {

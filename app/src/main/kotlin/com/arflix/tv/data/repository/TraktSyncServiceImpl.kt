@@ -1,4 +1,10 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.repository.ProfileManager
+import com.arflix.tv.shared.repository.AuthRepository
+
+import com.arflix.tv.shared.repository.TraktRepository
+
+import com.arflix.tv.shared.repository.AuthState
 import com.arflix.tv.shared.util.KmpDateUtils
 
 import android.content.Context
@@ -16,10 +22,15 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import com.arflix.tv.shared.repository.SyncProgress
+import com.arflix.tv.shared.repository.SyncStatus
+import com.arflix.tv.shared.repository.SyncResult
+
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
+import com.arflix.tv.shared.repository.TraktSyncService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
@@ -49,14 +60,14 @@ import java.util.concurrent.atomic.AtomicInteger
  * - episode_progress: In-progress playback state
  * - sync_state: Tracks sync timestamps and status
  */
-class TraktSyncService constructor(
+class TraktSyncServiceImpl constructor(
     private val context: Context,
     private val traktApi: TraktApi,
     private val supabaseApi: SupabaseApi,
     private val authRepository: AuthRepository,
     private val outboxRepository: TraktOutboxRepository,
     private val profileManager: ProfileManager
-) {
+) : TraktSyncService {
     private val TAG = "TraktSyncService"
     private val gson = Gson()
     private val clientId = Constants.TRAKT_CLIENT_ID
@@ -66,13 +77,13 @@ class TraktSyncService constructor(
 
     // Sync progress state
     private val _syncProgress = MutableStateFlow(SyncProgress())
-    val syncProgress: StateFlow<SyncProgress> = _syncProgress
+    override val syncProgress: StateFlow<SyncProgress> = _syncProgress
 
     private val _isSyncing = MutableStateFlow(false)
-    val isSyncing: StateFlow<Boolean> = _isSyncing
+    override val isSyncing: StateFlow<Boolean> = _isSyncing
 
     private val _syncEvents = MutableSharedFlow<SyncStatus>(extraBufferCapacity = 1)
-    val syncEvents: SharedFlow<SyncStatus> = _syncEvents.asSharedFlow()
+    override val syncEvents: SharedFlow<SyncStatus> = _syncEvents.asSharedFlow()
 
     private val supabaseAuthMutex = Mutex()
 
@@ -106,7 +117,7 @@ class TraktSyncService constructor(
      * This imports ALL watched movies and episodes, overwriting existing data
      */
 
-    suspend fun performFullSync(): SyncResult = withContext(Dispatchers.IO) {
+    override suspend fun performFullSync(): SyncResult = withContext(Dispatchers.IO) {
         if (_isSyncing.value) {
             return@withContext SyncResult.Error("Sync already in progress")
         }
@@ -312,7 +323,7 @@ class TraktSyncService constructor(
      * Only syncs data that has changed since last sync
      */
 
-    suspend fun performIncrementalSync(): SyncResult = withContext(Dispatchers.IO) {
+    override suspend fun performIncrementalSync(): SyncResult = withContext(Dispatchers.IO) {
         if (_isSyncing.value) {
             return@withContext SyncResult.Error("Sync already in progress")
         }
@@ -484,7 +495,7 @@ class TraktSyncService constructor(
     /**
      * Sync a single movie as watched to Supabase and Trakt
      */
-    suspend fun markMovieWatched(tmdbId: Int, traktId: Int? = null): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun markMovieWatched(tmdbId: Int, traktId: Int?): Boolean = withContext(Dispatchers.IO) {
         try {
             val userId = getUserId()
             val hasSupabase = userId != null && getSupabaseAuth() != null
@@ -557,11 +568,11 @@ class TraktSyncService constructor(
     /**
      * Sync a single episode as watched to Supabase and Trakt
      */
-    suspend fun markEpisodeWatched(
+    override suspend fun markEpisodeWatched(
         showTmdbId: Int,
         season: Int,
         episode: Int,
-        showTraktId: Int? = null
+        showTraktId: Int?
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             val userId = getUserId()
@@ -664,14 +675,14 @@ class TraktSyncService constructor(
     /**
      * Write episode watched state to Supabase without sending another Trakt history request.
      */
-    suspend fun markEpisodeWatchedInSupabaseOnly(
+    override suspend fun markEpisodeWatchedInSupabaseOnly(
         showTmdbId: Int,
         season: Int,
         episode: Int,
-        showTraktId: Int? = null
-    ): Boolean = withContext(Dispatchers.IO) {
+        traktShowId: Int?
+    ): Unit = withContext(Dispatchers.IO) {
         try {
-            val userId = getUserId() ?: return@withContext false
+            val userId = getUserId() ?: return@withContext
             val now = com.arflix.tv.shared.util.KmpDateUtils.nowIsoString()
 
             executeSupabaseCall("mark episode watched") { auth ->
@@ -683,7 +694,7 @@ class TraktSyncService constructor(
                         showTmdbId = showTmdbId,
                         season = season,
                         episode = episode,
-                        showTraktId = showTraktId,
+                        showTraktId = traktShowId,
                         watched = true,
                         watchedAt = now,
                         source = "arvio",
@@ -701,7 +712,7 @@ class TraktSyncService constructor(
     /**
      * Mark movie as unwatched in Supabase and Trakt
      */
-    suspend fun markMovieUnwatched(tmdbId: Int): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun markMovieUnwatched(tmdbId: Int): Boolean = withContext(Dispatchers.IO) {
         try {
             val userId = getUserId()
             val hasSupabase = userId != null && getSupabaseAuth() != null
@@ -736,7 +747,7 @@ class TraktSyncService constructor(
     /**
      * Mark episode as unwatched in Supabase and Trakt
      */
-    suspend fun markEpisodeUnwatched(showTmdbId: Int, season: Int, episode: Int): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun markEpisodeUnwatched(showTmdbId: Int, season: Int, episode: Int): Boolean = withContext(Dispatchers.IO) {
         try {
             val userId = getUserId()
             val hasSupabase = userId != null && getSupabaseAuth() != null
@@ -839,7 +850,7 @@ class TraktSyncService constructor(
     /**
      * Get all watched movies from Supabase
      */
-    suspend fun getWatchedMovies(): Set<Int> = withContext(Dispatchers.IO) {
+    override suspend fun getWatchedMovies(): Set<Int> = withContext(Dispatchers.IO) {
         try {
             val userId = getUserId()
             val hasSupabase = userId != null && getSupabaseAuth() != null
@@ -887,7 +898,7 @@ class TraktSyncService constructor(
      * Returns set of keys in format "show_tmdb:tmdbId:season:episode" (and trakt variants)
      * Paginates to get ALL records, bypassing PostgREST 1000-row default limit.
      */
-    suspend fun getWatchedEpisodes(): Set<String> = withContext(Dispatchers.IO) {
+    override suspend fun getWatchedEpisodes(): Set<String> = withContext(Dispatchers.IO) {
         try {
             val userId = getUserId()
             val hasSupabase = userId != null && getSupabaseAuth() != null
@@ -955,7 +966,7 @@ class TraktSyncService constructor(
     /**
      * Get watched episodes for a specific show — direct Supabase query, no pagination issues.
      */
-    suspend fun getWatchedEpisodesForShow(showTmdbId: Int): Set<String> = withContext(Dispatchers.IO) {
+    override suspend fun getWatchedEpisodesForShow(showTmdbId: Int): Set<String> = withContext(Dispatchers.IO) {
         try {
             val userId = getUserId()
             val hasSupabase = userId != null && getSupabaseAuth() != null
@@ -1035,7 +1046,7 @@ class TraktSyncService constructor(
     /**
      * Get last sync time
      */
-    suspend fun getLastSyncTime(): String? = withContext(Dispatchers.IO) {
+    override suspend fun getLastSyncTime(): String? = withContext(Dispatchers.IO) {
         try {
             val userId = getUserId() ?: return@withContext null
             if (getSupabaseAuth() == null) return@withContext null
@@ -1907,27 +1918,5 @@ class TraktSyncService constructor(
 
 // ========== Data Classes ==========
 
-data class SyncProgress(
-    val status: SyncStatus = SyncStatus.IDLE,
-    val message: String = "",
-    val moviesProcessed: Int = 0,
-    val totalMovies: Int = 0,
-    val episodesProcessed: Int = 0,
-    val totalEpisodes: Int = 0
-)
 
-enum class SyncStatus {
-    IDLE,
-    STARTING,
-    SYNCING_MOVIES,
-    SYNCING_EPISODES,
-    SYNCING_PROGRESS,
-    COMPLETED,
-    ERROR
-}
-
-sealed class SyncResult {
-    data class Success(val moviesSynced: Int, val episodesSynced: Int) : SyncResult()
-    data class Error(val message: String) : SyncResult()
-}
 

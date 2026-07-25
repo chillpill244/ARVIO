@@ -1,15 +1,12 @@
-package com.arflix.tv.data.repository
+package com.arflix.tv.shared.repository
 
-import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import com.arflix.tv.data.api.TmdbApi
 import com.arflix.tv.data.model.MediaItem
 import com.arflix.tv.data.model.MediaType
-import com.arflix.tv.util.AppLogger
-import com.arflix.tv.util.Constants
-import com.arflix.tv.util.traktDataStore
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -23,19 +20,22 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
-/**
- * Local watchlist item stored in DataStore
- */
+@Serializable
 data class LocalWatchlistItem(
     val tmdbId: Int,
     val mediaType: String,  // "tv" or "movie"
     val title: String,
     val posterPath: String? = null,
     val backdropPath: String? = null,
-    val addedAt: Long = System.currentTimeMillis(),
+    val addedAt: Long,
     val sourceOrder: Int = Int.MAX_VALUE
 )
+
 
 /**
  * Profile-scoped local watchlist repository.
@@ -43,12 +43,11 @@ data class LocalWatchlistItem(
  * No authentication required - works completely offline.
  */
 class WatchlistRepository constructor(
-    private val context: Context,
+    private val traktDataStore: DataStore<Preferences>,
     private val profileManager: ProfileManager,
     private val tmdbApi: TmdbApi,
     private val invalidationBus: CloudSyncInvalidationBus
 ) {
-    private val gson = Gson()
 
     // Profile-scoped DataStore key
     private fun watchlistKey() = profileManager.profileStringKey("local_watchlist_v1")
@@ -100,20 +99,14 @@ class WatchlistRepository constructor(
                 cacheLoaded = true
             }
         } catch (error: Exception) {
-            AppLogger.recordException(
-                throwable = error,
-                context = mapOf(
-                    "error_area" to "WatchlistRepository",
-                    "watchlist_phase" to "load_key_cache"
-                )
-            )
+            println("Watchlist error phase: load_key_cache - $error")
         }
     }
 
     /**
      * Add item to watchlist
      */
-    suspend fun addToWatchlist(mediaType: MediaType, tmdbId: Int, mediaItem: MediaItem? = null) {
+    suspend fun addToWatchlist(mediaType: MediaType, tmdbId: Int, mediaItem: MediaItem?) {
         val key = cacheKey(mediaType, tmdbId)
 
         // Create local item
@@ -308,29 +301,20 @@ class WatchlistRepository constructor(
     suspend fun exportWatchlistForProfile(profileId: String): List<LocalWatchlistItem> {
         val safeProfileId = profileId.trim().ifBlank { "default" }
         return try {
-            val prefs = context.traktDataStore.data.first()
+            val prefs = traktDataStore.data.first()
             val json = prefs[watchlistKeyFor(safeProfileId)] ?: return emptyList()
-            val type = TypeToken.getParameterized(
-                MutableList::class.java,
-                LocalWatchlistItem::class.java
-            ).type
-            gson.fromJson<List<LocalWatchlistItem>>(json, type) ?: emptyList()
+            
+            runCatching { kotlinx.serialization.json.Json.decodeFromString<List<LocalWatchlistItem>>(json) }.getOrDefault(emptyList())
         } catch (error: Exception) {
-            AppLogger.recordException(
-                throwable = error,
-                context = mapOf(
-                    "error_area" to "WatchlistRepository",
-                    "watchlist_phase" to "export_profile"
-                )
-            )
+            println("Watchlist error phase: export_profile - $error")
             emptyList()
         }
     }
 
     suspend fun importWatchlistForProfile(profileId: String, items: List<LocalWatchlistItem>) {
         val safeProfileId = profileId.trim().ifBlank { "default" }
-        val json = runCatching { gson.toJson(items) }.getOrDefault("[]")
-        context.traktDataStore.edit { prefs ->
+        val json = runCatching { Json.encodeToString(items) }.getOrDefault("[]")
+        traktDataStore.edit { prefs ->
             prefs[watchlistKeyFor(safeProfileId)] = json
         }
         invalidationBus.markDirty(CloudSyncScope.WATCHLIST, safeProfileId, "import watchlist")
@@ -344,22 +328,13 @@ class WatchlistRepository constructor(
      */
     private suspend fun loadWatchlistRaw(): List<LocalWatchlistItem> {
         return try {
-            val prefs = context.traktDataStore.data.first()
+            val prefs = traktDataStore.data.first()
             val json = prefs[watchlistKey()] ?: return emptyList()
-            val type = TypeToken.getParameterized(
-                MutableList::class.java,
-                LocalWatchlistItem::class.java
-            ).type
-            (gson.fromJson<List<LocalWatchlistItem>>(json, type) ?: emptyList())
+            
+            (runCatching { kotlinx.serialization.json.Json.decodeFromString<List<LocalWatchlistItem>>(json) }.getOrDefault(emptyList()))
                 .sortedWith(compareBy<LocalWatchlistItem> { it.sourceOrder }.thenByDescending { it.addedAt })
         } catch (error: Exception) {
-            AppLogger.recordException(
-                throwable = error,
-                context = mapOf(
-                    "error_area" to "WatchlistRepository",
-                    "watchlist_phase" to "load_raw"
-                )
-            )
+            println("Watchlist error phase: load_raw - $error")
             emptyList()
         }
     }
@@ -368,8 +343,8 @@ class WatchlistRepository constructor(
      * Save watchlist items to DataStore
      */
     private suspend fun saveWatchlist(items: List<LocalWatchlistItem>) {
-        val json = gson.toJson(items)
-        context.traktDataStore.edit { prefs ->
+        val json = Json.encodeToString(items)
+        traktDataStore.edit { prefs ->
             prefs[watchlistKey()] = json
         }
         invalidationBus.markDirty(CloudSyncScope.WATCHLIST, profileManager.getProfileIdSync(), "save watchlist")
@@ -379,7 +354,7 @@ class WatchlistRepository constructor(
      * Enrich a watchlist item with TMDB data
      */
     private suspend fun enrichWatchlistItem(item: LocalWatchlistItem): MediaItem? {
-        val apiKey = Constants.TMDB_API_KEY
+        val apiKey = "e74db05c7d0d089d81643cb4d1420ed6"
         return try {
             if (item.mediaType == "tv") {
                 enrichTvShow(item.tmdbId, apiKey, item.addedAt, item.sourceOrder)
@@ -387,11 +362,7 @@ class WatchlistRepository constructor(
                 enrichMovie(item.tmdbId, apiKey, item.addedAt, item.sourceOrder)
             }
         } catch (error: Exception) {
-            AppLogger.breadcrumb(
-                tag = "Watchlist",
-                message = "enrich_failed media_type=${item.mediaType} error=${error::class.java.simpleName}",
-                severity = "warning"
-            )
+            println("Watchlist warning: enrich_failed media_type=${item.mediaType} error=${error::class.java.simpleName}")
             // Fallback to basic item from stored data
             MediaItem(
                 id = item.tmdbId,
@@ -417,11 +388,11 @@ class WatchlistRepository constructor(
             overview = details.overview ?: "",
             year = details.firstAirDate?.take(4) ?: "",
             releaseDate = details.firstAirDate ?: "",
-            tmdbRating = details.voteAverage?.let { String.format(java.util.Locale.US, "%.1f", it) } ?: "",
+            tmdbRating = details.voteAverage?.let { it.toString().take(3) } ?: "",
             duration = details.episodeRunTime?.firstOrNull()?.let { "${it}m" } ?: "",
             mediaType = MediaType.TV,
-            image = details.posterPath?.let { "${Constants.IMAGE_BASE}$it" } ?: "",
-            backdrop = details.backdropPath?.let { "${Constants.BACKDROP_BASE_LARGE}$it" },
+            image = details.posterPath?.let { "${"https://image.tmdb.org/t/p/w500"}$it" } ?: "",
+            backdrop = details.backdropPath?.let { "${"https://image.tmdb.org/t/p/w1280"}$it" },
             addedAt = addedAt,
             sourceOrder = sourceOrder
         )
@@ -436,11 +407,11 @@ class WatchlistRepository constructor(
             overview = details.overview ?: "",
             year = details.releaseDate?.take(4) ?: "",
             releaseDate = details.releaseDate ?: "",
-            tmdbRating = details.voteAverage?.let { String.format(java.util.Locale.US, "%.1f", it) } ?: "",
+            tmdbRating = details.voteAverage?.let { it.toString().take(3) } ?: "",
             duration = details.runtime?.let { formatRuntime(it) } ?: "",
             mediaType = MediaType.MOVIE,
-            image = details.posterPath?.let { "${Constants.IMAGE_BASE}$it" } ?: "",
-            backdrop = details.backdropPath?.let { "${Constants.BACKDROP_BASE_LARGE}$it" },
+            image = details.posterPath?.let { "${"https://image.tmdb.org/t/p/w500"}$it" } ?: "",
+            backdrop = details.backdropPath?.let { "${"https://image.tmdb.org/t/p/w1280"}$it" },
             addedAt = addedAt,
             sourceOrder = sourceOrder
         )

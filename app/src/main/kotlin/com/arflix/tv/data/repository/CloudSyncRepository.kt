@@ -1,4 +1,9 @@
 package com.arflix.tv.data.repository
+import com.arflix.tv.shared.repository.ProfileManager
+import com.arflix.tv.shared.repository.AuthRepository
+
+
+import com.arflix.tv.shared.repository.AuthState
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
@@ -7,7 +12,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.arflix.tv.data.model.Addon
 import com.arflix.tv.data.model.CatalogConfig
 import com.arflix.tv.data.model.Profile
-import com.arflix.tv.data.repository.ContinueWatchingItem
+import com.arflix.tv.shared.repository.TraktRepository
+import com.arflix.tv.shared.repository.ContinueWatchingItem
 import com.arflix.tv.network.OkHttpProvider
 import com.arflix.tv.ui.components.CARD_LAYOUT_MODE_LANDSCAPE
 import com.arflix.tv.ui.components.catalogueRowLayoutKeyFromPreferenceName
@@ -22,6 +28,8 @@ import com.arflix.tv.util.SKIP_PROFILE_SELECTION_KEY
 import com.arflix.tv.util.settingsDataStore
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.arflix.tv.shared.repository.WatchlistRepository
+import com.arflix.tv.shared.repository.LocalWatchlistItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -413,14 +421,14 @@ class CloudSyncRepository constructor(
             ?.takeIf { it.isNotBlank() }
             ?.let { payload ->
                 runCatching {
-                    JSONObject(payload).optJSONObject("profileAvatarImagesById")
+                    com.arflix.tv.shared.util.ArvioJsonObject(payload).optJSONObject("profileAvatarImagesById")
                 }.getOrNull()
             }
         root.put(
             "profileAvatarImagesById",
             profileAvatarImageManager.buildInlineAvatarImagesJson(profiles, existingAvatarImagesById)
         )
-        root.put("profileSettingsById", JSONObject(gson.toJson(profileSettingsById)))
+        root.put("profileSettingsById", com.arflix.tv.shared.util.ArvioJsonObject(gson.toJson(profileSettingsById)))
 
         // Validate active Trakt auth before exporting so revoked tokens do not
         // get written back to cloud and restored on the next launch.
