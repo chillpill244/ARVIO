@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -121,8 +123,8 @@ fun ContextMenu(
     // Read the nav bar height from the host view *before* entering the Popup instead.
     val hostView = LocalView.current
     val density = LocalDensity.current
-    val navBarHeight = remember(hostView) {
-        with(density) {
+    val navBarHeight by produceState(initialValue = 0.dp, hostView, density) {
+        value = with(density) {
             (ViewCompat.getRootWindowInsets(hostView)
                 ?.getInsets(WindowInsetsCompat.Type.navigationBars())
                 ?.bottom ?: 0).toDp()
@@ -302,7 +304,7 @@ fun ContextMenu(
                                 indication = null,
                                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                             ) { /* consume click so backdrop handler doesn't fire */ }
-                            .padding(top = 16.dp, bottom = 24.dp + navBarHeight)
+                            .padding(top = 16.dp, bottom = 40.dp + navBarHeight)
                     ) {
                         // Drag handle indicator
                         Box(

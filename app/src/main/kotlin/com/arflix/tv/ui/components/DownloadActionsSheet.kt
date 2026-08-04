@@ -30,7 +30,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.ViewCompat
@@ -71,8 +72,8 @@ fun DownloadActionsSheet(
     // Read the nav bar height from the host view *before* entering the Popup instead.
     val hostView = LocalView.current
     val density = LocalDensity.current
-    val navBarHeight = remember(hostView) {
-        with(density) {
+    val navBarHeight by produceState(initialValue = 0.dp, hostView, density) {
+        value = with(density) {
             (ViewCompat.getRootWindowInsets(hostView)
                 ?.getInsets(WindowInsetsCompat.Type.navigationBars())
                 ?.bottom ?: 0).toDp()
@@ -112,7 +113,7 @@ fun DownloadActionsSheet(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                     .background(Color(0xFF1A1A1A))
-                    .padding(bottom = 8.dp + navBarHeight)
+                    .padding(bottom = 32.dp + navBarHeight)
             ) {
                 // Handle
                 Box(

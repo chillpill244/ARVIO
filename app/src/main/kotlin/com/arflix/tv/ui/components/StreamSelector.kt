@@ -47,7 +47,8 @@ import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.ViewCompat
@@ -134,8 +135,8 @@ fun StreamSelector(
     // Read the nav bar height from the host view *before* entering the Popup instead.
     val hostView = LocalView.current
     val density = LocalDensity.current
-    val navBarHeight = remember(hostView) {
-        with(density) {
+    val navBarHeight by produceState(initialValue = 0.dp, hostView, density) {
+        value = with(density) {
             (ViewCompat.getRootWindowInsets(hostView)
                 ?.getInsets(WindowInsetsCompat.Type.navigationBars())
                 ?.bottom ?: 0).toDp()
@@ -710,7 +711,7 @@ fun StreamSelector(
                             state = mobileListState,
                             contentPadding = PaddingValues(
                                 top = 8.dp,
-                                bottom = 8.dp + navBarHeight
+                                bottom = 24.dp + navBarHeight
                             ),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier
