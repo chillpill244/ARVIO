@@ -18,7 +18,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -227,7 +230,7 @@ fun DownloadSheet(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                     .background(Color(0xFF1A1A1A))
-                    .navigationBarsPadding()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(bottom = 16.dp)
             ) {
                 // Handle
@@ -315,7 +318,10 @@ fun DownloadSheet(
                             color = TextSecondary,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
-                        LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f, fill = false),
+                            contentPadding = PaddingValues(bottom = 8.dp)
+                        ) {
                             items(downloadable) { stream ->
                                 StreamDownloadRow(
                                     stream = stream,
@@ -343,7 +349,10 @@ fun DownloadSheet(
                                     color = TextSecondary,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                                 )
-                                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                                LazyColumn(
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    contentPadding = PaddingValues(bottom = 8.dp)
+                                ) {
                                     items(inspection.variants) { variant ->
                                         SubtitleRow(
                                             label = variant.label,
@@ -395,7 +404,10 @@ fun DownloadSheet(
                             }
                         }
 
-                        LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f, fill = false),
+                            contentPadding = PaddingValues(bottom = 8.dp)
+                        ) {
                             item {
                                 SubtitleRow(
                                     label = "No subtitles",
