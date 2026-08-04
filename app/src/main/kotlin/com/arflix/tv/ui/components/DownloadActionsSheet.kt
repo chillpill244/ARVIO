@@ -15,10 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +31,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,6 +65,18 @@ fun DownloadActionsSheet(
     val isVisible = download != null
     val status = download?.let {
         DownloadStatus.entries.find { e -> e.name == it.status } ?: DownloadStatus.QUEUED
+    }
+
+    // Popup creates its own Android Window so Compose WindowInsets return 0 inside it.
+    // Read the nav bar height from the host view *before* entering the Popup instead.
+    val hostView = LocalView.current
+    val density = LocalDensity.current
+    val navBarHeight = remember(hostView) {
+        with(density) {
+            (ViewCompat.getRootWindowInsets(hostView)
+                ?.getInsets(WindowInsetsCompat.Type.navigationBars())
+                ?.bottom ?: 0).toDp()
+        }
     }
 
     val transitionState = remember { MutableTransitionState(false) }
@@ -99,8 +112,7 @@ fun DownloadActionsSheet(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                     .background(Color(0xFF1A1A1A))
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(bottom = 8.dp)
+                    .padding(bottom = 8.dp + navBarHeight)
             ) {
                 // Handle
                 Box(

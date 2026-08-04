@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -49,6 +48,10 @@ import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -126,6 +129,18 @@ fun StreamSelector(
     val listState = rememberTvLazyListState()
     val focusRequester = remember { FocusRequester() }
     val isMobile = LocalDeviceType.current.isTouchDevice()
+
+    // Popup creates its own Android Window so Compose WindowInsets return 0 inside it.
+    // Read the nav bar height from the host view *before* entering the Popup instead.
+    val hostView = LocalView.current
+    val density = LocalDensity.current
+    val navBarHeight = remember(hostView) {
+        with(density) {
+            (ViewCompat.getRootWindowInsets(hostView)
+                ?.getInsets(WindowInsetsCompat.Type.navigationBars())
+                ?.bottom ?: 0).toDp()
+        }
+    }
 
     // Request focus when visible
     LaunchedEffect(isVisible) {
@@ -695,7 +710,7 @@ fun StreamSelector(
                             state = mobileListState,
                             contentPadding = PaddingValues(
                                 top = 8.dp,
-                                bottom = 8.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                                bottom = 8.dp + navBarHeight
                             ),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier

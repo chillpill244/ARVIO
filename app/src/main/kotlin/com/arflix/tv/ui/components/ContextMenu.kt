@@ -23,9 +23,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -63,6 +60,10 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.arflix.tv.ui.theme.ArflixTypography
@@ -115,6 +116,18 @@ fun ContextMenu(
     val isMobile = LocalDeviceType.current.isTouchDevice()
     var focusedIndex by remember { mutableIntStateOf(0) }
     val focusRequester = remember { FocusRequester() }
+
+    // Popup creates its own Android Window so Compose WindowInsets return 0 inside it.
+    // Read the nav bar height from the host view *before* entering the Popup instead.
+    val hostView = LocalView.current
+    val density = LocalDensity.current
+    val navBarHeight = remember(hostView) {
+        with(density) {
+            (ViewCompat.getRootWindowInsets(hostView)
+                ?.getInsets(WindowInsetsCompat.Type.navigationBars())
+                ?.bottom ?: 0).toDp()
+        }
+    }
 
     // Request focus when menu becomes visible
     LaunchedEffect(isVisible) {
@@ -289,8 +302,7 @@ fun ContextMenu(
                                 indication = null,
                                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                             ) { /* consume click so backdrop handler doesn't fire */ }
-                            .windowInsetsPadding(WindowInsets.navigationBars)
-                            .padding(top = 16.dp, bottom = 24.dp)
+                            .padding(top = 16.dp, bottom = 24.dp + navBarHeight)
                     ) {
                         // Drag handle indicator
                         Box(
