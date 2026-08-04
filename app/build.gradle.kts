@@ -30,8 +30,8 @@ android {
         // Fire TV devices can be as low as Android 7.1 (API 25) or lower depending on model/OS.
         minSdk = 23
         targetSdk = 35
-        versionCode = 295
-        versionName = "2.2.6"
+        versionCode = 296
+        versionName = "2.2.7"
         buildConfigField("String", "GITHUB_OWNER", "\"chillpill244\"")
         buildConfigField("String", "GITHUB_REPO", "\"ARVIO\"")
 
