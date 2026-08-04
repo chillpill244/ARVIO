@@ -95,7 +95,7 @@ fun Toast(
 
             Row(
                 modifier = Modifier
-                    .padding(bottom = 48.dp)
+                    .padding(bottom = 112.dp)
                     .shadow(
                         elevation = 18.dp,
                         shape = RoundedCornerShape(18.dp),
