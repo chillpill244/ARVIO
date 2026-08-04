@@ -3443,7 +3443,7 @@ private fun MobileSettingsSubPage(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(horizontal = 24.dp, vertical = 8.dp),
+            .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 8.dp + LocalAppBottomBarPadding.current),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         when (page) {
@@ -5993,8 +5993,10 @@ private fun CatalogDiscoveryModal(
                     .fillMaxSize()
                     .background(Color.Black.copy(alpha = 0.86f))
                     .padding(
-                        horizontal = if (isCompact) 10.dp else 48.dp,
-                        vertical = if (isCompact) 10.dp else 34.dp
+                        start = if (isCompact) 10.dp else 48.dp,
+                        end = if (isCompact) 10.dp else 48.dp,
+                        bottom = (if (isCompact) 10.dp else 34.dp) + LocalAppBottomBarPadding.current,
+                        top = if (isCompact) 10.dp else 34.dp
                     ),
                 contentAlignment = Alignment.TopCenter
             ) {
