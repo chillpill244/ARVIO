@@ -24,7 +24,10 @@ import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
@@ -35,6 +38,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,7 +56,7 @@ import coil.compose.AsyncImage
 import com.arflix.tv.data.db.DownloadEntity
 import com.arflix.tv.data.db.DownloadStatus
 import com.arflix.tv.ui.components.DownloadActionsSheet
-import com.arflix.tv.ui.theme.AccentGreen
+import com.arflix.tv.ui.components.DownloadSheet
 import com.arflix.tv.ui.theme.ArflixTypography
 import com.arflix.tv.ui.theme.TextSecondary
 import com.arflix.tv.ui.theme.appBackgroundDark
@@ -132,6 +140,14 @@ fun DownloadedEpisodesScreen(
                         }
                     }
                 }
+                item {
+                    PremiumDownloadNextEpisodeButton(
+                        onClick = { viewModel.prepareDownloadNextEpisode(tmdbId) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    )
+                }
             }
         }
 
@@ -143,6 +159,21 @@ fun DownloadedEpisodesScreen(
             onCancel = { viewModel.cancel(it) },
             onDelete = { viewModel.delete(it) },
             onRetry = { viewModel.retry(it) }
+        )
+
+        DownloadSheet(
+            isVisible = uiState.showDownloadSheet,
+            title = uiState.nextEpisodeTitle ?: "Loading...",
+            streams = uiState.streams,
+            subtitles = uiState.subtitles,
+            isLoadingStreams = uiState.isLoadingStreams,
+            isLoadingSubtitles = false,
+            preferredSubtitleLang = uiState.preferredSubtitleLang,
+            secondarySubtitleLang = uiState.secondarySubtitleLang,
+            onConfirm = { stream, subtitle, hlsSelection ->
+                viewModel.enqueueNextEpisodeDownload(stream, subtitle, hlsSelection)
+            },
+            onDismiss = { viewModel.dismissDownloadSheet() }
         )
     }
 }
@@ -245,14 +276,14 @@ private fun EpisodeDownloadCard(
                     LinearProgressIndicator(
                         progress = { download.progress / 100f },
                         modifier = Modifier.fillMaxWidth().height(2.dp),
-                        color = AccentGreen,
+                        color = com.arflix.tv.ui.skin.resolveAccentColor(fallback = Color.White),
                         trackColor = Color.White.copy(alpha = 0.2f)
                     )
                     Spacer(Modifier.height(3.dp))
                     Text(
                         text = "${download.progress}% · ${formatBytes(download.downloadedBytes)}",
                         style = ArflixTypography.caption,
-                        color = AccentGreen,
+                        color = com.arflix.tv.ui.skin.resolveAccentColor(fallback = Color.White),
                         fontSize = 10.sp
                     )
                 }
@@ -303,3 +334,82 @@ private fun EpisodeDownloadCard(
     }
 }
 
+
+@Composable
+private fun PremiumDownloadNextEpisodeButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isFocused) 1.05f else 1f,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 400f),
+        label = "button_scale"
+    )
+
+    val shape = RoundedCornerShape(percent = 50)
+    
+    val backgroundColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isFocused) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.06f),
+        animationSpec = androidx.compose.animation.core.tween(150),
+        label = "button_bg"
+    )
+
+    val contentColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isFocused) Color.White else Color.White.copy(alpha = 0.92f),
+        animationSpec = androidx.compose.animation.core.tween(150),
+        label = "button_content"
+    )
+
+    val borderColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (isFocused) Color.White.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.22f),
+        animationSpec = androidx.compose.animation.core.tween(150),
+        label = "button_border"
+    )
+
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
+            .background(backgroundColor)
+            .border(
+                width = 1.dp,
+                color = borderColor,
+                shape = shape
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .focusable(interactionSource = interactionSource)
+            .padding(vertical = 12.dp, horizontal = 24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Download,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            androidx.compose.material3.Text(
+                text = "Download Next Episode",
+                style = com.arflix.tv.ui.theme.ArflixTypography.label.copy(
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    fontSize = 16.sp
+                ),
+                color = contentColor
+            )
+        }
+    }
+}

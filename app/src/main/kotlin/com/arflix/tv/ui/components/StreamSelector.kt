@@ -715,7 +715,7 @@ fun StreamSelector(
 
 }
 
-private data class SourcePresentation(
+data class SourcePresentation(
     val stream: StreamSource,
     val title: String,
     val addonLabel: String,
@@ -740,7 +740,7 @@ private data class SourcePresentation(
 
 
 
-private object StreamRegexes {
+object StreamRegexes {
     val ENGLISH_HINT = Regex("""\b(ENG|ENGLISH)\b""", RegexOption.IGNORE_CASE)
     val TELUGU_HINT = Regex("""\b(TEL|TELUGU)\b""", RegexOption.IGNORE_CASE)
     val AV1 = Regex("""\bAV1\b""", RegexOption.IGNORE_CASE)
@@ -772,13 +772,13 @@ private object StreamRegexes {
  * Primary stream-source ordering class. Lower rank sorts first.
  * IPTV-resolved streams always come first, then Home Server, then any addons.
  */
-private fun sourceClassRank(stream: StreamSource): Int = when (stream.addonId) {
+fun sourceClassRank(stream: StreamSource): Int = when (stream.addonId) {
     "iptv_xtream_vod" -> 0
     "home_server" -> 1
     else -> 2
 }
 
-private fun sourceTabId(stream: StreamSource): String {
+fun sourceTabId(stream: StreamSource): String {
     val baseName = stream.addonName.split(" - ").firstOrNull()?.trim() ?: stream.addonName
     return if (stream.addonId == "home_server" && baseName.isNotBlank()) {
         "${stream.addonId}:$baseName"
@@ -787,7 +787,7 @@ private fun sourceTabId(stream: StreamSource): String {
     }
 }
 
-private fun presentSource(stream: StreamSource): SourcePresentation {
+fun presentSource(stream: StreamSource): SourcePresentation {
     val title = stream.behaviorHints?.filename?.takeIf { it.isNotBlank() } ?: stream.source
     val addonLabel = stream.addonName.split(" - ").firstOrNull()?.trim() ?: stream.addonName
     val searchBlob = buildString {
@@ -941,7 +941,7 @@ private fun presentSource(stream: StreamSource): SourcePresentation {
     )
 }
 
-private fun cleanStreamDescription(raw: String?, title: String): String? {
+fun cleanStreamDescription(raw: String?, title: String): String? {
     if (raw.isNullOrBlank()) return null
     val sizeLinePattern = Regex("""^[╰└].*\d+(\.\d+)?\s*(GB|MB|KB|TB).*$""", RegexOption.IGNORE_CASE)
     val channelTagPattern = Regex("""^\[.+]$""")
@@ -1410,7 +1410,7 @@ private fun CompactQualityBadge(stream: StreamSource) {
 
 // Helper function to get size in bytes for sorting
 // ALWAYS parses the display size string to ensure consistent sorting across all streams
-private fun getSizeBytes(stream: StreamSource): Long {
+fun getSizeBytes(stream: StreamSource): Long {
     // ALWAYS parse from display string - don't use sizeBytes field
     // This ensures consistent comparison (some streams have sizeBytes from behaviorHints
     // in actual bytes, others have it parsed with 1024 multiplier - causes inconsistency)
@@ -1418,7 +1418,7 @@ private fun getSizeBytes(stream: StreamSource): Long {
 }
 
 // Robust size string parser - handles all common formats
-private fun parseSizeString(sizeStr: String): Long {
+fun parseSizeString(sizeStr: String): Long {
     if (sizeStr.isBlank()) return 0L
 
     // Normalize: uppercase, replace comma with dot, remove extra spaces
@@ -1455,7 +1455,7 @@ private fun parseSizeString(sizeStr: String): Long {
 }
 
 // Calculate bytes from number and unit
-private fun calculateBytes(number: Double, unit: String): Long {
+fun calculateBytes(number: Double, unit: String): Long {
     return when (unit) {
         "TB" -> (number * 1024.0 * 1024.0 * 1024.0 * 1024.0).toLong()
         "GB" -> (number * 1024.0 * 1024.0 * 1024.0).toLong()
@@ -1476,3 +1476,16 @@ private fun qualityScore(quality: String): Int {
     }
 }
 
+
+fun sortStreams(streams: List<StreamSource>): List<StreamSource> {
+    val presentations = streams.map(::presentSource)
+    return presentations.sortedWith(compareBy<SourcePresentation> { sourceClassRank(it.stream) }
+        .thenByDescending { it.iptvLanguageScore }
+        .thenByDescending { it.sortCached }
+        .thenByDescending { it.sortDirect }
+        .thenByDescending { it.resolutionScore }
+        .thenByDescending { it.releaseScore }
+        .thenByDescending { it.sizeBytes }
+        .thenBy { it.title.lowercase() })
+        .map { it.stream }
+}

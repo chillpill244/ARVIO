@@ -105,7 +105,9 @@ fun DownloadSheet(
     onConfirm: (stream: StreamSource, subtitle: Subtitle?, hlsSelection: HlsDownloadSelection?) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val downloadable = streams.filter { it.isDirectDownloadable() }
+    val downloadable = remember(streams) {
+        sortStreams(streams.filter { it.isDirectDownloadable() })
+    }
     var selectedStream by remember(isVisible) { mutableStateOf<StreamSource?>(null) }
 
     // Auto-select the first subtitle matching preferred language when a stream is picked
