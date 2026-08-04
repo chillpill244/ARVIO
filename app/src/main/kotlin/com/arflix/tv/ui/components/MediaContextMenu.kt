@@ -7,6 +7,10 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -130,8 +134,12 @@ fun MediaContextMenu(
 
     if (!isMobile) {
         // --- TV layout: centered card with D-pad navigation ---
-        AnimatedVisibility(
-            visible = isVisible,
+        val transitionStateTv = remember { MutableTransitionState(false) }
+        transitionStateTv.targetState = isVisible
+        if (transitionStateTv.currentState || transitionStateTv.targetState) {
+            Popup(onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
+                AnimatedVisibility(
+                    visibleState = transitionStateTv,
             enter = fadeIn() + scaleIn(initialScale = 0.9f),
             exit = fadeOut() + scaleOut(targetScale = 0.9f)
         ) {
@@ -216,10 +224,16 @@ fun MediaContextMenu(
                 }
             }
         }
+            }
+        }
     } else {
         // --- Mobile layout: bottom-sheet style menu ---
-        AnimatedVisibility(
-            visible = isVisible,
+        val transitionStateMobile = remember { MutableTransitionState(false) }
+        transitionStateMobile.targetState = isVisible
+        if (transitionStateMobile.currentState || transitionStateMobile.targetState) {
+            Popup(onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
+                AnimatedVisibility(
+                    visibleState = transitionStateMobile,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
@@ -241,7 +255,7 @@ fun MediaContextMenu(
                 contentAlignment = Alignment.BottomCenter
             ) {
                 AnimatedVisibility(
-                    visible = isVisible,
+                    visibleState = transitionStateMobile,
                     enter = slideInVertically(initialOffsetY = { it }),
                     exit = slideOutVertically(targetOffsetY = { it })
                 ) {
@@ -256,7 +270,7 @@ fun MediaContextMenu(
                                 indication = null,
                                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                             ) { /* consume click so backdrop handler doesn't fire */ }
-                            .padding(top = 16.dp, bottom = 24.dp + LocalAppBottomBarPadding.current)
+                            .padding(top = 16.dp, bottom = 24.dp)
                     ) {
                         // Drag handle indicator
                         Box(
@@ -330,6 +344,8 @@ fun MediaContextMenu(
                         }
                     }
                 }
+            }
+        }
             }
         }
     }

@@ -5,6 +5,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,6 +33,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -188,22 +192,27 @@ fun DownloadSheet(
         }
     }
 
-    AnimatedVisibility(
-        visible = isVisible,
-        enter = fadeIn(),
-        exit = fadeOut()
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.6f))
-                .clickable(onClick = onDismiss)
-                .zIndex(20f)
-        )
-    }
+    val transitionState = remember { MutableTransitionState(false) }
+    transitionState.targetState = isVisible
+    if (transitionState.currentState || transitionState.targetState) {
+        Popup(onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                AnimatedVisibility(
+                    visibleState = transitionState,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.6f))
+                            .clickable(onClick = onDismiss)
+                            .zIndex(20f)
+                    )
+                }
 
-    AnimatedVisibility(
-        visible = isVisible,
+                AnimatedVisibility(
+                    visibleState = transitionState,
         enter = slideInVertically { it } + fadeIn(),
         exit = slideOutVertically { it } + fadeOut()
     ) {
@@ -217,7 +226,7 @@ fun DownloadSheet(
                     .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                     .background(Color(0xFF1A1A1A))
                     .navigationBarsPadding()
-                    .padding(bottom = 16.dp + LocalAppBottomBarPadding.current)
+                    .padding(bottom = 16.dp)
             ) {
                 // Handle
                 Box(
@@ -449,6 +458,9 @@ fun DownloadSheet(
                                 }
                             }
                         }
+                    }
+                }
+            }
                     }
                 }
             }

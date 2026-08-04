@@ -7,6 +7,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -42,6 +45,7 @@ import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -242,8 +246,12 @@ fun StreamSelector(
         streams.count { it.quality.contains("1080p", ignoreCase = true) }
     }
 
-    AnimatedVisibility(
-        visible = isVisible,
+    val transitionState = remember { MutableTransitionState(false) }
+    transitionState.targetState = isVisible
+    if (transitionState.currentState || transitionState.targetState) {
+        Popup(onDismissRequest = onClose, properties = PopupProperties(focusable = true)) {
+            AnimatedVisibility(
+                visibleState = transitionState,
         enter = fadeIn(tween(200)) + slideInVertically(tween(300)) { it / 4 },
         exit = fadeOut(tween(150)) + slideOutVertically(tween(200)) { it / 4 }
     ) {
@@ -682,7 +690,7 @@ fun StreamSelector(
                     } else {
                         LazyColumn(
                             state = mobileListState,
-                            contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp + com.arflix.tv.ui.components.LocalAppBottomBarPadding.current),
+                            contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier
                                 .fillMaxSize()
@@ -701,7 +709,10 @@ fun StreamSelector(
                 }
             }
         }
+        }
     }
+}
+
 }
 
 private data class SourcePresentation(
