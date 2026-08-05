@@ -210,6 +210,18 @@ class HttpLocalScraperRuntime @Inject constructor(
                         .getOrDefault(emptyList())
                 })
             }
+            if ("hdghartv" in providers) {
+                add(async(Dispatchers.IO) {
+                    runCatching { resolveHdGharTv(tmdbId, mediaType, season, episode, fallbackTitle, fallbackYear) }
+                        .getOrDefault(emptyList())
+                })
+            }
+            if ("castle" in providers) {
+                add(async(Dispatchers.IO) {
+                    runCatching { resolveCastle(tmdbId, mediaType, season, episode, fallbackTitle, fallbackYear) }
+                        .getOrDefault(emptyList())
+                })
+            }
         }
         jobs.awaitAll()
             .flatten()
@@ -1235,6 +1247,383 @@ class HttpLocalScraperRuntime @Inject constructor(
 
     // ── End AniDB ────────────────────────────────────────────────────────────────
 
+    // ── HDGharTV ────────────────────────────────────────────────────────────────
+    
+    private suspend fun resolveHdGharTv(
+        tmdbId: Int,
+        mediaType: String,
+        season: Int?,
+        episode: Int?,
+        fallbackTitle: String,
+        fallbackYear: Int?
+    ): List<HttpResolvedStream> {
+        val isTv = mediaType == "tv" || mediaType == "series"
+        val tmdbType = if (isTv) "tv" else "movie"
+        
+        // 1. Get Title from TMDB for Search
+        val tmdbUrl = "https://api.themoviedb.org/3/$tmdbType/$tmdbId?api_key=${Constants.TMDB_API_KEY}"
+        val tmdbJson = runCatching { getText(tmdbUrl) }.getOrNull() ?: return emptyList()
+        val tmdbData = runCatching { org.json.JSONObject(tmdbJson) }.getOrNull() ?: return emptyList()
+        val titleName = tmdbData.optString("name", tmdbData.optString("title", fallbackTitle))
+        if (titleName.isEmpty()) return emptyList()
+        
+        val releaseYear = tmdbData.optString("release_date", tmdbData.optString("first_air_date", fallbackYear?.toString() ?: "N/A")).split("-").firstOrNull() ?: "N/A"
+        val displayTitle = if (isTv) "📺 $titleName - ($releaseYear) S${season ?: 1}E${episode ?: 1}" else "🎦 $titleName ($releaseYear)"
+        
+        // 2. Search hdghartv.cc
+        val hdGharApi = "https://hdghartv.cc/api"
+        val searchUrl = "$hdGharApi/search?q=${java.net.URLEncoder.encode(titleName, "UTF-8")}&type=all&page=1"
+        val headers = mapOf(
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer" to "https://hdghartv.cc/"
+        )
+        val searchJson = runCatching { getText(searchUrl, headers) }.getOrNull() ?: return emptyList()
+        val searchData = runCatching { org.json.JSONObject(searchJson) }.getOrNull() ?: return emptyList()
+        
+        var targetId: String? = null
+        
+        val primaryArray = searchData.optJSONArray(if (isTv) "series" else "movies")
+        if (primaryArray != null) {
+            for (i in 0 until primaryArray.length()) {
+                val item = primaryArray.optJSONObject(i) ?: continue
+                if (item.optInt("tmdbId") == tmdbId) {
+                    targetId = item.optString("_id")
+                    break
+                }
+            }
+        }
+        
+        if (targetId == null) {
+            val secondaryArray = searchData.optJSONArray(if (isTv) "movies" else "series")
+            if (secondaryArray != null) {
+                for (i in 0 until secondaryArray.length()) {
+                    val item = secondaryArray.optJSONObject(i) ?: continue
+                    if (item.optInt("tmdbId") == tmdbId) {
+                        targetId = item.optString("_id")
+                        break
+                    }
+                }
+            }
+        }
+        
+        if (targetId.isNullOrEmpty()) return emptyList()
+        val apiType = if (isTv) "series" else "movies"
+        val detailsUrl = "$hdGharApi/$apiType/public/$targetId"
+        val detailsJson = runCatching { getText(detailsUrl, headers) }.getOrNull() ?: return emptyList()
+        val detailsData = runCatching { org.json.JSONObject(detailsJson) }.getOrNull() ?: return emptyList()
+        
+        var streamingLinks: org.json.JSONArray? = null
+        if (!isTv) {
+            streamingLinks = detailsData.optJSONArray("streamingLinks")
+        } else {
+            val seasons = detailsData.optJSONArray("seasons")
+            if (seasons != null) {
+                for (i in 0 until seasons.length()) {
+                    val s = seasons.optJSONObject(i) ?: continue
+                    if (s.optInt("seasonNumber") == (season ?: 1)) {
+                        val eps = s.optJSONArray("episodes")
+                        if (eps != null) {
+                            for (j in 0 until eps.length()) {
+                                val ep = eps.optJSONObject(j) ?: continue
+                                if (ep.optInt("episodeNumber") == (episode ?: 1)) {
+                                    streamingLinks = ep.optJSONArray("streamingLinks")
+                                    break
+                                }
+                            }
+                        }
+                        break
+                    }
+                }
+            }
+        }
+        
+        if (streamingLinks == null || streamingLinks.length() == 0) return emptyList()
+        
+        val results = mutableListOf<HttpResolvedStream>()
+        for (i in 0 until streamingLinks.length()) {
+            val linkObj = streamingLinks.optJSONObject(i) ?: continue
+            val url = linkObj.optString("url")
+            val quality = linkObj.optString("quality", "Auto")
+            
+            if (url.isNotEmpty()) {
+                val icon = if (quality.contains("2160") || quality.contains("4K") || quality.contains("4k")) "💎" else if (quality.contains("1080")) "🔥" else "🎬"
+                val audio = "Dual-Audio 🌐"
+                val format = if (url.contains(".m3u8")) "HLS" else "MP4"
+                
+                val desc = "⚡ $format\n$icon $quality | 🔊 $audio\n🛰️ Source: HDGharTV"
+                
+                results.add(
+                    HttpResolvedStream(
+                        provider = "HDGharTV",
+                        title = displayTitle,
+                        url = url,
+                        quality = quality,
+                        description = desc
+                    )
+                )
+            }
+        }
+        return results
+    }
+
+    // ── Castle ────────────────────────────────────────────────────────────────
+    
+    private suspend fun resolveCastle(
+        tmdbId: Int,
+        mediaType: String,
+        season: Int?,
+        episode: Int?,
+        fallbackTitle: String,
+        fallbackYear: Int?
+    ): List<HttpResolvedStream> {
+        val castleBase = "https://api.hlowb.com"
+        val channel = "IndiaA"
+        val clientType = "1"
+        val lang = "en-US"
+        val pkg = "com.external.castle"
+
+        fun decryptCastle(ciphertext: String, securityKey: String): String {
+            val decodedSecurityKey = android.util.Base64.decode(securityKey, android.util.Base64.DEFAULT)
+            val suffixBytes = "T!BgJB".toByteArray(Charsets.UTF_8)
+            var keyBytes = decodedSecurityKey + suffixBytes
+            
+            if (keyBytes.size < 16) {
+                val padded = ByteArray(16)
+                System.arraycopy(keyBytes, 0, padded, 0, keyBytes.size)
+                keyBytes = padded
+            } else if (keyBytes.size > 16) {
+                keyBytes = keyBytes.copyOfRange(0, 16)
+            }
+            
+            var cipherClean = ciphertext.trim()
+            try {
+                val json = org.json.JSONObject(cipherClean)
+                if (json.has("data") && json.opt("data") is String) {
+                    cipherClean = json.getString("data").trim()
+                }
+            } catch (e: Exception) {}
+            
+            val decodedCipher = android.util.Base64.decode(cipherClean, android.util.Base64.DEFAULT)
+            val secretKey = javax.crypto.spec.SecretKeySpec(keyBytes, "AES")
+            val ivSpec = javax.crypto.spec.IvParameterSpec(keyBytes)
+            val cipher = javax.crypto.Cipher.getInstance("AES/CBC/PKCS5Padding")
+            cipher.init(javax.crypto.Cipher.DECRYPT_MODE, secretKey, ivSpec)
+            return String(cipher.doFinal(decodedCipher), Charsets.UTF_8)
+        }
+
+        val apiHeaders = mapOf(
+            "User-Agent" to "okhttp/4.9.3",
+            "Accept" to "application/json",
+            "Accept-Language" to "en-US,en;q=0.9",
+            "Connection" to "Keep-Alive",
+            "Referer" to castleBase
+        )
+        
+        suspend fun postCastle(url: String, json: String): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val req = okhttp3.Request.Builder()
+                .url(url)
+                .post(json.toRequestBody("application/json".toMediaType()))
+                .header("User-Agent", "okhttp/4.9.3")
+                .header("Accept", "application/json")
+                .header("Accept-Language", "en-US,en;q=0.9")
+                .header("Connection", "Keep-Alive")
+                .header("Referer", castleBase)
+                .build()
+            okHttpClient.newCall(req).execute().body?.string() ?: ""
+        }
+
+        val tmdbType = if (mediaType == "tv") "tv" else "movie"
+        val tmdbUrl = "https://api.themoviedb.org/3/$tmdbType/$tmdbId?api_key=${Constants.TMDB_API_KEY}"
+        val tmdbJson = runCatching { getText(tmdbUrl) }.getOrNull() ?: return emptyList()
+        val tmdbData = runCatching { org.json.JSONObject(tmdbJson) }.getOrNull() ?: return emptyList()
+        val title = tmdbData.optString("name", tmdbData.optString("title", fallbackTitle))
+        if (title.isEmpty()) return emptyList()
+        val releaseYear = tmdbData.optString("release_date", tmdbData.optString("first_air_date", fallbackYear?.toString() ?: "N/A")).split("-").firstOrNull() ?: "N/A"
+        
+        val secUrl = "$castleBase/v0.1/system/getSecurityKey/1?channel=$channel&clientType=$clientType&lang=$lang"
+        val secJson = runCatching { getText(secUrl, apiHeaders) }.getOrNull() ?: return emptyList()
+        val securityKey = org.json.JSONObject(secJson).optString("data")
+        if (securityKey.isEmpty()) return emptyList()
+
+        val searchKeyword = if (mediaType != "tv" && releaseYear != "N/A") "$title $releaseYear" else title
+        val searchUrl = "$castleBase/film-api/v1.1.0/movie/searchByKeyword?channel=$channel&clientType=$clientType&keyword=${java.net.URLEncoder.encode(searchKeyword, "UTF-8")}&lang=$lang&mode=1&packageName=$pkg&page=1&size=30"
+        val searchEnc = runCatching { getText(searchUrl, apiHeaders) }.getOrNull() ?: return emptyList()
+        val searchDec = runCatching { decryptCastle(searchEnc, securityKey) }.getOrNull() ?: return emptyList()
+        val searchData = org.json.JSONObject(searchDec).optJSONObject("data") ?: return emptyList()
+        val rows = searchData.optJSONArray("rows") ?: return emptyList()
+        
+        var movieId: String? = null
+        for (i in 0 until rows.length()) {
+            val r = rows.optJSONObject(i) ?: continue
+            val rTitle = r.optString("title", r.optString("languageName", "")).lowercase()
+            if (rTitle.contains(title.lowercase()) || title.lowercase().contains(rTitle)) {
+                movieId = r.optString("id", r.optString("redirectIdStr", ""))
+                if (movieId.isNotEmpty()) break
+            }
+        }
+        if (movieId.isNullOrEmpty()) {
+            movieId = rows.optJSONObject(0)?.optString("id", rows.optJSONObject(0)?.optString("redirectIdStr", ""))
+            if (movieId.isNullOrEmpty()) return emptyList()
+        }
+
+        suspend fun getCastleDetails(mId: String): org.json.JSONObject? {
+            val dUrl = "$castleBase/film-api/v1.9.9/movie?channel=$channel&clientType=$clientType&lang=$lang&movieId=$mId&packageName=$pkg"
+            val dEnc = runCatching { getText(dUrl, apiHeaders) }.getOrNull() ?: return null
+            val dDec = runCatching { decryptCastle(dEnc, securityKey) }.getOrNull() ?: return null
+            return org.json.JSONObject(dDec).optJSONObject("data")
+        }
+        
+        var details = getCastleDetails(movieId) ?: return emptyList()
+        var currentMovieId = movieId
+        
+        if (mediaType == "tv" && season != null && episode != null) {
+            val seasons = details.optJSONArray("seasons")
+            var foundSeason = false
+            if (seasons != null) {
+                for (i in 0 until seasons.length()) {
+                    val s = seasons.optJSONObject(i) ?: continue
+                    if (s.optInt("number") == season) {
+                        foundSeason = true
+                        val rid = s.optString("redirectId")
+                        if (rid.isNotEmpty() && rid != currentMovieId) {
+                            details = getCastleDetails(rid) ?: details
+                            currentMovieId = rid
+                        }
+                        break
+                    }
+                }
+            }
+            if (!foundSeason) {
+                if (details.has("seasonNumber") && details.optInt("seasonNumber") != season) {
+                    return emptyList()
+                }
+            }
+        }
+        
+        var episodeId: String? = null
+        val episodes = details.optJSONArray("episodes") ?: org.json.JSONArray()
+        val targetEp = if (mediaType == "tv") {
+            for (i in 0 until episodes.length()) {
+                val e = episodes.optJSONObject(i) ?: continue
+                if (e.optInt("number") == episode) {
+                    episodeId = e.optString("id")
+                    break
+                }
+            }
+            if (episodeId.isNullOrEmpty()) return emptyList()
+            var found: org.json.JSONObject? = null
+            for (i in 0 until episodes.length()) {
+                val e = episodes.optJSONObject(i) ?: continue
+                if (e.optString("id") == episodeId) {
+                    found = e
+                    break
+                }
+            }
+            found
+        } else {
+            if (episodes.length() > 0) episodeId = episodes.optJSONObject(0)?.optString("id")
+            details
+        }
+        val tracks = targetEp?.optJSONArray("tracks") ?: org.json.JSONArray()
+        
+        val displayTitle = if (mediaType == "tv") "📺 $title - ($releaseYear) S${season ?: 1}E${episode ?: 1}" else "🎦 $title ($releaseYear)"
+        val results = mutableListOf<HttpResolvedStream>()
+        
+        fun parseVideo(vDec: String, langLabel: String, reqResolution: String) {
+            val vData = org.json.JSONObject(vDec).optJSONObject("data") ?: return
+            
+            val videos = vData.optJSONArray("videos")
+            var added = false
+            if (videos != null && videos.length() > 0) {
+                for (i in 0 until videos.length()) {
+                    val vObj = videos.optJSONObject(i) ?: continue
+                    val url = vObj.optString("url")
+                    if (url.isNotEmpty()) {
+                        val qual = vObj.optString("resolutionDescription", vObj.optString("resolution", "720p")).replace(Regex("^(SD|HD|FHD)\\s+", RegexOption.IGNORE_CASE), "")
+                        val desc = "Castle $langLabel - $qual"
+                        results.add(HttpResolvedStream(provider = "castle", title = displayTitle, url = url, quality = qual, description = desc))
+                        added = true
+                    } else if (vObj.optString("resolution") == reqResolution || vObj.optInt("resolution").toString() == reqResolution) {
+                        val rootUrl = vData.optString("videoUrl")
+                        if (rootUrl.isNotEmpty()) {
+                            val qual = vObj.optString("resolutionDescription", vObj.optString("resolution", "720p")).replace(Regex("^(SD|HD|FHD)\\s+", RegexOption.IGNORE_CASE), "")
+                            val desc = "Castle $langLabel - $qual"
+                            results.add(HttpResolvedStream(provider = "castle", title = displayTitle, url = rootUrl, quality = qual, description = desc))
+                            added = true
+                        }
+                    }
+                }
+            }
+            if (!added) {
+                val url = vData.optString("videoUrl")
+                if (url.isNotEmpty()) {
+                    val fallbackQual = if (reqResolution == "3") "1080p" else "720p"
+                    val desc = "Castle $langLabel - $fallbackQual"
+                    results.add(HttpResolvedStream(provider = "castle", title = displayTitle, url = url, quality = fallbackQual, description = desc))
+                }
+            }
+        }
+        
+        val resolutionsToFetch = listOf("3", "2") // 1080P, 720P
+        
+        for (i in 0 until tracks.length()) {
+            val t = tracks.optJSONObject(i) ?: continue
+            if (t.optBoolean("existIndividualVideo") && t.has("languageId")) {
+                val langId = t.optString("languageId")
+                val langName = t.optString("languageName", "Unknown")
+                
+                for (resolution in resolutionsToFetch) {
+                    val v1Url = "$castleBase/film-api/v2.0.1/movie/getVideo2?clientType=$clientType&packageName=$pkg&channel=$channel&lang=$lang"
+                    val body = org.json.JSONObject().apply {
+                        put("mode", "1")
+                        put("appMarket", "GuanWang")
+                        put("clientType", clientType)
+                        put("woolUser", "false")
+                        put("apkSignKey", "ED0955EB04E67A1D9F3305B95454FED485261475")
+                        put("androidVersion", "13")
+                        put("movieId", currentMovieId)
+                        put("episodeId", episodeId)
+                        put("languageId", langId)
+                        put("isNewUser", "false")
+                        put("resolution", resolution)
+                        put("packageName", pkg)
+                    }
+                    val v1Enc = runCatching { postCastle(v1Url, body.toString()) }.getOrNull() ?: continue
+                    val v1Dec = runCatching { decryptCastle(v1Enc, securityKey) }.getOrNull() ?: continue
+                    parseVideo(v1Dec, "[$langName]", resolution)
+                }
+            }
+        }
+        
+        if (results.isEmpty()) {
+            for (resolution in resolutionsToFetch) {
+                val v2Url = "$castleBase/film-api/v2.0.1/movie/getVideo2?clientType=$clientType&packageName=$pkg&channel=$channel&lang=$lang"
+                val body = org.json.JSONObject().apply {
+                    put("mode", "1")
+                    put("appMarket", "GuanWang")
+                    put("clientType", clientType)
+                    put("woolUser", "false")
+                    put("apkSignKey", "ED0955EB04E67A1D9F3305B95454FED485261475")
+                    put("androidVersion", "13")
+                    put("movieId", currentMovieId)
+                    put("episodeId", episodeId)
+                    put("isNewUser", "false")
+                    put("resolution", resolution)
+                    put("packageName", pkg)
+                }
+                val v2Enc = runCatching { postCastle(v2Url, body.toString()) }.getOrNull()
+                if (v2Enc != null) {
+                    val v2Dec = runCatching { decryptCastle(v2Enc, securityKey) }.getOrNull()
+                    if (v2Dec != null) {
+                        parseVideo(v2Dec, "[Shared]", resolution)
+                    }
+                }
+            }
+        }
+        
+        return results
+    }
+
     private suspend fun resolveNewTvApiUrl(): String {
         if (newTvApiUrl.isNotEmpty()) return newTvApiUrl
         for (encoded in NEW_TV_DOMAINS) {
@@ -1627,7 +2016,8 @@ class HttpLocalScraperRuntime @Inject constructor(
                 .takeIf { it.isNotEmpty() }
                 ?.let { StreamBehaviorHints(proxyHeaders = ProxyHeaders(request = it)) },
             subtitles = emptyList(),
-            sources = emptyList()
+            sources = emptyList(),
+            description = description
         )
     }
 
@@ -1689,7 +2079,8 @@ class HttpLocalScraperRuntime @Inject constructor(
         val title: String,
         val url: String,
         val quality: String,
-        val headers: Map<String, String> = emptyMap()
+        val headers: Map<String, String> = emptyMap(),
+        val description: String? = null
     )
 
     private data class VideasyServer(
