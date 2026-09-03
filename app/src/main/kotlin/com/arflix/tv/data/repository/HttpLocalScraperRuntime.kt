@@ -1453,12 +1453,29 @@ class HttpLocalScraperRuntime @Inject constructor(
         val rows = searchData.optJSONArray("rows") ?: return emptyList()
         
         var movieId: String? = null
+        val titleClean = title.lowercase().replace(Regex("[^a-z0-9]"), "")
+        
+        // Pass 1: Exact match
         for (i in 0 until rows.length()) {
             val r = rows.optJSONObject(i) ?: continue
-            val rTitle = r.optString("title", r.optString("languageName", "")).lowercase()
-            if (rTitle.contains(title.lowercase()) || title.lowercase().contains(rTitle)) {
+            val rTitleRaw = r.optString("title", r.optString("languageName", ""))
+            val rTitleClean = rTitleRaw.lowercase().replace(Regex("[^a-z0-9]"), "")
+            if (rTitleClean == titleClean) {
                 movieId = r.optString("id", r.optString("redirectIdStr", ""))
                 if (movieId.isNotEmpty()) break
+            }
+        }
+        
+        // Pass 2: Fuzzy match
+        if (movieId.isNullOrEmpty()) {
+            for (i in 0 until rows.length()) {
+                val r = rows.optJSONObject(i) ?: continue
+                val rTitleRaw = r.optString("title", r.optString("languageName", ""))
+                val rTitleClean = rTitleRaw.lowercase().replace(Regex("[^a-z0-9]"), "")
+                if (rTitleClean.contains(titleClean) || titleClean.contains(rTitleClean)) {
+                    movieId = r.optString("id", r.optString("redirectIdStr", ""))
+                    if (movieId.isNotEmpty()) break
+                }
             }
         }
         if (movieId.isNullOrEmpty()) {
@@ -1482,9 +1499,10 @@ class HttpLocalScraperRuntime @Inject constructor(
             if (seasons != null) {
                 for (i in 0 until seasons.length()) {
                     val s = seasons.optJSONObject(i) ?: continue
-                    if (s.optInt("number") == season) {
+                    val sNum = s.optInt("number", s.optInt("season", s.optInt("seasonNumber", -1)))
+                    if (sNum == season) {
                         foundSeason = true
-                        val rid = s.optString("redirectId")
+                        val rid = s.optString("redirectId", s.optString("movieId"))
                         if (rid.isNotEmpty() && rid != currentMovieId) {
                             details = getCastleDetails(rid) ?: details
                             currentMovieId = rid
@@ -1494,7 +1512,9 @@ class HttpLocalScraperRuntime @Inject constructor(
                 }
             }
             if (!foundSeason) {
-                if (details.has("seasonNumber") && details.optInt("seasonNumber") != season) {
+                val epArray = details.optJSONArray("episodes")
+                val isFlattenedAnime = epArray != null && epArray.length() > 50
+                if (details.has("seasonNumber") && details.optInt("seasonNumber") != season && !isFlattenedAnime) {
                     return emptyList()
                 }
             }
@@ -1502,12 +1522,16 @@ class HttpLocalScraperRuntime @Inject constructor(
         
         var episodeId: String? = null
         val episodes = details.optJSONArray("episodes") ?: org.json.JSONArray()
+        
+        var targetEpisodeNumber = episode
+
         val targetEp = if (mediaType == "tv") {
             for (i in 0 until episodes.length()) {
                 val e = episodes.optJSONObject(i) ?: continue
-                if (e.optInt("number") == episode) {
+                val eNum = e.optInt("number", e.optInt("episode", e.optInt("episodeNumber", -1)))
+                if (eNum == targetEpisodeNumber || eNum == episode) { // Fallback to raw episode if absolute fails
                     episodeId = e.optString("id")
-                    break
+                    if (eNum == targetEpisodeNumber) break
                 }
             }
             if (episodeId.isNullOrEmpty()) return emptyList()
@@ -1568,7 +1592,7 @@ class HttpLocalScraperRuntime @Inject constructor(
         
         for (i in 0 until tracks.length()) {
             val t = tracks.optJSONObject(i) ?: continue
-            if (t.optBoolean("existIndividualVideo") && t.has("languageId")) {
+            if (t.has("languageId")) {
                 val langId = t.optString("languageId")
                 val langName = t.optString("languageName", "Unknown")
                 
