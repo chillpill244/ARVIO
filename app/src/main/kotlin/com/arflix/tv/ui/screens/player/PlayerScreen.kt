@@ -285,9 +285,9 @@ fun PlayerScreen(
     DisposableEffect(activity, deviceType) {
         if (activePlayerScreenCount == 0) {
             originalOrientation = activity?.requestedOrientation
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         }
         activePlayerScreenCount++
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         
         val window = activity?.window
         if (window != null && deviceType != com.arflix.tv.util.DeviceType.TV) {
