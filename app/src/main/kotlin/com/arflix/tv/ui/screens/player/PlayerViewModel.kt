@@ -509,6 +509,17 @@ class PlayerViewModel @Inject constructor(
                     savedPosition = resumeData.positionMs
                 )
                 launch { fetchMediaMetadata(mediaType, mediaId) }
+                launch {
+                    if (mediaType == MediaType.TV && seasonNumber != null && episodeNumber != null) {
+                        val cachedImdbId = currentImdbId ?: mediaRepository.getCachedImdbId(mediaType, mediaId)
+                        val imdbId = cachedImdbId ?: resolveExternalIds(mediaType, mediaId).imdbId
+                        if (!imdbId.isNullOrBlank()) {
+                            currentImdbId = imdbId
+                            if (cachedImdbId == null) mediaRepository.cacheImdbId(mediaType, mediaId, imdbId)
+                            fetchSkipIntervals(imdbId, seasonNumber, episodeNumber)
+                        }
+                    }
+                }
                 return@launch
             }
 
@@ -1035,10 +1046,17 @@ class PlayerViewModel @Inject constructor(
      */
     private suspend fun fetchMediaMetadata(mediaType: MediaType, mediaId: Int) {
         try {
-            val details = if (mediaType == MediaType.TV) {
-                tmdbApi.getTvDetails(mediaId, Constants.TMDB_API_KEY)
+            val call = suspend {
+                if (mediaType == MediaType.TV) {
+                    tmdbApi.getTvDetails(mediaId, Constants.TMDB_API_KEY)
+                } else {
+                    tmdbApi.getMovieDetails(mediaId, Constants.TMDB_API_KEY)
+                }
+            }
+            val details = if (_uiState.value.isOffline) {
+                kotlinx.coroutines.withTimeout(2000L) { call() }
             } else {
-                tmdbApi.getMovieDetails(mediaId, Constants.TMDB_API_KEY)
+                call()
             }
 
             val logoUrl = try {
@@ -1064,10 +1082,19 @@ class PlayerViewModel @Inject constructor(
                 val season = currentSeason
                 val episode = currentEpisode
                 if (season != null && episode != null) {
-                    currentEpisodeTitle = runCatching {
-                        val seasonDetails = tmdbApi.getTvSeason(mediaId, season, Constants.TMDB_API_KEY)
+                    currentEpisodeTitle = try {
+                        val seasonCall = suspend { tmdbApi.getTvSeason(mediaId, season, Constants.TMDB_API_KEY) }
+                        val seasonDetails = if (_uiState.value.isOffline) {
+                            kotlinx.coroutines.withTimeout(2000L) { seasonCall() }
+                        } else {
+                            seasonCall()
+                        }
                         seasonDetails.episodes.firstOrNull { it.episodeNumber == episode }?.name
-                    }.getOrNull()
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
+                    }
                 }
             } else {
                 val movieDetails = details as com.arflix.tv.data.api.TmdbMovieDetails
@@ -1094,6 +1121,8 @@ class PlayerViewModel @Inject constructor(
                 releaseYear = releaseYear,
                 preferredAudioLanguage = resolvePreferredAudioLanguage()
             )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             // Failed to fetch metadata
         }
@@ -1103,11 +1132,24 @@ class PlayerViewModel @Inject constructor(
 
     private suspend fun resolveExternalIds(mediaType: MediaType, mediaId: Int): ExternalIds {
         return try {
-            val ids = when (mediaType) {
-                MediaType.MOVIE -> tmdbApi.getMovieExternalIds(mediaId, Constants.TMDB_API_KEY)
-                MediaType.TV -> tmdbApi.getTvExternalIds(mediaId, Constants.TMDB_API_KEY)
+            val call = suspend {
+                when (mediaType) {
+                    MediaType.MOVIE -> tmdbApi.getMovieExternalIds(mediaId, Constants.TMDB_API_KEY)
+                    MediaType.TV -> tmdbApi.getTvExternalIds(mediaId, Constants.TMDB_API_KEY)
+                }
             }
-            ExternalIds(imdbId = ids.imdbId, tvdbId = ids.tvdbId)
+            val ids = if (_uiState.value.isOffline) {
+                kotlinx.coroutines.withTimeoutOrNull(2000L) { call() }
+            } else {
+                call()
+            }
+            if (ids != null) {
+                ExternalIds(imdbId = ids.imdbId, tvdbId = ids.tvdbId)
+            } else {
+                ExternalIds(null, null)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (_: Exception) {
             ExternalIds(null, null)
         }
@@ -1118,7 +1160,13 @@ class PlayerViewModel @Inject constructor(
         activeSkipRequestKey = requestKey
         skipIntervalsJob?.cancel()
         skipIntervalsJob = viewModelScope.launch {
-            val intervals = skipIntroRepository.getSkipIntervals(imdbId, season, episode)
+            val intervals = if (_uiState.value.isOffline) {
+                kotlinx.coroutines.withTimeoutOrNull(2000L) {
+                    skipIntroRepository.getSkipIntervals(imdbId, season, episode)
+                } ?: emptyList()
+            } else {
+                skipIntroRepository.getSkipIntervals(imdbId, season, episode)
+            }
             if (activeSkipRequestKey != requestKey) return@launch
             skipIntervals = intervals
             // Force a recompute on the next position tick.
