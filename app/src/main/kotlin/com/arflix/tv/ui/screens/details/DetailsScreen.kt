@@ -1791,7 +1791,16 @@ internal fun DetailsContent(
 
                 // Episodes LazyRow (outside the inner Column to allow independent horizontal scroll)
                 if (item.mediaType == MediaType.TV && episodes.isNotEmpty()) {
+                    val episodeListState = androidx.compose.foundation.lazy.rememberLazyListState(
+                        initialFirstVisibleItemIndex = maxOf(0, episodeIndex)
+                    )
+                    androidx.compose.runtime.LaunchedEffect(episodeIndex, episodes.size) {
+                        if (episodeIndex in episodes.indices) {
+                            episodeListState.scrollToItem(episodeIndex)
+                        }
+                    }
                     LazyRow(
+                        state = episodeListState,
                         modifier = Modifier.arvioDpadFocusGroup(),
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
