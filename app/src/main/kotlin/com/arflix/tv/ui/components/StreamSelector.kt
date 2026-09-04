@@ -26,6 +26,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.lazy.LazyColumn
@@ -554,12 +558,17 @@ fun StreamSelector(
                 // Mobile single-column layout
                 val mobileListState = rememberLazyListState()
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp)
+                Box(
+                    modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Header row: title, count, close button
+                    Column(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .widthIn(max = 600.dp)
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        // Header row: title, count, close button
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -729,6 +738,8 @@ fun StreamSelector(
                         }
                     }
                 }
+                }
+
             }
         }
         }

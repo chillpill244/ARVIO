@@ -142,7 +142,9 @@ data class PlayerUiState(
     // (keyed by the original playlist URL) rather than a local file
     val isOfflineHls: Boolean = false,
     // StreamKeys restricting playback to the downloaded HLS variant/renditions
-    val offlineStreamKeys: List<androidx.media3.common.StreamKey> = emptyList()
+    val offlineStreamKeys: List<androidx.media3.common.StreamKey> = emptyList(),
+    // The user's configured addon ordering, used to sort tabs in the source picker
+    val addonOrderedIds: List<String> = emptyList()
 )
 
 
@@ -420,6 +422,10 @@ class PlayerViewModel @Inject constructor(
             translationManager.isEnabled = false
             translationManager.reset()
 
+            val orderedAddonIds = streamRepository.installedAddons.first()
+                .filter { it.isEnabled && it.type != com.arflix.tv.data.model.AddonType.SUBTITLE }
+                .map { it.id }
+
             _uiState.value = PlayerUiState(
                 isLoading = true,
                 isLoadingStreams = true,
@@ -436,6 +442,7 @@ class PlayerViewModel @Inject constructor(
                 autoPlayNext = autoPlayNext,
                 showLoadingStats = showLoadingStats,
                 volumeBoostDb = volumeBoostDb,
+                addonOrderedIds = orderedAddonIds,
                 // Naive guess until resolveNextEpisodeTarget refines it from TMDB data.
                 nextEpisodeTarget = if (mediaType == MediaType.TV && seasonNumber != null && episodeNumber != null) {
                     NextEpisodeTarget(seasonNumber, episodeNumber + 1)

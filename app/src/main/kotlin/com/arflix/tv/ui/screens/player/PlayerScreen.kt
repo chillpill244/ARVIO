@@ -3333,6 +3333,7 @@ fun PlayerScreen(
             selectedStream = uiState.selectedStream,
             isLoading = uiState.isLoadingStreams,
             hasStreamingAddons = !uiState.isSetupError,
+            addonOrderedIds = uiState.addonOrderedIds,
             title = uiState.title,
             subtitle = if (seasonNumber != null && episodeNumber != null) {
                 "S$seasonNumber E$episodeNumber"
