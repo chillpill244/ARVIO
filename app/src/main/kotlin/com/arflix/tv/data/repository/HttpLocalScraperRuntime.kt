@@ -222,6 +222,12 @@ class HttpLocalScraperRuntime @Inject constructor(
                         .getOrDefault(emptyList())
                 })
             }
+            if ("moviesdrive" in providers) {
+                add(async(Dispatchers.IO) {
+                    runCatching { resolveMoviesDrive(tmdbId, mediaType, season, episode, fallbackTitle, fallbackYear) }
+                        .getOrDefault(emptyList())
+                })
+            }
         }
         jobs.awaitAll()
             .flatten()
@@ -1045,10 +1051,37 @@ class HttpLocalScraperRuntime @Inject constructor(
         val out = mutableListOf<FourKStream>()
         val baseUrl = runCatching { java.net.URI(url).let { "${it.scheme}://${it.host}" } }.getOrNull()
             ?: hubcloudDomain.trimEnd('/')
-        val href = if (url.contains("hubcloud.php")) {
-            url
+            
+        var actualUrl = url
+        if (actualUrl.contains("search-recover.php")) {
+            val qMatch = Regex("""q=([^&]+)""").find(actualUrl)
+            var decodedQ = qMatch?.groupValues?.get(1) ?: ""
+            if (decodedQ.isNotBlank() && !decodedQ.contains(" ")) {
+                decodedQ = runCatching { String(android.util.Base64.decode(decodedQ, android.util.Base64.DEFAULT), Charsets.UTF_8) }.getOrDefault(decodedQ)
+            }
+            val apiUrl = if (actualUrl.contains("api=search")) actualUrl else {
+                if (decodedQ.isNotBlank()) {
+                    val encodedQ = java.net.URLEncoder.encode(decodedQ, "UTF-8")
+                    actualUrl.replace(Regex("""q=[^&]+"""), "q=$encodedQ") + "&api=search&page=1"
+                } else {
+                    "$actualUrl&api=search&page=1"
+                }
+            }
+            val apiJson = runCatching { getJson(apiUrl, mapOf("Accept" to "application/json")) }.getOrNull()
+            val hits = apiJson?.getArray("hits")
+            val firstHit = hits?.firstOrNull()?.asJsonObjectOrNull()
+            val hitUrl = firstHit?.string("url")
+            if (!hitUrl.isNullOrBlank()) {
+                actualUrl = hitUrl
+            } else {
+                return out
+            }
+        }
+
+        val href = if (actualUrl.contains("hubcloud.php")) {
+            actualUrl
         } else {
-            val html = runCatching { getText(url) }.getOrNull() ?: return out
+            val html = runCatching { getText(actualUrl) }.getOrNull() ?: return out
             val raw = org.jsoup.Jsoup.parse(html).selectFirst("#download")?.attr("href")?.trim().orEmpty()
             if (raw.isBlank()) return out
             if (raw.startsWith("http")) raw else "${baseUrl.trimEnd('/')}/${raw.trimStart('/')}"
@@ -1083,6 +1116,27 @@ class HttpLocalScraperRuntime @Inject constructor(
                 }
                 "10gbps" in label || "mega" in label || "pdl" in label || "fslv2" in label ->
                     out.add(stream(link, "10Gbps"))
+            }
+        }
+        return out
+    }
+
+    private suspend fun extractGdflix(url: String, defaultQuality: String): List<FourKStream> {
+        val out = mutableListOf<FourKStream>()
+        val html = runCatching { getText(url) }.getOrNull() ?: return out
+        val doc = org.jsoup.Jsoup.parse(html)
+        
+        doc.select("a.btn-primary, a[href*=\"drive\"], a[href*=\"download\"]").forEach { el ->
+            val link = el.attr("href").trim()
+            if (link.isNotBlank() && (link.contains("drive") || link.contains("download") || link.contains("fsl"))) {
+                val label = el.text().lowercase(Locale.US)
+                val quality = if (label.contains("4k") || label.contains("2160")) "4K"
+                else if (label.contains("1080")) "1080p"
+                else if (label.contains("720")) "720p"
+                else if (label.contains("480")) "480p"
+                else defaultQuality.ifEmpty { "1080p" }
+                
+                out.add(FourKStream(link, quality, "GDFlix", "", "", "", ""))
             }
         }
         return out
@@ -2142,6 +2196,175 @@ class HttpLocalScraperRuntime @Inject constructor(
     private data class FourKRelease(val spec: String, val audio: String, val langs: String, val quality: String)
     private data class AniDbResult(val url: String, val title: String)
 
+    // ── MoviesDrive ────────────────────────────────────────────────────────────
+
+    private suspend fun resolveMoviesDrive(
+        tmdbId: Int,
+        mediaType: String,
+        season: Int?,
+        episode: Int?,
+        fallbackTitle: String,
+        fallbackYear: Int?
+    ): List<HttpResolvedStream> = runCatching {
+        val details = fetchTmdbDetails(tmdbId, mediaType, fallbackTitle, fallbackYear)
+        val imdbId = details.imdbId ?: return@runCatching emptyList<HttpResolvedStream>()
+        val (_, hubcloud) = resolveFourKHDHubDomains()
+        
+        val domainRaw = getJson(
+            "https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json",
+            mapOf("User-Agent" to USER_AGENT)
+        )?.string("moviesdrive") ?: "https://new3.moviesdrive.christmas"
+        val domain = domainRaw.trimEnd('/')
+        
+        val headers = mapOf("User-Agent" to USER_AGENT)
+        
+        val searchUrl = "$domain/search.php?q=$imdbId"
+        val searchJson = getJson(searchUrl, headers) ?: return@runCatching emptyList<HttpResolvedStream>()
+        val hits = searchJson.getArray("hits")?.toList().orEmpty()
+        val permalinks = hits.mapNotNull { it.asJsonObjectOrNull()?.getObject("document")?.string("permalink") }.take(3)
+        
+        val collected = kotlinx.coroutines.coroutineScope {
+            permalinks.map { permalink ->
+                async(Dispatchers.IO) {
+                    val localCollected = mutableListOf<HttpResolvedStream>()
+                    val pageUrl = "$domain$permalink"
+            val pageHtml = getText(pageUrl, headers) ?: return@async localCollected
+            val doc = org.jsoup.Jsoup.parse(pageHtml)
+            
+            if (mediaType == "tv") {
+                val seasonMatchRegex = Regex("\\b(?:season\\s*0*$season|s0*$season)\\b", RegexOption.IGNORE_CASE)
+                val epMatchRegex = Regex("\\b(?:ep(?:isode)?\\s*0*$episode|e\\s*0*$episode|s\\d+e\\s*0*$episode)\\b", RegexOption.IGNORE_CASE)
+                
+                val h5Nodes = doc.select("h5")
+                for (i in h5Nodes.indices) {
+                    val current = h5Nodes[i]
+                    if (current.selectFirst("a[href]") != null) continue
+                    val text = current.text().trim()
+                    if (!seasonMatchRegex.containsMatchIn(text) || !Regex("(?i)\\b(?:\\d{3,4}p|4k)\\b").containsMatchIn(text)) continue
+                    val quality = getFourKQuality(text)
+                    
+                    val nextNode = h5Nodes.getOrNull(i + 1) ?: continue
+                    val anchor = nextNode.selectFirst("a[href]") ?: continue
+                    val aText = anchor.text().lowercase(Locale.US)
+                    if (!aText.contains("single episode") || aText.contains("zip")) continue
+                    
+                    val archiveUrl = absoluteUrl(domain, anchor.attr("href"))
+                    val archiveHtml = getText(archiveUrl, headers) ?: continue
+                    val archiveDoc = org.jsoup.Jsoup.parse(archiveHtml)
+                    val ah5Nodes = archiveDoc.select("h5")
+                    var foundTarget = false
+                    
+                    for (j in ah5Nodes.indices) {
+                        val aHeading = ah5Nodes[j]
+                        if (aHeading.selectFirst("a[href]") != null) {
+                            if (foundTarget) {
+                                aHeading.select("a[href]").forEach { l ->
+                                    val lHrefRaw = l.attr("href")
+                                    val lHref = lHrefRaw.lowercase(Locale.US)
+                                    if (lHref.contains("hubcloud") || lHref.contains("hubdrive")) {
+                                        val originalUrl = absoluteUrl(archiveUrl, lHrefRaw)
+                                        val hubUrl = originalUrl.replace(Regex("https?://[^/]+"), hubcloud)
+                                        val streams = dispatchFourKHost(hubUrl, hubcloud)
+                                        streams.forEach { s ->
+                                            val displayTitle = buildFourKTitle(s, mediaType, season, episode)
+                                            localCollected.add(HttpResolvedStream("MoviesDrive", displayTitle, s.url, s.quality.ifEmpty { quality }))
+                                        }
+                                    } else if (lHref.contains("gdflix")) {
+                                        val originalUrl = absoluteUrl(archiveUrl, lHrefRaw)
+                                        val streams = extractGdflix(originalUrl, quality)
+                                        streams.forEach { s ->
+                                            val displayTitle = buildFourKTitle(s, mediaType, season, episode)
+                                            localCollected.add(HttpResolvedStream("MoviesDrive", displayTitle, s.url, s.quality.ifEmpty { quality }))
+                                        }
+                                    } else if (lHref.contains("mdrive.lol")) {
+                                        val mdriveUrl = absoluteUrl(archiveUrl, lHrefRaw)
+                                        val mdriveHtml = runCatching { getText(mdriveUrl, headers) }.getOrNull() ?: ""
+                                        org.jsoup.Jsoup.parse(mdriveHtml).select("h5 a[href]").forEach { mLink ->
+                                            val mHrefRaw = mLink.attr("href")
+                                            val mHref = mHrefRaw.lowercase(Locale.US)
+                                            if (mHref.contains("hubcloud") || mHref.contains("hubdrive")) {
+                                                val hubUrl = absoluteUrl(mdriveUrl, mHrefRaw).replace(Regex("https?://[^/]+"), hubcloud)
+                                                val streams = dispatchFourKHost(hubUrl, hubcloud)
+                                                streams.forEach { s ->
+                                                    val displayTitle = buildFourKTitle(s, mediaType, season, episode)
+                                                    localCollected.add(HttpResolvedStream("MoviesDrive", displayTitle, s.url, s.quality.ifEmpty { quality }))
+                                                }
+                                            } else if (mHref.contains("gdflix")) {
+                                                val streams = extractGdflix(absoluteUrl(mdriveUrl, mHrefRaw), quality)
+                                                streams.forEach { s ->
+                                                    val displayTitle = buildFourKTitle(s, mediaType, season, episode)
+                                                    localCollected.add(HttpResolvedStream("MoviesDrive", displayTitle, s.url, s.quality.ifEmpty { quality }))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                foundTarget = false
+                            }
+                        } else {
+                            if (epMatchRegex.containsMatchIn(aHeading.text())) {
+                                foundTarget = true
+                            } else if (Regex("(?i)\\b(?:ep(?:isode)?\\s*\\d+|e\\s*\\d+|s\\d+e\\d+)\\b").containsMatchIn(aHeading.text())) {
+                                foundTarget = false
+                            }
+                        }
+                    }
+                }
+            } else {
+                var lastQuality = "1080p"
+                doc.select("h5").forEach { h5 ->
+                    val a = h5.selectFirst("a[href]")
+                    if (a != null) {
+                        val hrefRaw = a.attr("href")
+                        val href = absoluteUrl(domain, hrefRaw).lowercase(Locale.US)
+                        if (href.contains("hubcloud") || href.contains("hubdrive")) {
+                            val realHref = absoluteUrl(domain, hrefRaw).replace(Regex("https?://[^/]+"), hubcloud)
+                            val streams = dispatchFourKHost(realHref, hubcloud)
+                            streams.forEach { s ->
+                                val displayTitle = buildFourKTitle(s, mediaType, null, null)
+                                localCollected.add(HttpResolvedStream("MoviesDrive", displayTitle, s.url, s.quality.ifEmpty { lastQuality }))
+                            }
+                        } else if (href.contains("gdflix")) {
+                            val realHref = absoluteUrl(domain, hrefRaw)
+                            val streams = extractGdflix(realHref, lastQuality)
+                            streams.forEach { s ->
+                                val displayTitle = buildFourKTitle(s, mediaType, null, null)
+                                localCollected.add(HttpResolvedStream("MoviesDrive", displayTitle, s.url, s.quality.ifEmpty { lastQuality }))
+                            }
+                        } else if (href.contains("mdrive.lol")) {
+                            val mdriveUrl = absoluteUrl(domain, hrefRaw)
+                            val mdriveHtml = runCatching { getText(mdriveUrl, headers) }.getOrNull() ?: ""
+                            org.jsoup.Jsoup.parse(mdriveHtml).select("h5 a[href]").forEach { mLink ->
+                                val mHrefRaw = mLink.attr("href")
+                                val mHref = mHrefRaw.lowercase(Locale.US)
+                                if (mHref.contains("hubcloud") || mHref.contains("hubdrive")) {
+                                    val hubUrl = absoluteUrl(mdriveUrl, mHrefRaw).replace(Regex("https?://[^/]+"), hubcloud)
+                                    val streams = dispatchFourKHost(hubUrl, hubcloud)
+                                    streams.forEach { s ->
+                                        val displayTitle = buildFourKTitle(s, mediaType, null, null)
+                                        localCollected.add(HttpResolvedStream("MoviesDrive", displayTitle, s.url, s.quality.ifEmpty { lastQuality }))
+                                    }
+                                } else if (mHref.contains("gdflix")) {
+                                    val streams = extractGdflix(absoluteUrl(mdriveUrl, mHrefRaw), lastQuality)
+                                    streams.forEach { s ->
+                                        val displayTitle = buildFourKTitle(s, mediaType, null, null)
+                                        localCollected.add(HttpResolvedStream("MoviesDrive", displayTitle, s.url, s.quality.ifEmpty { lastQuality }))
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        lastQuality = getFourKQuality(h5.text())
+                    }
+                }
+            }
+            localCollected
+        }
+    }.awaitAll().flatten()
+}
+
+collected.distinctBy { it.url }.filterNot { it.quality.contains("480p", ignoreCase = true) }
+}.getOrDefault(emptyList())
     companion object {
         private val DIV_EP_REGEX = Regex("""<div[^>]+class=["']ep[^>]*>.*?</div>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
         private val DATA_IFRAME_REGEX = Regex("""data-iframe=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
